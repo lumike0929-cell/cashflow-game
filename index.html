@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="一个用于学习资产、负债、现金流和财务自由概念的单人现金流棋盘游戏。"
+    />
+    <title>现金流自由棋｜财商桌游原型</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">¥</span>
+          <div>
+            <strong>现金流自由棋</strong>
+            <small>自制财商桌游原型</small>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button class="ghost" id="saveGame" type="button">保存</button>
+          <button class="ghost" id="loadGame" type="button">读取</button>
+          <button class="danger" id="resetGame" type="button">重开</button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="intro-panel" id="setupPanel">
+          <div class="intro-copy">
+            <span class="eyebrow">目标</span>
+            <h1>让被动收入超过总支出，跳出打工循环。</h1>
+            <p>
+              选择一个职业，从“月结日”开始绕棋盘前进。你会遇到机会、市场、额外支出和学习事件。
+              关键不是赚最多工资，而是把现金换成持续流入的资产。
+            </p>
+          </div>
+
+          <div class="career-grid" id="careerGrid" aria-label="选择职业"></div>
+        </section>
+
+        <section class="game-panel hidden" id="gamePanel" aria-live="polite">
+          <div class="hero-strip">
+            <div>
+              <span class="eyebrow" id="careerLabel">职业</span>
+              <h1 id="gameTitle">现金流挑战</h1>
+              <p id="gameSubtitle">先积累现金，再买入能产生现金流的资产。</p>
+            </div>
+            <div class="freedom-meter">
+              <span>财务自由进度</span>
+              <strong id="freedomPercent">0%</strong>
+              <div class="meter"><span id="freedomBar"></span></div>
+            </div>
+          </div>
+
+          <div class="play-grid">
+            <section class="board-card">
+              <div class="section-heading">
+                <div>
+                  <h2>棋盘</h2>
+                  <p>掷骰后按格子触发事件。</p>
+                </div>
+                <div class="round-pill" id="roundLabel">第 1 月</div>
+              </div>
+              <div class="board" id="board"></div>
+            </section>
+
+            <aside class="turn-card">
+              <div class="dice-box">
+                <span>本回合</span>
+                <strong id="diceValue">-</strong>
+                <button class="primary" id="rollDice" type="button">掷骰</button>
+              </div>
+              <div class="action-stack" id="actionStack"></div>
+              <div class="log-list" id="logList"></div>
+            </aside>
+          </div>
+
+          <div class="finance-grid">
+            <section class="sheet-card">
+              <div class="section-heading compact">
+                <div>
+                  <h2>收入表</h2>
+                  <p>每次经过月结日结算。</p>
+                </div>
+              </div>
+              <div class="statement" id="incomeStatement"></div>
+            </section>
+
+            <section class="sheet-card">
+              <div class="section-heading compact">
+                <div>
+                  <h2>资产</h2>
+                  <p>能带来现金流的项目。</p>
+                </div>
+              </div>
+              <div class="asset-list" id="assetList"></div>
+            </section>
+
+            <section class="sheet-card">
+              <div class="section-heading compact">
+                <div>
+                  <h2>负债</h2>
+                  <p>借款会增加月支出。</p>
+                </div>
+              </div>
+              <div class="asset-list" id="liabilityList"></div>
+            </section>
+          </div>
+        </section>
+      </main>
+
+      <div class="modal hidden" id="cardModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-card">
+          <button class="icon-button" id="closeModal" type="button" aria-label="关闭">×</button>
+          <span class="eyebrow" id="modalType">事件</span>
+          <h2 id="modalTitle">标题</h2>
+          <p id="modalText">内容</p>
+          <div class="deal-metrics" id="dealMetrics"></div>
+          <div class="modal-actions" id="modalActions"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="./game.js"></script>
+  </body>
+</html>
