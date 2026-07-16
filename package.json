@@ -1,0 +1,15 @@
+{
+  "name": "cashflow-game",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node tests/static-check.mjs",
+    "lint": "node tests/lint.mjs",
+    "test": "node --test tests/real-estate.test.mjs",
+    "test:browser": "node tests/browser-acceptance.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0"
+  }
+}

@@ -31,10 +31,8 @@
 body {
   margin: 0;
   min-width: 320px;
-  background:
-    radial-gradient(circle at 12% 8%, rgba(216, 162, 31, 0.24), transparent 28rem),
-    radial-gradient(circle at 88% 4%, rgba(36, 107, 159, 0.16), transparent 26rem),
-    linear-gradient(180deg, var(--bg-2), var(--bg));
+  overflow-x: hidden;
+  background: linear-gradient(180deg, var(--bg-2) 0%, #f1f6ef 42%, var(--bg) 100%);
   color: var(--ink);
 }
 
@@ -559,7 +557,10 @@ p {
 .modal-card {
   position: relative;
   width: min(620px, 100%);
+  max-height: min(86vh, 820px);
+  overflow: auto;
   padding: clamp(22px, 4vw, 34px);
+  padding-bottom: max(clamp(22px, 4vw, 34px), env(safe-area-inset-bottom));
   box-shadow: var(--shadow);
 }
 
@@ -616,10 +617,157 @@ p {
   background: linear-gradient(135deg, var(--gold-soft), #ffffff);
 }
 
+.negative-line b {
+  color: var(--red);
+}
+
+.real-estate-section {
+  margin-top: 18px;
+}
+
+.real-estate-portfolio,
+.property-list,
+.transaction-history {
+  display: grid;
+  gap: 12px;
+}
+
+.portfolio-summary {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.summary-metric {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel-2);
+}
+
+.summary-metric span,
+.summary-metric strong {
+  display: block;
+}
+
+.summary-metric span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.summary-metric strong {
+  margin-top: 4px;
+  font-size: clamp(16px, 2vw, 22px);
+  overflow-wrap: anywhere;
+}
+
+.property-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) minmax(96px, auto);
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 76px;
+  padding: 12px;
+  text-align: left;
+  border-radius: 16px;
+}
+
+.property-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-weight: 950;
+}
+
+.property-row strong,
+.property-row small,
+.property-numbers {
+  min-width: 0;
+}
+
+.property-row small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.property-numbers {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+}
+
+.property-numbers b {
+  color: var(--green);
+  font-size: 20px;
+}
+
+.transaction-history {
+  max-height: 260px;
+  overflow: auto;
+  padding-top: 4px;
+}
+
+.transaction-history h3 {
+  margin: 6px 0 0;
+  font-size: 18px;
+}
+
+.history-row {
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.history-row strong {
+  color: var(--blue);
+}
+
+.history-row span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.motion-pop {
+  animation: pop-in 220ms ease both;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @media (max-width: 1180px) {
   .career-grid,
   .finance-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .portfolio-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .play-grid,
@@ -645,7 +793,8 @@ p {
 
   .career-grid,
   .finance-grid,
-  .board {
+  .board,
+  .portfolio-summary {
     grid-template-columns: 1fr;
   }
 
@@ -662,12 +811,39 @@ p {
   .deal-metrics {
     grid-template-columns: 1fr;
   }
+
+  .layout {
+    padding-inline: 12px;
+  }
+
+  .property-row {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .property-numbers {
+    grid-column: 2;
+    justify-items: start;
+  }
+
+  .modal {
+    align-items: end;
+    padding: 10px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: 88vh;
+    border-radius: 20px 20px 16px 16px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
   }
 }

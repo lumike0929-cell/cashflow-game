@@ -1,3 +1,29 @@
+import { realEstateOpportunities } from "./realEstateData.js";
+import {
+  applyMortgagePayday,
+  buyProperty,
+  calculateEmergencyReserveMonths,
+  calculateMonthlyCashflow,
+  calculateNetWorth,
+  calculateOpportunity,
+  calculatePassiveIncome,
+  calculatePortfolioSummary,
+  calculatePropertyCashflow,
+  calculateSellPreview,
+  calculateTotalExpenses,
+  emergencyReserveRequiredMonths,
+  ensureRealEstateState,
+  sellProperty,
+  syncMortgageLiabilities,
+} from "./realEstateCalculator.js";
+import { migrateSavedState, parseSavedState, CURRENT_SAVE_VERSION } from "./realEstateStorageMigration.js";
+import {
+  pickPropertyHoldingEvent,
+  pickRealEstateMarketEvent,
+  resolvePropertyHoldingEvent,
+  resolveRealEstateMarketEvent,
+} from "./realEstateEventResolver.js";
+
 const STORAGE_KEY = "cashflow-freedom-game-v1";
 
 const careers = [
@@ -41,90 +67,23 @@ const careers = [
 
 const boardTiles = [
   { type: "payday", icon: "月", title: "月结日", text: "领取工资与被动收入，支付全部支出。" },
-  { type: "opportunity", icon: "机", title: "小机会", text: "低门槛资产或小生意。" },
+  { type: "opportunity", icon: "机", title: "房地产机会", text: "评估租金、房贷和净现金流。" },
   { type: "doodad", icon: "花", title: "额外支出", text: "生活消费会考验现金储备。" },
-  { type: "market", icon: "市", title: "市场", text: "资产价格和租金出现变化。" },
+  { type: "market", icon: "市", title: "房地产市场", text: "房价、租金或维修成本变化。" },
   { type: "learn", icon: "学", title: "学习", text: "提升财商，降低之后的犯错成本。" },
-  { type: "opportunity", icon: "投", title: "投资机会", text: "可能是股票、房产或生意。" },
+  { type: "opportunity", icon: "房", title: "看房日", text: "比较不同房地产现金流。" },
   { type: "bank", icon: "银", title: "银行", text: "可以借钱，也可以提前还债。" },
   { type: "doodad", icon: "账", title: "账单", text: "突发开销直接扣现金。" },
-  { type: "opportunity", icon: "房", title: "大机会", text: "更高首付，可能带来更高现金流。" },
-  { type: "market", icon: "价", title: "市场", text: "有人愿意买入你的资产。" },
+  { type: "opportunity", icon: "租", title: "租赁机会", text: "找到能产生租金的资产。" },
+  { type: "market", icon: "价", title: "市场", text: "持有资产会被市场影响。" },
   { type: "learn", icon: "课", title: "课程", text: "用知识换取更好的判断力。" },
-  { type: "doodad", icon: "修", title: "维修", text: "现金不足时只能借钱。" },
-  { type: "opportunity", icon: "股", title: "投资机会", text: "留意现金回报率。" },
+  { type: "propertyEvent", icon: "修", title: "房产持有", text: "维修、空置、续约或翻修。" },
+  { type: "opportunity", icon: "店", title: "商业房产", text: "店面、仓库或办公空间。" },
   { type: "bank", icon: "贷", title: "银行", text: "借贷能加速，也会增加月支出。" },
-  { type: "market", icon: "涨", title: "市场", text: "好资产有时能卖出溢价。" },
+  { type: "market", icon: "涨", title: "市场", text: "上涨和下跌都会发生。" },
   { type: "doodad", icon: "购", title: "消费", text: "想要和需要不总是一回事。" },
-  { type: "opportunity", icon: "店", title: "生意机会", text: "小型企业能贡献被动收入。" },
-  { type: "payday", icon: "薪", title: "月结日", text: "再次结算现金流。" },
-];
-
-const opportunityCards = [
-  {
-    name: "自动售货机点位",
-    type: "business",
-    cost: 18000,
-    downPayment: 6000,
-    cashflow: 850,
-    text: "朋友转让两个稳定点位，需要补货外包管理。",
-  },
-  {
-    name: "指数基金定投包",
-    type: "stock",
-    cost: 12000,
-    downPayment: 4000,
-    cashflow: 220,
-    text: "现金分红不高，但门槛低，适合早期累积。",
-  },
-  {
-    name: "车位出租",
-    type: "property",
-    cost: 52000,
-    downPayment: 16000,
-    cashflow: 1200,
-    text: "社区车位长期出租，维护成本低。",
-  },
-  {
-    name: "二手公寓",
-    type: "property",
-    cost: 320000,
-    downPayment: 42000,
-    cashflow: 2600,
-    text: "租金稳定，但需要较高首付。",
-  },
-  {
-    name: "线上课程版权",
-    type: "business",
-    cost: 26000,
-    downPayment: 9000,
-    cashflow: 1400,
-    text: "一次制作后持续销售，平台抽成已计入。",
-  },
-  {
-    name: "高息债券组合",
-    type: "stock",
-    cost: 34000,
-    downPayment: 11000,
-    cashflow: 900,
-    text: "现金流稳定，但市场价格波动较大。",
-  },
-  {
-    name: "洗衣房合伙份额",
-    type: "business",
-    cost: 88000,
-    downPayment: 24000,
-    cashflow: 2300,
-    text: "店长负责运营，你作为小股东分红。",
-  },
-  {
-    name: "小套房出租",
-    type: "property",
-    cost: 210000,
-    downPayment: 32000,
-    cashflow: 2100,
-    text: "地段普通，但租客稳定。",
-  },
+  { type: "propertyEvent", icon: "管", title: "持有管理", text: "房产赚钱也需要维护。" },
+  { type: "payday", icon: "薪", title: "月结日", text: "再次结算现金流与房贷本金。" },
 ];
 
 const doodadCards = [
@@ -136,50 +95,11 @@ const doodadCards = [
   { name: "保险补缴", cost: 3600, text: "必要支出，不能跳过。" },
 ];
 
-const marketCards = [
-  {
-    name: "房租上涨",
-    text: "你的房产类资产租金上涨 10%。",
-    action: "rentUp",
-  },
-  {
-    name: "小企业买家出现",
-    text: "有人愿意用 1.35 倍账面价值买入你的生意资产。",
-    action: "sell",
-    type: "business",
-    multiple: 1.35,
-  },
-  {
-    name: "房产买家出价",
-    text: "买家愿意用 1.25 倍账面价值收购你的房产资产。",
-    action: "sell",
-    type: "property",
-    multiple: 1.25,
-  },
-  {
-    name: "股市热潮",
-    text: "股票类资产可以用 1.5 倍账面价值卖出。",
-    action: "sell",
-    type: "stock",
-    multiple: 1.5,
-  },
-  {
-    name: "利率上升",
-    text: "所有贷款月供增加 5%。",
-    action: "rateUp",
-  },
-  {
-    name: "市场平静",
-    text: "没有可以交易的机会。本回合观察市场即可。",
-    action: "none",
-  },
-];
-
 const learningCards = [
-  { name: "读完一本财商书", cost: 0, iq: 1, text: "你更会区分资产和负债。" },
-  { name: "参加投资课", cost: 3200, iq: 2, text: "之后买资产时现金流评估更准确。" },
+  { name: "读完一本财商书", cost: 0, iq: 1, text: "你更会区分资产、负债和房产净值。" },
+  { name: "参加房地产现金流课", cost: 3200, iq: 2, text: "你学会先看净现金流，而不是只看价格。" },
   { name: "复盘失败交易", cost: 1200, iq: 1, text: "一次错误如果被复盘，就不算白亏。" },
-  { name: "请教会计朋友", cost: 1800, iq: 1, text: "你学会先看净现金流，而不是只看价格。" },
+  { name: "请教会计朋友", cost: 1800, iq: 1, text: "你学会把房贷、维修和空置都算进支出。" },
 ];
 
 let state = null;
@@ -202,6 +122,7 @@ const el = {
   incomeStatement: document.querySelector("#incomeStatement"),
   assetList: document.querySelector("#assetList"),
   liabilityList: document.querySelector("#liabilityList"),
+  realEstatePortfolio: document.querySelector("#realEstatePortfolio"),
   saveGame: document.querySelector("#saveGame"),
   loadGame: document.querySelector("#loadGame"),
   resetGame: document.querySelector("#resetGame"),
@@ -215,15 +136,21 @@ const el = {
 };
 
 function createState(career) {
-  return {
+  return migrateSavedState({
+    saveVersion: CURRENT_SAVE_VERSION,
     career,
     month: 1,
+    round: 1,
     position: 0,
     cash: career.savings,
     salary: career.salary,
     baseExpenses: career.expenses,
     assets: [],
     liabilities: [],
+    ownedProperties: [],
+    propertyTransactions: [],
+    settledEvents: [],
+    emergencyDebt: 0,
     financialIq: 0,
     lastRoll: null,
     gameOver: false,
@@ -231,23 +158,23 @@ function createState(career) {
       `你选择了${career.name}，初始现金 ${money(career.savings)}。`,
       "目标：让被动收入大于或等于总支出。",
     ],
-  };
+  });
 }
 
 function passiveIncome() {
-  return state.assets.reduce((sum, asset) => sum + asset.cashflow, 0);
-}
-
-function liabilityPayments() {
-  return state.liabilities.reduce((sum, item) => sum + item.payment, 0);
+  return state ? calculatePassiveIncome(state) : 0;
 }
 
 function totalExpenses() {
-  return state.baseExpenses + liabilityPayments();
+  return state ? calculateTotalExpenses(state) : 0;
+}
+
+function liabilityPayments() {
+  return state?.liabilities?.reduce((sum, item) => sum + moneyValue(item.payment), 0) || 0;
 }
 
 function netMonthlyCashflow() {
-  return state.salary + passiveIncome() - totalExpenses();
+  return state ? calculateMonthlyCashflow(state) : 0;
 }
 
 function freedomRatio() {
@@ -256,12 +183,20 @@ function freedomRatio() {
 }
 
 function money(value) {
-  const sign = value < 0 ? "-" : "";
-  return `${sign}¥${Math.abs(Math.round(value)).toLocaleString("zh-CN")}`;
+  const safeValue = moneyValue(value);
+  const sign = safeValue < 0 ? "-" : "";
+  return `${sign}¥${Math.abs(safeValue).toLocaleString("zh-CN")}`;
+}
+
+function moneyValue(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  const rounded = Math.round(number);
+  return Object.is(rounded, -0) ? 0 : rounded;
 }
 
 function pick(list) {
-  return list[Math.floor(Math.random() * list.length)];
+  return list[Math.floor(Math.random() * list.length)] || list[0];
 }
 
 function addLog(message) {
@@ -269,11 +204,16 @@ function addLog(message) {
   state.logs = state.logs.slice(0, 9);
 }
 
+function persistQuietly() {
+  if (!state) return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
 function renderSetup() {
   el.careerGrid.innerHTML = careers
     .map(
       (career) => `
-        <button class="career-card" type="button" data-career="${career.id}">
+        <button class="career-card motion-pop" type="button" data-career="${career.id}">
           <span class="career-icon">${career.icon}</span>
           <h3>${career.name}</h3>
           <p>${career.note}</p>
@@ -296,7 +236,7 @@ function renderSetup() {
       openSimpleModal({
         type: "开始",
         title: "现金流挑战开始",
-        text: `你现在是${career.name}。每次经过月结日会收到工资和资产现金流，同时支付生活支出和贷款月供。`,
+        text: `你现在是${career.name}。这版重点练习房地产：买入、持有、还房贷、遇到市场变化，再决定是否出售。`,
         actions: [{ label: "开始掷骰", className: "primary", onClick: closeModal }],
       });
     });
@@ -318,14 +258,15 @@ function render() {
     showSetup();
     return;
   }
-
+  ensureRealEstateState(state);
+  syncMortgageLiabilities(state);
   showGame();
   const freedom = freedomRatio();
   el.careerLabel.textContent = state.career.name;
-  el.gameTitle.textContent = state.gameOver ? "你已经跳出打工循环" : "现金流挑战进行中";
+  el.gameTitle.textContent = state.gameOver ? "你已经跳出打工循环" : "房地产现金流挑战";
   el.gameSubtitle.textContent = state.gameOver
     ? "被动收入已经覆盖全部支出，游戏目标达成。"
-    : `现金 ${money(state.cash)}，净月现金流 ${money(netMonthlyCashflow())}。`;
+    : `现金 ${money(state.cash)}，净月现金流 ${money(netMonthlyCashflow())}，净资产 ${money(calculateNetWorth(state))}。`;
   el.freedomPercent.textContent = `${freedom}%`;
   el.freedomBar.style.width = `${freedom}%`;
   el.roundLabel.textContent = `第 ${state.month} 月`;
@@ -334,6 +275,7 @@ function render() {
   renderBoard();
   renderActions();
   renderStatements();
+  renderRealEstatePortfolio();
   renderLogs();
 }
 
@@ -355,9 +297,10 @@ function renderBoard() {
 }
 
 function renderActions() {
-  const debt = state.liabilities.reduce((sum, item) => sum + item.balance, 0);
+  const debt = state.liabilities.reduce((sum, item) => sum + moneyValue(item.balance), 0);
   const buttons = [
     `<button type="button" id="borrowSmall">借入 ${money(5000)}</button>`,
+    `<button type="button" id="openPortfolio">房地产中心</button>`,
   ];
 
   if (debt > 0) {
@@ -372,22 +315,30 @@ function renderActions() {
   document.querySelector("#borrowSmall")?.addEventListener("click", () => borrowMoney(5000, "主动借款"));
   document.querySelector("#repayDebt")?.addEventListener("click", repayDebt);
   document.querySelector("#newRun")?.addEventListener("click", resetGame);
+  document.querySelector("#openPortfolio")?.addEventListener("click", () => {
+    document.querySelector("#realEstateSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 function renderStatements() {
+  const summary = calculatePortfolioSummary(state.ownedProperties);
   const rows = [
     ["工资收入", "主动收入", state.salary],
-    ["被动收入", "资产每月流入", passiveIncome()],
+    ["租金收入", "房地产每月租金", summary.monthlyRent],
+    ["其他被动收入", "生意或证券流入", passiveIncome() - summary.monthlyRent],
     ["生活支出", "职业基础支出", -state.baseExpenses],
-    ["贷款月供", "所有负债的月付款", -liabilityPayments()],
+    ["房贷月供", "房地产贷款月付款", -summary.monthlyMortgage],
+    ["房产支出", "管理费与维修准备金", -summary.monthlyExpenses],
+    ["其他贷款月供", "非房贷负债月付款", -(liabilityPayments() - summary.monthlyMortgage)],
     ["净月现金流", "月结日实际增加的现金", netMonthlyCashflow()],
     ["手上现金", "可以投资或应急", state.cash],
+    ["净资产", "现金 + 资产 - 负债", calculateNetWorth(state)],
   ];
 
   el.incomeStatement.innerHTML = rows
     .map(
       ([label, help, value]) => `
-        <div class="stat-row">
+        <div class="stat-row ${Number(value) < 0 ? "negative-line" : ""}">
           <div>
             <strong>${label}</strong>
             <small>${help}</small>
@@ -398,8 +349,9 @@ function renderStatements() {
     )
     .join("");
 
-  el.assetList.innerHTML = state.assets.length
-    ? state.assets
+  const nonPropertyAssets = state.assets.filter((asset) => asset.type !== "property");
+  el.assetList.innerHTML = nonPropertyAssets.length
+    ? nonPropertyAssets
         .map(
           (asset) => `
             <div class="asset-row positive">
@@ -412,7 +364,7 @@ function renderStatements() {
           `,
         )
         .join("")
-    : '<div class="asset-row"><strong>暂无资产</strong><small>买入资产后会显示在这里。</small></div>';
+    : '<div class="asset-row"><strong>暂无其他资产</strong><small>本轮重点资产在房地产中心。</small></div>';
 
   el.liabilityList.innerHTML = state.liabilities.length
     ? state.liabilities
@@ -421,14 +373,76 @@ function renderStatements() {
             <div class="asset-row negative">
               <div>
                 <strong>${item.name}</strong>
-                <small>余额 ${money(item.balance)}</small>
+                <small>${item.type === "mortgage" ? "房贷" : "负债"}余额 ${money(item.balance)}</small>
               </div>
               <b>-${money(item.payment)}</b>
             </div>
           `,
         )
         .join("")
-    : '<div class="asset-row"><strong>暂无负债</strong><small>借款后会增加月供。</small></div>';
+    : '<div class="asset-row"><strong>暂无负债</strong><small>借款或买入房产后会增加月供。</small></div>';
+}
+
+function renderRealEstatePortfolio() {
+  const summary = calculatePortfolioSummary(state.ownedProperties);
+  const propertiesHtml = state.ownedProperties.length
+    ? state.ownedProperties
+        .map(
+          (property) => `
+            <button class="property-row motion-pop" type="button" data-property="${property.id}">
+              <span class="property-icon">${propertyIcon(property.category)}</span>
+              <span>
+                <strong>${property.name}</strong>
+                <small>${property.category} · 持有 ${Math.max(0, state.month - property.purchasedMonth)} 个月 · ${property.lastMarketChange || "市场未变化"}</small>
+              </span>
+              <span class="property-numbers">
+                <b>${money(property.monthlyCashflow)}</b>
+                <small>净值 ${money(property.equity)}</small>
+              </span>
+            </button>
+          `,
+        )
+        .join("")
+    : '<div class="asset-row"><strong>还没有房地产</strong><small>遇到房地产机会时，可以从首付、房贷和租金开始判断。</small></div>';
+
+  const historyHtml = state.propertyTransactions.length
+    ? state.propertyTransactions
+        .slice(0, 7)
+        .map(
+          (tx) => `
+            <div class="history-row">
+              <strong>${tx.type}</strong>
+              <span>第 ${tx.month} 月 · ${tx.description}</span>
+            </div>
+          `,
+        )
+        .join("")
+    : '<div class="history-row"><strong>暂无记录</strong><span>购买、出售、维修和市场变化会记录在这里。</span></div>';
+
+  el.realEstatePortfolio.innerHTML = `
+    <div class="portfolio-summary">
+      ${summaryMetric("持有数量", `${summary.count} 项`)}
+      ${summaryMetric("总市值", money(summary.totalValue))}
+      ${summaryMetric("房贷总额", money(summary.totalMortgage))}
+      ${summaryMetric("房产净值", money(summary.totalEquity))}
+      ${summaryMetric("每月租金", money(summary.monthlyRent))}
+      ${summaryMetric("每月支出", money(summary.monthlyExpenses + summary.monthlyMortgage))}
+      ${summaryMetric("每月现金流", money(summary.monthlyCashflow))}
+    </div>
+    <div class="property-list">${propertiesHtml}</div>
+    <div class="transaction-history">
+      <h3>房地产交易记录</h3>
+      ${historyHtml}
+    </div>
+  `;
+
+  el.realEstatePortfolio.querySelectorAll("[data-property]").forEach((button) => {
+    button.addEventListener("click", () => showPropertyDetail(button.dataset.property));
+  });
+}
+
+function summaryMetric(label, value) {
+  return `<div class="summary-metric"><span>${label}</span><strong>${value}</strong></div>`;
 }
 
 function renderLogs() {
@@ -441,6 +455,21 @@ function assetLabel(type) {
     business: "生意",
     stock: "证券",
   }[type] || "资产";
+}
+
+function propertyIcon(category) {
+  return {
+    小套房: "套",
+    学生公寓: "学",
+    双拼屋: "双",
+    郊区住宅: "宅",
+    商店店面: "店",
+    停车位: "车",
+    小型仓库: "仓",
+    度假小屋: "假",
+    小型办公空间: "办",
+    多户住宅: "户",
+  }[category] || "房";
 }
 
 function rollDice() {
@@ -456,6 +485,7 @@ function rollDice() {
 
   state.position = next;
   addLog(`掷出 ${roll}，移动到「${boardTiles[next].title}」。`);
+  state.round += 1;
   render();
   triggerTile(boardTiles[next]);
 }
@@ -478,7 +508,12 @@ function triggerTile(tile) {
   }
 
   if (tile.type === "market") {
-    showMarket();
+    showPropertyMarket();
+    return;
+  }
+
+  if (tile.type === "propertyEvent") {
+    showPropertyHoldingEvent();
     return;
   }
 
@@ -498,65 +533,203 @@ function triggerTile(tile) {
 }
 
 function collectPayday(reason) {
-  const amount = netMonthlyCashflow();
-  state.cash += amount;
+  const beforeCashflow = netMonthlyCashflow();
+  state.cash += beforeCashflow;
+  const mortgageResults = applyMortgagePayday(state);
   state.month += 1;
-  addLog(`${reason}：结算净现金流 ${money(amount)}。`);
+  addLog(`${reason}：结算净现金流 ${money(beforeCashflow)}。`);
+  mortgageResults.forEach((result) => {
+    addLog(`${result.propertyName} 本月偿还本金 ${money(result.principal)}，剩余房贷 ${money(result.afterBalance)}。`);
+    if (result.paidOff) {
+      addLog(`庆祝！${result.propertyName} 房贷还清，房产现金流提高。`);
+      openSimpleModal({
+        type: "房贷还清",
+        title: "你真正拥有了更多房产",
+        text: `${result.propertyName} 的房贷已经还清。每次偿还一部分本金，你真正拥有的房产比例就会增加。`,
+        actions: [{ label: "太好了", className: "primary", onClick: closeModal }],
+      });
+    }
+  });
   if (state.cash < 0) {
     const needed = Math.abs(state.cash) + 2000;
     borrowMoney(needed, "现金为负自动借款", false);
   }
+  persistQuietly();
   checkWin();
 }
 
 function showOpportunity() {
-  const card = pick(opportunityCards);
-  const iqBonus = 1 + state.financialIq * 0.02;
-  const adjustedCashflow = Math.round(card.cashflow * iqBonus);
-  const deal = {
+  const card = pick(realEstateOpportunities);
+  const iqDiscount = Math.min(0.08, state.financialIq * 0.01);
+  const opportunity = {
     ...card,
-    cashflow: adjustedCashflow,
-    value: card.cost,
-    id: `${card.type}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    downPayment: Math.round(card.downPayment * (1 - iqDiscount)),
   };
-  const shortfall = Math.max(0, deal.downPayment - state.cash);
-  const roi = Math.round((deal.cashflow * 12 / deal.downPayment) * 100);
+  const calculation = calculateOpportunity(opportunity);
+  const eventId = `opportunity-${state.round}-${state.position}-${opportunity.id}`;
+  const shortfall = Math.max(0, opportunity.downPayment - state.cash);
+  const cashAfter = state.cash - opportunity.downPayment;
+  const reserveMonths = calculateEmergencyReserveMonths(state, cashAfter);
+  const requiredMonths = emergencyReserveRequiredMonths(opportunity.riskLevel);
 
   openSimpleModal({
-    type: "机会",
-    title: deal.name,
-    text: deal.text,
-    metrics: [
-      ["资产类型", assetLabel(deal.type)],
-      ["首付", money(deal.downPayment)],
-      ["每月现金流", `+${money(deal.cashflow)}`],
-      ["年化现金回报", `${roi}%`],
-    ],
+    type: "房地产机会",
+    title: opportunity.name,
+    text: `${opportunity.description} ${opportunity.childNote}`,
+    metrics: propertyOpportunityMetrics(opportunity, calculation),
     actions: [
       {
-        label: state.cash >= deal.downPayment ? "买入资产" : `借 ${money(shortfall)} 买入`,
+        label: shortfall > 0 ? `现金不足，还差 ${money(shortfall)}` : "购买",
         className: "primary",
+        disabled: shortfall > 0,
         onClick: () => {
-          if (shortfall > 0) borrowMoney(shortfall, "为买入资产借款", false);
-          buyAsset(deal);
-          closeModal();
+          if (shortfall > 0) return;
+          if (reserveMonths < requiredMonths) {
+            showEmergencyReserveConfirm(opportunity, eventId, reserveMonths, requiredMonths);
+            return;
+          }
+          completePropertyPurchase(opportunity, eventId);
         },
       },
-      { label: "放弃机会", onClick: () => {
-        addLog(`放弃了「${deal.name}」。`);
-        closeModal();
-        render();
-      } },
+      { label: "为什么？", onClick: () => showOpportunityWhy(opportunity, calculation, eventId) },
+      { label: "查看计算", onClick: () => showOpportunityCalculation(opportunity, calculation, eventId) },
+      {
+        label: "放弃",
+        onClick: () => {
+          state.settledEvents.push(eventId);
+          addLog(`放弃了「${opportunity.name}」。`);
+          closeModal();
+          persistQuietly();
+          render();
+        },
+      },
     ],
   });
 }
 
-function buyAsset(deal) {
-  state.cash -= deal.downPayment;
-  state.assets.push(deal);
-  addLog(`买入「${deal.name}」，每月被动收入增加 ${money(deal.cashflow)}。`);
-  checkWin();
+function propertyOpportunityMetrics(opportunity, calculation) {
+  return [
+    ["类型", opportunity.category],
+    ["总价", money(opportunity.purchasePrice)],
+    ["首付款", money(opportunity.downPayment)],
+    ["贷款金额", money(calculation.loanAmount)],
+    ["每月租金", money(opportunity.monthlyRent)],
+    ["每月房贷", money(opportunity.mortgagePayment)],
+    ["管理与维修", money(calculation.monthlyExpenses)],
+    ["每月净现金流", money(calculation.monthlyCashflow)],
+    ["预计房产净值", money(calculation.projectedEquity)],
+    ["风险等级", opportunity.riskLevel],
+    ["地段等级", opportunity.locationQuality],
+    ["儿童说明", opportunity.childNote],
+  ];
+}
+
+function showOpportunityWhy(opportunity, calculation, eventId) {
+  openSimpleModal({
+    type: "为什么",
+    title: `${opportunity.name} 值得看什么？`,
+    text: `房地产不是只看总价。你要先看首付会不会掏空现金，再看租金扣掉房贷、管理费和维修准备金后是否仍有净现金流。`,
+    metrics: [
+      ["风险", opportunity.riskLevel],
+      ["地段", opportunity.locationQuality],
+      ["状态", opportunity.condition],
+      ["现金流判断", calculation.monthlyCashflow >= 0 ? "每月流入" : "每月倒贴"],
+    ],
+    actions: [
+      { label: "返回机会卡", className: "primary", onClick: () => showOpportunityByCard(opportunity, eventId) },
+      { label: "放弃", onClick: closeModal },
+    ],
+  });
+}
+
+function showOpportunityCalculation(opportunity, calculation, eventId) {
+  openSimpleModal({
+    type: "查看计算",
+    title: `${opportunity.name} 每月现金流`,
+    text: "每月租金 − 每月房贷 − 管理费 − 维修准备金 ＝ 每月净现金流。",
+    metrics: [
+      ["每月租金", money(opportunity.monthlyRent)],
+      ["− 每月房贷", money(-opportunity.mortgagePayment)],
+      ["− 管理费", money(-opportunity.managementFee)],
+      ["− 维修准备金", money(-opportunity.repairReserve)],
+      ["＝ 每月净现金流", money(calculation.monthlyCashflow)],
+    ],
+    actions: [
+      { label: "返回机会卡", className: "primary", onClick: () => showOpportunityByCard(opportunity, eventId) },
+      { label: "关闭", onClick: closeModal },
+    ],
+  });
+}
+
+function showOpportunityByCard(opportunity, eventId) {
+  const calculation = calculateOpportunity(opportunity);
+  const shortfall = Math.max(0, opportunity.downPayment - state.cash);
+  openSimpleModal({
+    type: "房地产机会",
+    title: opportunity.name,
+    text: `${opportunity.description} ${opportunity.childNote}`,
+    metrics: propertyOpportunityMetrics(opportunity, calculation),
+    actions: [
+      {
+        label: shortfall > 0 ? `现金不足，还差 ${money(shortfall)}` : "购买",
+        className: "primary",
+        disabled: shortfall > 0,
+        onClick: () => completePropertyPurchase(opportunity, eventId),
+      },
+      { label: "查看计算", onClick: () => showOpportunityCalculation(opportunity, calculation, eventId) },
+      { label: "放弃", onClick: closeModal },
+    ],
+  });
+}
+
+function showEmergencyReserveConfirm(opportunity, eventId, reserveMonths, requiredMonths) {
+  openSimpleModal({
+    type: "现金安全垫提醒",
+    title: "购买后现金会偏低",
+    text: "房产可能赚钱，但你仍需要留钱处理维修和生活意外。",
+    metrics: [
+      ["购买后现金", money(state.cash - opportunity.downPayment)],
+      ["约可覆盖支出", `${reserveMonths} 个月`],
+      ["建议安全垫", `${requiredMonths} 个月`],
+      ["风险等级", opportunity.riskLevel],
+    ],
+    actions: [
+      { label: "仍然购买", className: "primary", onClick: () => completePropertyPurchase(opportunity, eventId) },
+      { label: "先不买", onClick: closeModal },
+    ],
+  });
+}
+
+function completePropertyPurchase(opportunity, eventId) {
+  if (state.settledEvents.includes(eventId)) return;
+  const result = buyProperty(state, opportunity, eventId);
+  if (!result.ok) {
+    openSimpleModal({
+      type: "无法购买",
+      title: "购买没有完成",
+      text: result.reason,
+      actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+    });
+    return;
+  }
+  addLog(`买入「${result.property.name}」，每月房地产现金流 ${money(result.property.monthlyCashflow)}。`);
+  persistQuietly();
   render();
+  openSimpleModal({
+    type: "购买成功",
+    title: "新房地产加入资产中心",
+    text: `扣除首付 ${money(result.property.downPayment)}，新增房贷 ${money(result.property.originalMortgage)}。`,
+    metrics: [
+      ["剩余现金", money(state.cash)],
+      ["每月租金", money(result.property.monthlyRent)],
+      ["每月支出", money(result.property.monthlyExpenses + result.property.mortgagePayment)],
+      ["净现金流变化", money(result.property.monthlyCashflow)],
+      ["房产净值", money(result.property.equity)],
+      ["净资产", money(calculateNetWorth(state))],
+    ],
+    actions: [{ label: "查看资产中心", className: "primary", onClick: closeModal }],
+  });
+  checkWin();
 }
 
 function showDoodad() {
@@ -575,6 +748,7 @@ function showDoodad() {
         onClick: () => {
           payCost(cost, card.name);
           closeModal();
+          persistQuietly();
           render();
         },
       },
@@ -582,83 +756,97 @@ function showDoodad() {
   });
 }
 
-function showMarket() {
-  const card = pick(marketCards);
-  if (card.action === "rentUp") {
-    const properties = state.assets.filter((asset) => asset.type === "property");
-    openSimpleModal({
-      type: "市场",
-      title: card.name,
-      text: properties.length ? card.text : "你还没有房产资产，所以这次市场变化与你无关。",
-      actions: [
-        {
-          label: "应用市场变化",
-          className: "primary",
-          onClick: () => {
-            properties.forEach((asset) => {
-              asset.cashflow = Math.round(asset.cashflow * 1.1);
-            });
-            addLog(properties.length ? "房产租金上涨，被动收入提高。" : "市场变化没有影响你的资产。");
-            closeModal();
-            checkWin();
-            render();
-          },
-        },
-      ],
-    });
-    return;
-  }
-
-  if (card.action === "rateUp") {
-    openSimpleModal({
-      type: "市场",
-      title: card.name,
-      text: state.liabilities.length ? card.text : "你没有贷款，所以利率上升暂时不影响你。",
-      actions: [
-        {
-          label: "应用市场变化",
-          className: "primary",
-          onClick: () => {
-            state.liabilities.forEach((item) => {
-              item.payment = Math.ceil(item.payment * 1.05);
-            });
-            addLog(state.liabilities.length ? "贷款月供上升 5%。" : "利率变化没有影响你。");
-            closeModal();
-            render();
-          },
-        },
-      ],
-    });
-    return;
-  }
-
-  if (card.action === "sell") {
-    const candidates = state.assets.filter((asset) => asset.type === card.type);
-    const sellActions = candidates.map((asset) => ({
-      label: `卖出 ${asset.name}：${money(asset.value * card.multiple)}`,
-      className: "primary",
-      onClick: () => {
-        sellAsset(asset.id, card.multiple);
-        closeModal();
-      },
-    }));
-
-    openSimpleModal({
-      type: "市场",
-      title: card.name,
-      text: candidates.length ? card.text : `你目前没有${assetLabel(card.type)}资产可以出售。`,
-      actions: sellActions.length
-        ? [...sellActions, { label: "暂不出售", onClick: closeModal }]
-        : [{ label: "知道了", className: "primary", onClick: closeModal }],
-    });
-    return;
-  }
-
+function showPropertyMarket() {
+  const event = pickRealEstateMarketEvent();
   openSimpleModal({
-    type: "市场",
-    title: card.name,
-    text: card.text,
-    actions: [{ label: "继续", className: "primary", onClick: closeModal }],
+    type: "房地产市场",
+    title: event.title,
+    text: state.ownedProperties.length ? event.text : "你还没有房产，所以这次房地产市场变化没有受到影响。",
+    actions: [
+      {
+        label: "应用市场变化",
+        className: "primary",
+        onClick: () => {
+          const result = resolveRealEstateMarketEvent(state, event);
+          const affected = result.affected || [];
+          addLog(affected.length ? `${event.title} 已影响 ${affected.length} 项房产。` : result.message);
+          persistQuietly();
+          render();
+          showMarketResult(event, affected);
+        },
+      },
+    ],
+  });
+}
+
+function showMarketResult(event, affected) {
+  openSimpleModal({
+    type: "市场结果",
+    title: event.title,
+    text: affected.length ? "以下是变化前后的关键数值。" : "你没有房产，因此没有数值变化。",
+    metrics: affected.length
+      ? affected.slice(0, 4).flatMap((item) => [
+          [item.name, `${money(item.beforeValue)} -> ${money(item.afterValue)}`],
+          ["租金 / 现金流", `${money(item.beforeRent)} -> ${money(item.afterRent)} / ${money(item.afterCashflow)}`],
+        ])
+      : [["影响", "无"]],
+    actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+  });
+}
+
+function showPropertyHoldingEvent() {
+  const event = pickPropertyHoldingEvent(state);
+  if (!event) {
+    openSimpleModal({
+      type: "房产持有",
+      title: "本次没有房地产事件",
+      text: "你还没有持有房产，所以不会抽取维修、空置或翻修事件。",
+      actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+    });
+    return;
+  }
+  const property = pick(state.ownedProperties);
+  openSimpleModal({
+    type: "房产持有",
+    title: event.title,
+    text: `${property.name}：${event.text}`,
+    metrics: [
+      ["作用房产", property.name],
+      ["当前现金", money(state.cash)],
+      ["当前价值", money(property.currentValue)],
+      ["当前租金", money(property.monthlyRent)],
+    ],
+    actions: [
+      {
+        label: "结算事件",
+        className: "primary",
+        onClick: () => {
+          const result = resolvePropertyHoldingEvent(state, event, property.id);
+          addLog(result.ok ? result.description : result.reason);
+          persistQuietly();
+          render();
+          showHoldingResult(event, result);
+        },
+      },
+    ],
+  });
+}
+
+function showHoldingResult(event, result) {
+  openSimpleModal({
+    type: "持有事件结果",
+    title: event.title,
+    text: result.ok ? result.description : result.reason,
+    metrics: result.ok
+      ? [
+          ["现金变化", money(-result.cashCost)],
+          ["价值变化", `${money(result.before.currentValue)} -> ${money(result.after.currentValue)}`],
+          ["租金变化", `${money(result.before.monthlyRent)} -> ${money(result.after.monthlyRent)}`],
+          ["现金流变化", `${money(result.before.monthlyCashflow)} -> ${money(result.after.monthlyCashflow)}`],
+          ["紧急负债", money(state.emergencyDebt)],
+        ]
+      : [["结果", "未影响"]],
+    actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
   });
 }
 
@@ -678,6 +866,7 @@ function showLearning() {
           state.financialIq += card.iq;
           addLog(`完成学习，财商等级提升到 ${state.financialIq}。`);
           closeModal();
+          persistQuietly();
           render();
         },
       },
@@ -686,14 +875,87 @@ function showLearning() {
   });
 }
 
-function sellAsset(assetId, multiple) {
-  const asset = state.assets.find((item) => item.id === assetId);
-  if (!asset) return;
-  const price = Math.round(asset.value * multiple);
-  state.cash += price;
-  state.assets = state.assets.filter((item) => item.id !== assetId);
-  addLog(`卖出「${asset.name}」，获得 ${money(price)}，但失去每月 ${money(asset.cashflow)} 被动收入。`);
+function showPropertyDetail(propertyId) {
+  const property = state.ownedProperties.find((item) => item.id === propertyId);
+  if (!property) return;
+  openSimpleModal({
+    type: "房地产详情",
+    title: property.name,
+    text: `${property.description} 儿童说明：每次偿还一部分本金，你真正拥有的房产比例就会增加。`,
+    metrics: [
+      ["类型", property.category],
+      ["当前价值", money(property.currentValue)],
+      ["剩余房贷", money(property.mortgageBalance)],
+      ["房产净值", money(property.equity)],
+      ["每月租金", money(property.monthlyRent)],
+      ["房贷月供", money(property.mortgagePayment)],
+      ["每月支出", money(property.monthlyExpenses)],
+      ["每月净现金流", money(calculatePropertyCashflow(property))],
+      ["已还本金", money(property.principalPaid)],
+      ["市场变化", property.lastMarketChange || "暂无"],
+      ["持有月份", `${Math.max(0, state.month - property.purchasedMonth)} 个月`],
+      ["状态", property.status === "paidOff" ? "房贷已还清" : "持有中"],
+    ],
+    actions: [
+      { label: "出售房产", className: "danger", onClick: () => showPropertySellModal(property.id) },
+      { label: "关闭", className: "primary", onClick: closeModal },
+    ],
+  });
+}
+
+function showPropertySellModal(propertyId) {
+  const property = state.ownedProperties.find((item) => item.id === propertyId);
+  if (!property) return;
+  const preview = calculateSellPreview(property);
+  openSimpleModal({
+    type: "出售房地产",
+    title: `出售 ${property.name}`,
+    text: "卖价不是你真正拿到的钱，还要先还贷款和支付出售费用。",
+    metrics: [
+      ["当前市场价值", money(preview.currentValue)],
+      ["剩余房贷", money(preview.mortgageBalance)],
+      ["出售费用", money(preview.sellingFee)],
+      ["实际收到现金", money(preview.cashReceived)],
+      ["预计损益", money(preview.profitLoss)],
+      ["亏损提示", preview.profitLoss < 0 ? "这笔出售会亏损" : "这笔出售预计盈利"],
+    ],
+    actions: [
+      {
+        label: "确认出售",
+        className: "danger",
+        onClick: () => completePropertySale(property.id),
+      },
+      { label: "取消", className: "primary", onClick: () => showPropertyDetail(property.id) },
+    ],
+  });
+}
+
+function completePropertySale(propertyId) {
+  const result = sellProperty(state, propertyId);
+  if (!result.ok) {
+    openSimpleModal({
+      type: "出售失败",
+      title: "没有完成出售",
+      text: result.reason,
+      actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+    });
+    return;
+  }
+  addLog(`卖出「${result.property.name}」，实际收到 ${money(result.preview.cashReceived)}。`);
+  persistQuietly();
   render();
+  openSimpleModal({
+    type: "出售结算",
+    title: `${result.property.name} 已出售`,
+    text: "房产已移出资产中心，对应房贷也已移除。",
+    metrics: [
+      ["现金增加", money(result.preview.cashReceived)],
+      ["房贷减少", money(result.preview.mortgageBalance)],
+      ["出售费用", money(result.preview.sellingFee)],
+      ["损益", money(result.preview.profitLoss)],
+    ],
+    actions: [{ label: "完成", className: "primary", onClick: closeModal }],
+  });
 }
 
 function payCost(cost, reason) {
@@ -710,16 +972,18 @@ function borrowMoney(amount, name = "银行借款", shouldRender = true) {
   state.cash += rounded;
   state.liabilities.push({
     id: `loan-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    type: "loan",
     name,
     balance: rounded,
     payment: Math.ceil(rounded * 0.03),
   });
   addLog(`${name}：现金增加 ${money(rounded)}，月供增加 ${money(Math.ceil(rounded * 0.03))}。`);
+  persistQuietly();
   if (shouldRender) render();
 }
 
 function repayDebt() {
-  const loan = state.liabilities[0];
+  const loan = state.liabilities.find((item) => item.type !== "mortgage");
   if (!loan || state.cash <= 0) return;
   const payment = Math.min(5000, loan.balance, state.cash);
   loan.balance -= payment;
@@ -731,6 +995,7 @@ function repayDebt() {
   } else {
     loan.payment = Math.ceil(loan.balance * 0.03);
   }
+  persistQuietly();
   render();
 }
 
@@ -738,6 +1003,7 @@ function checkWin() {
   if (state.gameOver || passiveIncome() < totalExpenses()) return false;
   state.gameOver = true;
   addLog("被动收入已经覆盖总支出，财务自由达成。");
+  persistQuietly();
   render();
   openSimpleModal({
     type: "胜利",
@@ -745,9 +1011,9 @@ function checkWin() {
     text: `你的被动收入为 ${money(passiveIncome())}，总支出为 ${money(totalExpenses())}。现在即使不依赖工资，也能覆盖每月支出。`,
     metrics: [
       ["用时", `${state.month} 个月`],
-      ["资产数量", `${state.assets.length} 个`],
+      ["房地产数量", `${state.ownedProperties.length} 项`],
       ["手上现金", money(state.cash)],
-      ["财商等级", `${state.financialIq}`],
+      ["净资产", money(calculateNetWorth(state))],
     ],
     actions: [
       { label: "再开一局", className: "primary", onClick: resetGame },
@@ -778,7 +1044,12 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [] }) {
     button.type = "button";
     button.textContent = action.label;
     if (action.className) button.className = action.className;
-    button.addEventListener("click", action.onClick);
+    if (action.disabled) button.disabled = true;
+    button.addEventListener("click", () => {
+      if (button.disabled) return;
+      button.disabled = true;
+      action.onClick();
+    });
     el.modalActions.append(button);
   });
 
@@ -791,34 +1062,32 @@ function closeModal() {
 
 function saveGame() {
   if (!state) return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  persistQuietly();
   openSimpleModal({
     type: "保存",
     title: "进度已保存",
-    text: "下次打开这个页面后，可以点击读取继续。",
+    text: "下次打开这个页面后，可以点击读取继续。房地产、房贷和交易记录都会恢复。",
     actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
   });
 }
 
 function loadGame() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
+  const loaded = parseSavedState(localStorage.getItem(STORAGE_KEY));
+  if (!loaded) {
+    localStorage.removeItem(STORAGE_KEY);
     openSimpleModal({
       type: "读取",
-      title: "没有找到存档",
-      text: "先开始一局并保存，之后才能读取。",
+      title: "没有找到可用存档",
+      text: "先开始一局并保存，之后才能读取。旧版异常存档会被安全跳过，避免白屏。",
       actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
     });
     return;
   }
 
-  try {
-    state = JSON.parse(raw);
-    addLog("读取了本地存档。");
-    render();
-  } catch {
-    localStorage.removeItem(STORAGE_KEY);
-  }
+  state = loaded;
+  addLog("读取并迁移了本地存档。");
+  persistQuietly();
+  render();
 }
 
 function resetGame() {
@@ -845,6 +1114,39 @@ window.addEventListener("keydown", (event) => {
     rollDice();
   }
 });
+
+window.cashflowDebug = {
+  getState: () => state,
+  setState: (nextState) => {
+    state = migrateSavedState(nextState);
+    render();
+  },
+  buyFirstProperty: () => {
+    if (!state) state = createState(careers[3]);
+    state.cash = Math.max(state.cash, 300000);
+    completePropertyPurchase(realEstateOpportunities[0], `debug-${Date.now()}`);
+  },
+  triggerMarket: () => {
+    if (!state) return;
+    const event = pickRealEstateMarketEvent(() => 0);
+    resolveRealEstateMarketEvent(state, event);
+    persistQuietly();
+    render();
+  },
+  triggerHoldingEvent: () => {
+    if (!state) return;
+    const event = pickPropertyHoldingEvent(state, () => 0);
+    if (event) resolvePropertyHoldingEvent(state, event, state.ownedProperties[0]?.id);
+    persistQuietly();
+    render();
+  },
+  payday: () => {
+    if (!state) return;
+    collectPayday("验收月结日");
+    render();
+  },
+  closeModal,
+};
 
 renderSetup();
 render();
