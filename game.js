@@ -106,12 +106,15 @@ import {
   createCitySceneSvg,
   createSoundManager,
   diceMarkup,
+  eventIllustrationMarkup,
   haptic,
   indexAfter,
   loadExperienceSettings,
   nextIndices,
   saveExperienceSettings,
   tileVisual,
+  tutorialSteps,
+  contextTipMessages,
   avatarMarkup,
 } from "./gameExperience.js";
 
@@ -225,15 +228,31 @@ const uiState = {
   hudStatus: "准备中",
   movingStep: 0,
   movingTotal: 0,
-  avatarMood: "idle",
+  avatarMood: "neutral",
+  avatarTimer: null,
   previewIndices: [],
   camera: savedExperience.camera,
   muted: savedExperience.muted,
   volume: savedExperience.volume,
+  effectVolume: savedExperience.effectVolume,
+  musicVolume: savedExperience.musicVolume,
+  musicEnabled: savedExperience.musicEnabled,
+  hapticsEnabled: savedExperience.hapticsEnabled,
+  tutorialComplete: savedExperience.tutorialComplete,
+  seenTips: savedExperience.seenTips,
+  tutorial: {
+    active: false,
+    index: 0,
+    replay: false,
+  },
+  pendingTips: [],
   draggingCamera: false,
 };
 soundManager.setMuted(uiState.muted);
 soundManager.setVolume(uiState.volume);
+soundManager.setEffectVolume(uiState.effectVolume);
+soundManager.setMusicVolume(uiState.musicVolume);
+soundManager.setMusicEnabled(uiState.musicEnabled);
 
 const el = {
   setupPanel: document.querySelector("#setupPanel"),
@@ -381,9 +400,10 @@ function renderSetup() {
     .map(
       (career) => `
         <button class="career-card motion-pop" type="button" data-career="${career.id}">
-          <span class="career-icon">${career.icon}</span>
+          <span class="career-icon">${avatarMarkup(career, "happy")}</span>
           <h3>${career.name}</h3>
           <p>${career.note}</p>
+          <small class="career-personality">${careerPersonality(career.id)}</small>
           <div class="career-stats">
             <span>工资 ${money(career.salary)}</span>
             <span>月支出 ${money(career.expenses)}</span>
@@ -403,11 +423,20 @@ function renderSetup() {
       openSimpleModal({
         type: "开始",
         title: "现金流挑战开始",
-        text: `你现在是${career.name}。这版重点练习房地产：买入、持有、还房贷、遇到市场变化，再决定是否出售。`,
-        actions: [{ label: "开始掷骰", className: "primary", onClick: closeModal }],
+        text: `你现在是${career.name}。这版城市会陪你练习收入、支出、投资、保险、银行和人生事件。`,
+        actions: [{ label: "开始掷骰", className: "primary", onClick: () => { closeModal(); maybeStartTutorial(); } }],
       });
     });
   });
+}
+
+function careerPersonality(id) {
+  return {
+    teacher: "探险型：稳稳观察每个选择",
+    engineer: "发明家型：喜欢拆解系统",
+    designer: "小店长型：擅长看见机会",
+    doctor: "规划型：重视安全垫",
+  }[id] || "城市冒险家";
 }
 
 function showGame() {
@@ -418,6 +447,12 @@ function showGame() {
 function showSetup() {
   el.gamePanel.classList.add("hidden");
   el.setupPanel.classList.remove("hidden");
+}
+
+function unlockAudio() {
+  if (!uiState.muted && uiState.musicEnabled) {
+    soundManager.startMusic(state ? "board" : "home");
+  }
 }
 
 function render() {
@@ -458,6 +493,7 @@ function render() {
   renderStockPortfolio();
   renderBusinessPortfolio();
   renderLogs();
+  renderTutorial();
 }
 
 function renderBoard() {
@@ -485,7 +521,10 @@ function renderBoard() {
                 <span class="tile-copy">
                   <strong>${tile.title}</strong>
                   <small>${visual.category} · ${visual.status}</small>
+                  <em>${visual.badge}</em>
                 </span>
+                <span class="tile-particle one"></span>
+                <span class="tile-particle two"></span>
               </button>
             `;
           })
@@ -613,6 +652,12 @@ function saveExperience() {
   saveExperienceSettings(localStorage, {
     muted: uiState.muted,
     volume: uiState.volume,
+    effectVolume: uiState.effectVolume,
+    musicVolume: uiState.musicVolume,
+    musicEnabled: uiState.musicEnabled,
+    hapticsEnabled: uiState.hapticsEnabled,
+    tutorialComplete: uiState.tutorialComplete,
+    seenTips: uiState.seenTips,
     camera: uiState.camera,
   });
 }
@@ -684,8 +729,128 @@ function toggleSound() {
   uiState.muted = !uiState.muted;
   soundManager.setMuted(uiState.muted);
   saveExperience();
-  if (!uiState.muted) soundManager.play("tap");
+  if (!uiState.muted) {
+    soundManager.play("tap");
+    soundManager.startMusic(state ? "board" : "home");
+  }
   renderActions();
+}
+
+function setAvatarMood(mood, duration = 1500) {
+  uiState.avatarMood = mood;
+  if (uiState.avatarTimer) clearTimeout(uiState.avatarTimer);
+  if (duration > 0 && mood !== "walking") {
+    uiState.avatarTimer = setTimeout(() => {
+      uiState.avatarMood = "neutral";
+      uiState.avatarTimer = null;
+      if (state) renderBoard();
+    }, prefersReducedMotion() ? 120 : duration);
+  }
+  if (state) renderBoard();
+}
+
+function moodFromAmount(amount, fallback = "neutral") {
+  const value = moneyValue(amount);
+  if (value > 0) return value > 5000 ? "excited" : "happy";
+  if (value < 0) return Math.abs(value) > 5000 ? "sad" : "worried";
+  return fallback;
+}
+
+function startTutorial(replay = false) {
+  uiState.tutorial = { active: true, index: 0, replay };
+  soundManager.play("tap");
+  renderTutorial();
+}
+
+function nextTutorialStep() {
+  if (!uiState.tutorial.active) return;
+  if (uiState.tutorial.index >= tutorialSteps.length - 1) {
+    completeTutorial();
+    return;
+  }
+  uiState.tutorial.index += 1;
+  renderTutorial();
+}
+
+function previousTutorialStep() {
+  if (!uiState.tutorial.active) return;
+  uiState.tutorial.index = Math.max(0, uiState.tutorial.index - 1);
+  renderTutorial();
+}
+
+function skipTutorial() {
+  if (!uiState.tutorial.active) return;
+  uiState.tutorial.active = false;
+  uiState.tutorialComplete = true;
+  saveExperience();
+  renderTutorial();
+}
+
+function completeTutorial() {
+  uiState.tutorial.active = false;
+  uiState.tutorialComplete = true;
+  saveExperience();
+  soundManager.play("win");
+  setAvatarMood("celebrating", 1800);
+  renderTutorial();
+}
+
+function maybeStartTutorial() {
+  if (!uiState.tutorialComplete) startTutorial(false);
+}
+
+function renderTutorial() {
+  document.querySelector("#tutorialOverlay")?.remove();
+  if (!uiState.tutorial.active) return;
+  const step = tutorialSteps[uiState.tutorial.index] || tutorialSteps[0];
+  const overlay = document.createElement("div");
+  overlay.className = `tutorial-overlay target-${step.target}`;
+  overlay.id = "tutorialOverlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-label", `新手教学：${step.title}`);
+  overlay.innerHTML = `
+    <div class="tutorial-spotlight" aria-hidden="true"></div>
+    <div class="tutorial-card">
+      <span class="tutorial-count">${uiState.tutorial.index + 1} / ${tutorialSteps.length}</span>
+      <h2>${step.title}</h2>
+      <p>${step.text}</p>
+      <div class="tutorial-actions">
+        <button type="button" id="tutorialBack" ${uiState.tutorial.index === 0 ? "disabled" : ""}>上一步</button>
+        <button type="button" id="tutorialSkip">跳过</button>
+        <button class="primary" type="button" id="tutorialNext">${uiState.tutorial.index >= tutorialSteps.length - 1 ? "完成" : "下一步"}</button>
+      </div>
+    </div>
+  `;
+  document.body.append(overlay);
+  document.querySelector("#tutorialBack")?.addEventListener("click", previousTutorialStep);
+  document.querySelector("#tutorialSkip")?.addEventListener("click", skipTutorial);
+  document.querySelector("#tutorialNext")?.addEventListener("click", nextTutorialStep);
+}
+
+function showContextTip(tipId, force = false) {
+  const tip = contextTipMessages[tipId];
+  if (!tip) return false;
+  if (!force && uiState.seenTips[tipId]) return false;
+  uiState.seenTips = { ...uiState.seenTips, [tipId]: true };
+  saveExperience();
+  openSimpleModal({
+    type: "教学提示",
+    title: tip.title,
+    text: tip.text,
+    actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+  });
+  setAvatarMood("thinking", 1400);
+  return true;
+}
+
+function queueContextTip(tipId) {
+  const tip = contextTipMessages[tipId];
+  if (!tip || uiState.seenTips[tipId] || uiState.pendingTips.includes(tipId)) return false;
+  uiState.seenTips = { ...uiState.seenTips, [tipId]: true };
+  uiState.pendingTips = [...uiState.pendingTips, tipId];
+  saveExperience();
+  return true;
 }
 
 function renderStatements() {
@@ -1076,15 +1241,20 @@ function emitFinanceEffect(amount, label = "现金变化", kind = "neutral") {
   const number = moneyValue(amount);
   const layer = document.createElement("div");
   layer.className = `finance-effect ${number >= 0 ? "positive" : "negative"} ${kind}`;
+  layer.setAttribute("role", "status");
+  layer.setAttribute("aria-live", "polite");
+  const effectLabel = number >= 0 ? "现金增加" : "现金减少";
+  const icon = number >= 0 ? (kind === "payday" ? "薪" : "¥") : kind === "expense" ? "账" : "债";
   layer.innerHTML = `
-    <span class="effect-icon">${number >= 0 ? "¥" : "账"}</span>
+    <span class="effect-icon">${icon}</span>
     <strong>${number >= 0 ? "+" : "-"}${money(Math.abs(number))}</strong>
-    <small>${label}</small>
+    <small>${effectLabel} · ${label}</small>
+    <span class="effect-trail" aria-hidden="true"></span>
   `;
   document.body.append(layer);
   if (number >= 0) soundManager.play("coin");
   else soundManager.play("warning");
-  if (number < 0) haptic([14, 20, 14]);
+  if (number < 0) haptic([14, 20, 14], uiState.hapticsEnabled);
   setTimeout(() => layer.remove(), prefersReducedMotion() ? 200 : 1500);
 }
 
@@ -1176,11 +1346,11 @@ function ratePulse(label) {
 async function rollDice(forcedRoll = null) {
   if (!state || state.gameOver || uiState.isRolling || uiState.isMoving) return;
   soundManager.play("dice");
-  haptic(12);
+  haptic(12, uiState.hapticsEnabled);
   uiState.isRolling = true;
   uiState.diceRolling = true;
   uiState.hudStatus = "骰子旋转";
-  uiState.avatarMood = "idle";
+  uiState.avatarMood = "neutral";
   render();
   const roll = typeof forcedRoll === "number" ? Math.max(1, Math.min(6, Math.round(forcedRoll))) : Math.floor(Math.random() * 6) + 1;
   const previous = state.position;
@@ -1194,7 +1364,7 @@ async function rollDice(forcedRoll = null) {
   state.lastRoll = roll;
   uiState.diceRolling = false;
   soundManager.play("land");
-  haptic(22);
+  haptic(22, uiState.hapticsEnabled);
   render();
   await wait(prefersReducedMotion() ? 30 : 180);
   await movePlayerStepByStep(previous, roll);
@@ -1204,7 +1374,7 @@ async function rollDice(forcedRoll = null) {
   uiState.movingStep = 0;
   uiState.movingTotal = 0;
   uiState.hudStatus = "到达";
-  uiState.avatarMood = "celebrate";
+  uiState.avatarMood = "celebrating";
   soundManager.play("happy");
   addLog(`掷出 ${roll}，逐格移动到「${boardTiles[next].title}」。`);
   state.round += 1;
@@ -1226,7 +1396,7 @@ async function movePlayerStepByStep(previous, roll) {
       collectPayday("经过月结日");
     }
     soundManager.play("step");
-    haptic(8);
+    haptic(8, uiState.hapticsEnabled);
     render();
     focusCameraOnPlayer(false, 1.04);
     await wait(prefersReducedMotion() ? 30 : 210);
@@ -1349,6 +1519,8 @@ function collectPayday(reason) {
   addLog(`${reason}：结算净现金流 ${money(beforeCashflow)}。`);
   if (dividendResult.totalDividend > 0) {
     addLog(`收到股票股息 ${money(dividendResult.totalDividend)}。股息不是每家公司都会发放。`);
+    queueContextTip("firstDividend");
+    setAvatarMood("happy", 1400);
   }
   if (priceTick.affected.length) {
     addLog(`股票价格更新：${priceTick.affected.slice(0, 2).map((item) => `${item.symbol}${item.direction}${signedPercent(item.percent)}`).join("，")}。`);
@@ -1380,6 +1552,8 @@ function collectPayday(reason) {
   if (state.cash < 0) {
     const protection = evaluateBankruptcyProtection(state);
     addLog(protection.message);
+    queueContextTip("cashShortage");
+    queueContextTip("firstDebt");
     if (protection.status === "bankrupt") {
       persistQuietly();
       render();
@@ -1568,6 +1742,8 @@ function completePropertyPurchase(opportunity, eventId, financing = null) {
   }
   addLog(`${result.property.financingMode === "cash" ? "现金买入" : "房贷买入"}「${result.property.name}」，每月房地产现金流 ${money(result.property.monthlyCashflow)}。`);
   emitFinanceEffect(-result.property.downPayment, "买入房地产", "buy");
+  queueContextTip("firstProperty");
+  setAvatarMood("proud", 1800);
   persistQuietly();
   render();
   openSimpleModal({
@@ -1586,6 +1762,7 @@ function completePropertyPurchase(opportunity, eventId, financing = null) {
       ["净资产", money(calculateNetWorth(state))],
     ],
     actions: [{ label: "查看资产中心", className: "primary", onClick: closeModal }],
+    outcome: "success",
   });
   checkWin();
 }
@@ -1668,6 +1845,8 @@ function completeStockPurchase(stockId, quantity, eventId) {
   }
   addLog(`买入 ${result.stock.name} ${result.shares} 股，花费 ${money(result.totalAmount)}。`);
   emitFinanceEffect(-result.totalAmount, "买入股票", "buy");
+  queueContextTip("firstStock");
+  setAvatarMood("excited", 1500);
   persistQuietly();
   render();
   const summary = calculateStockPortfolioSummary(state);
@@ -1684,6 +1863,7 @@ function completeStockPurchase(stockId, quantity, eventId) {
       ["净资产", money(calculateNetWorth(state))],
     ],
     actions: [{ label: "查看股票中心", className: "primary", onClick: closeModal }],
+    outcome: "success",
   });
 }
 
@@ -2029,6 +2209,9 @@ function completeLifeEvent(event, optionId) {
   }
   addLog(`${event.title}：${result.option.label}，现金变化 ${signedMoney(result.cashChange)}。`);
   emitFinanceEffect(result.cashChange, event.title, result.cashChange >= 0 ? "life-positive" : "life-negative");
+  setAvatarMood(event.type === "unemployment" ? "sad" : moodFromAmount(result.cashChange, "thinking"), 1700);
+  if (event.type === "unemployment" || event.category === "失业与工作") queueContextTip("firstUnemployment");
+  if (result.liabilityAdded > 0) queueContextTip("firstDebt");
   persistQuietly();
   render();
   openSimpleModal({
@@ -2045,6 +2228,7 @@ function completeLifeEvent(event, optionId) {
       ["现金", money(state.cash)],
     ],
     actions: [{ label: "完成", className: "primary", onClick: closeModal }],
+    outcome: result.cashChange < 0 || result.liabilityAdded > 0 ? "warning" : "success",
   });
 }
 
@@ -2161,6 +2345,7 @@ function completeJobSearch(training) {
   const before = state.salary;
   const result = searchForJob(state, training);
   addLog(result.ok ? `寻找工作进度 ${state.unemployment.jobSearchProgress}%。` : result.reason);
+  setAvatarMood(state.unemployment.unemployed ? "thinking" : "celebrating", 1800);
   persistQuietly();
   render();
   openSimpleModal({
@@ -2174,6 +2359,7 @@ function completeJobSearch(training) {
       ["找工作进度", `${state.unemployment.jobSearchProgress}%`],
     ],
     actions: [{ label: "完成", className: "primary", onClick: closeModal }],
+    outcome: state.unemployment.unemployed ? "neutral" : "success",
   });
 }
 
@@ -2583,6 +2769,8 @@ function completeBusinessInvestment(businessId, eventId) {
   }
   addLog(`投資 ${result.business.name}，每月預估淨利 ${money(result.business.monthlyProfit)}。`);
   emitFinanceEffect(-result.business.totalInvested, "投资小生意", "buy");
+  queueContextTip("firstBusiness");
+  setAvatarMood("proud", 1600);
   persistQuietly();
   render();
   openSimpleModal({
@@ -2598,6 +2786,7 @@ function completeBusinessInvestment(businessId, eventId) {
       ["淨資產", money(calculateNetWorth(state))],
     ],
     actions: [{ label: "查看小生意中心", className: "primary", onClick: closeModal }],
+    outcome: "success",
   });
 }
 
@@ -3017,9 +3206,12 @@ function payCost(cost, reason) {
   state.cash -= cost;
   addLog(`${reason}：支出 ${money(cost)}。`);
   emitFinanceEffect(-cost, reason, "expense");
+  setAvatarMood("worried", 1400);
   if (state.cash < 0) {
     const protection = evaluateBankruptcyProtection(state);
     addLog(protection.message);
+    queueContextTip("cashShortage");
+    queueContextTip("firstDebt");
   }
 }
 
@@ -3027,6 +3219,10 @@ function borrowMoney(amount, name = "银行借款", shouldRender = true) {
   const rounded = Math.ceil(amount / 1000) * 1000;
   const result = takePersonalLoan(state, rounded, `legacy-loan-${state.round}-${Date.now()}`);
   addLog(result.ok ? `${name}：现金增加 ${money(result.amount)}，月供增加 ${money(result.payment)}。` : result.reason);
+  if (result.ok) {
+    queueContextTip("firstDebt");
+    setAvatarMood("worried", 1400);
+  }
   persistQuietly();
   if (shouldRender) render();
 }
@@ -3075,11 +3271,15 @@ function checkWin() {
   return true;
 }
 
-function openSimpleModal({ type, title, text, metrics = [], actions = [] }) {
+function openSimpleModal({ type, title, text, metrics = [], actions = [], outcome = "neutral" }) {
   el.modalType.textContent = type;
   el.modalTitle.textContent = title;
   el.modalText.textContent = text;
-  el.modal.querySelector(".modal-card")?.setAttribute("data-event-type", type);
+  const modalCard = el.modal.querySelector(".modal-card");
+  modalCard?.setAttribute("data-event-type", type);
+  modalCard?.setAttribute("data-outcome", outcome);
+  modalCard?.querySelector(".event-illustration")?.remove();
+  modalCard?.insertAdjacentHTML("afterbegin", eventIllustrationMarkup(type));
   el.dealMetrics.innerHTML = metrics
     .map(
       ([label, value]) => `
@@ -3108,10 +3308,14 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [] }) {
   });
 
   el.modal.classList.remove("hidden");
+  soundManager.setScene("event");
 }
 
 function closeModal() {
   el.modal.classList.add("hidden");
+  soundManager.setScene(state ? "board" : "home");
+  const nextTip = uiState.pendingTips.shift();
+  if (nextTip) setTimeout(() => showContextTip(nextTip, true), prefersReducedMotion() ? 20 : 120);
 }
 
 function saveGame() {
@@ -3166,7 +3370,23 @@ function clearSavedGame() {
   showSetup();
 }
 
+function confirmClearSavedGame() {
+  openSimpleModal({
+    type: "清除存档",
+    title: "确认清除本机存档？",
+    text: "这只会删除这个浏览器里的 Cashflow 进度，线上游戏不会受到影响。",
+    actions: [
+      { label: "确认清除", className: "danger", onClick: clearSavedGame },
+      { label: "先保留", className: "primary", onClick: closeModal },
+    ],
+    outcome: "warning",
+  });
+}
+
 function showRules() {
+  const tips = Object.entries(contextTipMessages)
+    .map(([, tip]) => `${tip.title}：${tip.text}`)
+    .join("<br>");
   openSimpleModal({
     type: "游戏规则",
     title: "现金流城市挑战",
@@ -3175,6 +3395,8 @@ function showRules() {
       ["行动", "掷骰前进，最终落点才触发事件"],
       ["胜利", "被动收入 ≥ 总支出"],
       ["地图", "可拖曳、缩放，并可回到玩家"],
+      ["新手教学", "可在音效设置中重新观看"],
+      ["情境提示", tips],
       ["提醒", "所有税务、保险、投资内容都是游戏学习规则"],
     ],
     actions: [{ label: "开始吧", className: "primary", onClick: closeModal }],
@@ -3182,20 +3404,50 @@ function showRules() {
 }
 
 function showSoundSettings() {
+  const soundSnapshot = soundManager.getSnapshot();
   openSimpleModal({
     type: "音效设置",
-    title: uiState.muted ? "音效已关闭" : "音效已开启",
-    text: "音效使用浏览器 Web Audio 即时生成；如果设备不支持，会安静降级，不影响游戏。",
+    title: uiState.muted ? "声音已关闭" : "声音已开启",
+    text: "音效和背景音乐使用浏览器即时生成；首次互动后才会播放，不支持时会安静降级。",
     metrics: [
-      ["状态", uiState.muted ? "静音" : "开启"],
-      ["音量", `${Math.round(uiState.volume * 100)}%`],
-      ["震动", navigator?.vibrate ? "轻量开启" : "此设备不支持"],
+      ["总声音", uiState.muted ? "静音" : "开启"],
+      ["音效音量", `${Math.round(uiState.effectVolume * 100)}%`],
+      ["背景音乐", `${uiState.musicEnabled ? "开启" : "关闭"} · ${Math.round(uiState.musicVolume * 100)}%`],
+      ["震动", uiState.hapticsEnabled && navigator?.vibrate ? "轻量开启" : uiState.hapticsEnabled ? "设备不支持" : "关闭"],
+      ["音乐状态", soundSnapshot.musicPlaying ? "正在播放" : "等待互动或已暂停"],
+      ["教学", uiState.tutorialComplete ? "已完成，可重播" : "尚未完成"],
     ],
     actions: [
-      { label: uiState.muted ? "开启音效" : "关闭音效", className: "primary", onClick: () => { toggleSound(); showSoundSettings(); } },
+      { label: uiState.muted ? "开启声音" : "关闭声音", className: "primary", onClick: () => { toggleSound(); showSoundSettings(); } },
+      { label: uiState.musicEnabled ? "关闭音乐" : "开启音乐", onClick: () => { toggleMusic(); showSoundSettings(); } },
+      { label: uiState.hapticsEnabled ? "关闭震动" : "开启震动", onClick: () => { toggleHaptics(); showSoundSettings(); } },
+      { label: "音效小一点", onClick: () => { adjustEffectVolume(-0.15); showSoundSettings(); } },
+      { label: "音效大一点", onClick: () => { adjustEffectVolume(0.15); showSoundSettings(); } },
+      { label: "重新观看教学", onClick: () => { closeModal(); startTutorial(true); } },
+      { label: "查看提示", onClick: showRules },
       { label: "关闭", onClick: closeModal },
     ],
   });
+}
+
+function toggleMusic() {
+  uiState.musicEnabled = !uiState.musicEnabled;
+  soundManager.setMusicEnabled(uiState.musicEnabled);
+  if (uiState.musicEnabled && !uiState.muted) soundManager.startMusic(state ? "board" : "home");
+  saveExperience();
+}
+
+function toggleHaptics() {
+  uiState.hapticsEnabled = !uiState.hapticsEnabled;
+  if (uiState.hapticsEnabled) haptic(8, true);
+  saveExperience();
+}
+
+function adjustEffectVolume(delta) {
+  uiState.effectVolume = Math.max(0, Math.min(1, uiState.effectVolume + delta));
+  soundManager.setEffectVolume(uiState.effectVolume);
+  soundManager.play("tap");
+  saveExperience();
 }
 
 el.rollDice.addEventListener("click", rollDice);
@@ -3205,7 +3457,7 @@ el.resetGame.addEventListener("click", resetGame);
 el.continueGameHome?.addEventListener("click", loadGame);
 el.rulesHome?.addEventListener("click", showRules);
 el.soundHome?.addEventListener("click", showSoundSettings);
-el.clearSaveHome?.addEventListener("click", clearSavedGame);
+el.clearSaveHome?.addEventListener("click", confirmClearSavedGame);
 el.closeModal.addEventListener("click", closeModal);
 el.modal.addEventListener("click", (event) => {
   if (event.target === el.modal) closeModal();
@@ -3217,6 +3469,11 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     rollDice();
   }
+});
+window.addEventListener("pointerdown", unlockAudio, { once: true });
+window.addEventListener("keydown", unlockAudio, { once: true });
+document.addEventListener("visibilitychange", () => {
+  soundManager.handleVisibility(document.hidden);
 });
 
 window.cashflowDebug = {
@@ -3347,11 +3604,33 @@ window.cashflowDebug = {
     movingTotal: uiState.movingTotal,
     camera: uiState.camera,
     muted: uiState.muted,
+    effectVolume: uiState.effectVolume,
+    musicVolume: uiState.musicVolume,
+    musicEnabled: uiState.musicEnabled,
+    hapticsEnabled: uiState.hapticsEnabled,
+    avatarMood: uiState.avatarMood,
+    tutorialComplete: uiState.tutorialComplete,
+    tutorialActive: uiState.tutorial.active,
+    tutorialIndex: uiState.tutorial.index,
+    seenTips: uiState.seenTips,
+    sound: soundManager.getSnapshot(),
     boardTiles: boardTiles.length,
   }),
   focusPlayer: () => focusCameraOnPlayer(true),
   zoomMap: (delta) => zoomCamera(delta),
   toggleSound,
+  toggleMusic,
+  toggleHaptics,
+  startTutorial,
+  nextTutorialStep,
+  previousTutorialStep,
+  skipTutorial,
+  completeTutorial,
+  showContextTip,
+  setEmotion: (mood, duration = 0) => setAvatarMood(mood, duration),
+  playIncomeEffect: () => emitFinanceEffect(500, "验收收入", "debug-income"),
+  playExpenseEffect: () => emitFinanceEffect(-300, "验收支出", "debug-expense"),
+  dispatchVisibility: () => document.dispatchEvent(new Event("visibilitychange")),
   closeModal,
 };
 

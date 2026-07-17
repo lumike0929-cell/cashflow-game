@@ -49,24 +49,67 @@ export const boardPath = [
 ];
 
 export const tileVisuals = {
-  payday: { category: "薪水日", status: "月结", tone: "gold" },
-  opportunity: { category: "房地产", status: "机会", tone: "green" },
-  propertyEvent: { category: "房地产", status: "持有", tone: "green" },
-  stockOpportunity: { category: "股票", status: "买卖", tone: "violet" },
-  stockMarket: { category: "股票", status: "市场", tone: "violet" },
-  businessOpportunity: { category: "小生意", status: "投资", tone: "amber" },
-  businessEvent: { category: "小生意", status: "经营", tone: "amber" },
-  businessMarket: { category: "市场", status: "需求", tone: "blue" },
-  bank: { category: "银行", status: "贷款", tone: "slate" },
-  insurance: { category: "保险", status: "保障", tone: "blue" },
-  lifeEvent: { category: "医疗", status: "人生", tone: "red" },
-  tax: { category: "税务", status: "责任", tone: "slate" },
-  jobEvent: { category: "失业", status: "工作", tone: "red" },
-  market: { category: "市场", status: "变化", tone: "blue" },
-  doodad: { category: "意外支出", status: "扣款", tone: "red" },
-  learn: { category: "学习", status: "成长", tone: "violet" },
-  family: { category: "家庭", status: "责任", tone: "red" },
-  charity: { category: "慈善", status: "分享", tone: "green" },
+  payday: { category: "薪水日", status: "月结", tone: "gold", badge: "金币" },
+  opportunity: { category: "房地产", status: "机会", tone: "green", badge: "房屋" },
+  propertyEvent: { category: "房地产", status: "持有", tone: "green", badge: "维修" },
+  stockOpportunity: { category: "股票", status: "买卖", tone: "violet", badge: "行情" },
+  stockMarket: { category: "股票", status: "市场", tone: "violet", badge: "波动" },
+  businessOpportunity: { category: "小生意", status: "投资", tone: "amber", badge: "店铺" },
+  businessEvent: { category: "小生意", status: "经营", tone: "amber", badge: "客流" },
+  businessMarket: { category: "市场", status: "需求", tone: "blue", badge: "需求" },
+  bank: { category: "银行", status: "贷款", tone: "slate", badge: "信用" },
+  insurance: { category: "保险", status: "保障", tone: "blue", badge: "盾牌" },
+  lifeEvent: { category: "医疗", status: "人生", tone: "red", badge: "健康" },
+  tax: { category: "税务", status: "责任", tone: "slate", badge: "文件" },
+  jobEvent: { category: "失业", status: "工作", tone: "red", badge: "工作" },
+  market: { category: "市场", status: "变化", tone: "blue", badge: "风向" },
+  doodad: { category: "意外支出", status: "扣款", tone: "red", badge: "账单" },
+  learn: { category: "学习", status: "成长", tone: "violet", badge: "书本" },
+  family: { category: "家庭", status: "责任", tone: "red", badge: "家庭" },
+  charity: { category: "慈善", status: "分享", tone: "green", badge: "爱心" },
+};
+
+export const tutorialSteps = [
+  { id: "goal", title: "目标", text: "让被动收入逐步接近或超过每月支出，这就是跳出打工循环的核心目标。", target: "hero" },
+  { id: "map", title: "角色与城市", text: "你的角色会在城市棋盘上逐格前进，每个区域代表不同的财务选择。", target: "board" },
+  { id: "dice", title: "掷骰前进", text: "按下主按钮后，骰子结果就是前进格数。移动中按钮会锁定，避免重复操作。", target: "dice" },
+  { id: "move", title: "逐格移动", text: "角色会一步一步走，只有最后停下的格子会触发事件。", target: "board" },
+  { id: "event", title: "落点事件", text: "事件卡会显示金钱变化、风险和学习说明。遇到“为什么？”可以先看解释。", target: "modal" },
+  { id: "finance", title: "财务 HUD", text: "关注现金、收入、支出、资产、负债和净资产，数字会跟着你的选择更新。", target: "finance" },
+  { id: "why", title: "为什么？", text: "学习按钮会用儿童能理解的话解释概念，不是真实投资、保险或税务建议。", target: "modal" },
+  { id: "save", title: "自动保存", text: "游戏会保存到这个浏览器。你也可以随时按保存或读取继续。", target: "topbar" },
+  { id: "first-roll", title: "开始第一回合", text: "准备好后，掷骰前进，看看现金流城市给你什么选择。", target: "dice" },
+];
+
+export const contextTipMessages = {
+  cashShortage: {
+    title: "第一次现金不足",
+    text: "现金不够时，可以先查看银行、出售资产或减少支出。负债会影响之后的现金流。",
+  },
+  firstProperty: {
+    title: "第一次买房",
+    text: "买房要看首付款、贷款和每月现金流。卖价不等于真正拿到的钱。",
+  },
+  firstStock: {
+    title: "第一次买股票",
+    text: "股票价格会变动。还没卖出前，涨跌只是目前变化，不是最终结果。",
+  },
+  firstBusiness: {
+    title: "第一次投资小生意",
+    text: "营收是收到的钱，扣除固定成本和变动成本后，留下的才是净利。",
+  },
+  firstUnemployment: {
+    title: "第一次失业",
+    text: "收入中断时，紧急预备金、保险和较低固定支出会给你更多选择时间。",
+  },
+  firstDividend: {
+    title: "第一次收到股息",
+    text: "股息是部分公司分享成果给股东，但不是每家公司都会发，也不会保证增加。",
+  },
+  firstDebt: {
+    title: "第一次产生负债",
+    text: "负债能暂时解决现金压力，但之后通常会增加每月支出，要留意现金流。",
+  },
 };
 
 export function tileVisual(type) {
@@ -99,17 +142,29 @@ export function createCitySceneSvg() {
         </filter>
       </defs>
       <rect width="${mapSize.width}" height="${mapSize.height}" rx="48" fill="#dff2d7" />
+      ${district(372, 360, 270, 225, "#e7f6ea", "住宅区", "花园小路")}
+      ${district(690, 340, 260, 210, "#fff4cf", "金融区", "银行与行情")}
+      ${district(1010, 365, 285, 225, "#e9f3ff", "商业区", "商店与办公")}
+      ${district(405, 625, 285, 225, "#fff1ce", "创业区", "小店实验街")}
+      ${district(735, 660, 255, 205, "#efe9ff", "教育区", "学校与课程")}
+      ${district(1060, 645, 260, 205, "#ffe5e0", "医疗区", "医院与诊所")}
+      ${district(730, 500, 230, 205, "#ccebd2", "公园休闲区", "喷泉与小桥")}
+      ${district(520, 500, 170, 115, "#e9f3ff", "公共服务区", "邮局与路灯")}
       <path d="M80 600 C300 510 390 680 560 610 C750 530 890 590 1040 520 C1230 430 1370 520 1600 430" fill="none" stroke="url(#water)" stroke-width="92" stroke-linecap="round" opacity="0.9" />
       <path d="M80 600 C300 510 390 680 560 610 C750 530 890 590 1040 520 C1230 430 1370 520 1600 430" fill="none" stroke="#e8fbff" stroke-width="12" stroke-linecap="round" opacity="0.85" />
       <path d="M170 140 L1480 170 L1545 740 L1360 930 L230 890 L125 420 Z" fill="none" stroke="url(#road)" stroke-width="118" stroke-linejoin="round" stroke-linecap="round" opacity="0.78" />
       <path d="M170 140 L1480 170 L1545 740 L1360 930 L230 890 L125 420 Z" fill="none" stroke="#f8faf4" stroke-width="14" stroke-dasharray="32 28" stroke-linejoin="round" stroke-linecap="round" opacity="0.86" />
-      ${building(445, 420, "银行", "#ffe8a6", "#d8a21f")}
-      ${building(675, 390, "学校", "#dff3ff", "#246b9f")}
-      ${building(930, 385, "股票", "#efe9ff", "#6c5aa8")}
-      ${building(1145, 440, "医院", "#ffe5e0", "#c84d42")}
-      ${building(500, 665, "住宅", "#e7f6ea", "#1f7a52")}
-      ${building(805, 700, "小生意街", "#fff1ce", "#b47718")}
-      ${building(1110, 700, "商业区", "#e9f3ff", "#3573a4")}
+      ${homeCluster(420, 420)}
+      ${building(700, 390, "银行", "#ffe8a6", "#d8a21f", "¥")}
+      ${building(875, 390, "股票", "#efe9ff", "#6c5aa8", "↗")}
+      ${marketBoard(1045, 390)}
+      ${building(1145, 440, "医院", "#ffe5e0", "#c84d42", "+")}
+      ${ambulance(1260, 540)}
+      ${building(515, 675, "创业街", "#fff1ce", "#b47718", "店")}
+      ${building(765, 705, "学校", "#dff3ff", "#246b9f", "书")}
+      ${building(1110, 700, "商业区", "#e9f3ff", "#3573a4", "商")}
+      ${officeRow(1135, 610)}
+      ${bridge(930, 535)}
       <circle cx="835" cy="555" r="72" fill="#ccebd2" filter="url(#softShadow)" />
       <circle cx="835" cy="555" r="36" fill="#8ed0eb" />
       <circle cx="835" cy="555" r="16" fill="#ffffff" opacity="0.85" />
@@ -121,9 +176,12 @@ export function createCitySceneSvg() {
   `;
 }
 
-export function avatarMarkup(career, mood = "idle") {
+export function avatarMarkup(career, mood = "neutral") {
   const icon = career?.icon || "你";
-  const color = careerColor(career?.id);
+  const id = career?.id || "teacher";
+  const color = careerColor(id);
+  const expression = expressionForMood(mood);
+  const accessory = accessoryMarkup(id);
   return `
     <div class="player-avatar mood-${mood}" aria-label="玩家角色">
       <span class="avatar-shadow"></span>
@@ -132,10 +190,19 @@ export function avatarMarkup(career, mood = "idle") {
       <span class="avatar-body" style="--avatar-color:${color}">
         <span class="avatar-arm left"></span>
         <span class="avatar-arm right"></span>
+        <span class="avatar-badge">${icon}</span>
       </span>
       <span class="avatar-head">
-        <span class="avatar-face">${icon}</span>
+        <span class="avatar-hair ${id}"></span>
+        ${accessory}
+        <span class="avatar-eye left"></span>
+        <span class="avatar-eye right"></span>
+        <span class="avatar-brow left"></span>
+        <span class="avatar-brow right"></span>
+        <span class="avatar-mouth ${expression}"></span>
+        <span class="avatar-face-label">${icon}</span>
       </span>
+      <span class="avatar-spark"></span>
     </div>
   `;
 }
@@ -144,8 +211,23 @@ export function diceMarkup(value = 1, rolling = false) {
   const dots = Array.from({ length: 9 }, (_, index) => `<span class="${dotActive(index, value) ? "active" : ""}"></span>`).join("");
   return `
     <div class="dice3d ${rolling ? "rolling" : ""}" aria-label="骰子 ${value}">
+      <span class="dice-corner top"></span>
       <div class="dice-face">${dots}</div>
       <span class="dice-shadow"></span>
+      <strong class="dice-result-text">前进 ${value} 格</strong>
+    </div>
+  `;
+}
+
+export function eventIllustrationMarkup(type = "") {
+  const key = illustrationKey(type);
+  return `
+    <div class="event-illustration art-${key}" aria-hidden="true">
+      <span class="art-sun"></span>
+      <span class="art-ground"></span>
+      <span class="art-building one"></span>
+      <span class="art-building two"></span>
+      <span class="art-symbol">${illustrationSymbol(key)}</span>
     </div>
   `;
 }
@@ -169,9 +251,16 @@ export function saveExperienceSettings(storage, settings) {
 
 export function normalizeSettings(settings) {
   const camera = settings?.camera || {};
+  const seenTips = settings?.seenTips && typeof settings.seenTips === "object" ? settings.seenTips : {};
   return {
     muted: Boolean(settings?.muted),
     volume: Math.max(0, Math.min(1, Number(settings?.volume) || 0.55)),
+    effectVolume: Math.max(0, Math.min(1, Number(settings?.effectVolume) || 0.75)),
+    musicVolume: Math.max(0, Math.min(1, Number(settings?.musicVolume) || 0.22)),
+    musicEnabled: settings?.musicEnabled !== false,
+    hapticsEnabled: settings?.hapticsEnabled !== false,
+    tutorialComplete: Boolean(settings?.tutorialComplete),
+    seenTips: Object.fromEntries(Object.entries(seenTips).map(([key, value]) => [key, Boolean(value)])),
     camera: {
       x: finiteNumber(camera.x, 0),
       y: finiteNumber(camera.y, 0),
@@ -211,6 +300,12 @@ export function createSoundManager() {
   let context = null;
   let muted = false;
   let volume = 0.55;
+  let effectVolume = 0.75;
+  let musicVolume = 0.22;
+  let musicEnabled = true;
+  let musicGain = null;
+  let musicOscillators = [];
+  let lastPlayed = {};
 
   function ensureContext() {
     if (muted) return null;
@@ -227,6 +322,9 @@ export function createSoundManager() {
 
   function play(name) {
     if (muted) return;
+    const now = Date.now();
+    if (name === "step" && now - (lastPlayed.step || 0) < 110) return;
+    lastPlayed = { ...lastPlayed, [name]: now };
     const audio = ensureContext();
     if (!audio) return;
     const profile = soundProfiles[name] || soundProfiles.tap;
@@ -236,7 +334,7 @@ export function createSoundManager() {
     oscillator.frequency.setValueAtTime(profile.start, audio.currentTime);
     oscillator.frequency.exponentialRampToValueAtTime(profile.end, audio.currentTime + profile.duration);
     gain.gain.setValueAtTime(0.0001, audio.currentTime);
-    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume * profile.gain), audio.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume * effectVolume * profile.gain), audio.currentTime + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + profile.duration);
     oscillator.connect(gain);
     gain.connect(audio.destination);
@@ -244,18 +342,94 @@ export function createSoundManager() {
     oscillator.stop(audio.currentTime + profile.duration + 0.02);
   }
 
+  function startMusic(scene = "board") {
+    if (muted || !musicEnabled) return false;
+    const audio = ensureContext();
+    if (!audio) return false;
+    if (musicOscillators.length) return true;
+    const chord = scene === "home" ? [196, 247, 294] : scene === "event" ? [174, 220, 261] : [220, 277, 330];
+    musicGain = audio.createGain();
+    musicGain.gain.setValueAtTime(0.0001, audio.currentTime);
+    musicGain.gain.linearRampToValueAtTime(volume * musicVolume * 0.18, audio.currentTime + 0.45);
+    musicGain.connect(audio.destination);
+    musicOscillators = chord.map((frequency, index) => {
+      const oscillator = audio.createOscillator();
+      oscillator.type = index === 0 ? "triangle" : "sine";
+      oscillator.frequency.setValueAtTime(frequency, audio.currentTime);
+      oscillator.connect(musicGain);
+      oscillator.start();
+      return oscillator;
+    });
+    return true;
+  }
+
+  function stopMusic() {
+    if (!context || !musicOscillators.length) return;
+    const stopAt = context.currentTime + 0.35;
+    try {
+      if (musicGain) musicGain.gain.linearRampToValueAtTime(0.0001, stopAt);
+      musicOscillators.forEach((oscillator) => oscillator.stop(stopAt + 0.02));
+    } catch {
+      // Audio shutdown is best effort.
+    }
+    musicOscillators = [];
+    musicGain = null;
+  }
+
+  function updateMusicLevel() {
+    if (!context || !musicGain) return;
+    musicGain.gain.setTargetAtTime(muted || !musicEnabled ? 0.0001 : volume * musicVolume * 0.18, context.currentTime, 0.18);
+  }
+
   return {
     play,
+    startMusic,
+    stopMusic,
+    setScene(scene) {
+      if (!musicOscillators.length) return;
+      stopMusic();
+      setTimeout(() => startMusic(scene), 80);
+    },
+    handleVisibility(hidden) {
+      if (hidden) stopMusic();
+      else startMusic("board");
+    },
     setMuted(nextMuted) {
       muted = Boolean(nextMuted);
+      if (muted) stopMusic();
+      else updateMusicLevel();
     },
     setVolume(nextVolume) {
       volume = Math.max(0, Math.min(1, Number(nextVolume) || 0));
+      updateMusicLevel();
+    },
+    setEffectVolume(nextVolume) {
+      effectVolume = Math.max(0, Math.min(1, Number(nextVolume) || 0));
+    },
+    setMusicVolume(nextVolume) {
+      musicVolume = Math.max(0, Math.min(1, Number(nextVolume) || 0));
+      updateMusicLevel();
+    },
+    setMusicEnabled(nextEnabled) {
+      musicEnabled = Boolean(nextEnabled);
+      if (!musicEnabled) stopMusic();
+      else updateMusicLevel();
+    },
+    getSnapshot() {
+      return {
+        muted,
+        volume,
+        effectVolume,
+        musicVolume,
+        musicEnabled,
+        musicPlaying: musicOscillators.length > 0,
+      };
     },
   };
 }
 
-export function haptic(pattern) {
+export function haptic(pattern, enabled = true) {
+  if (!enabled) return;
   try {
     if (navigator?.vibrate) navigator.vibrate(pattern);
   } catch {
@@ -263,14 +437,97 @@ export function haptic(pattern) {
   }
 }
 
-function building(x, y, label, fill, stroke) {
+function district(x, y, width, height, fill, title, subtitle) {
+  return `
+    <g class="city-district">
+      <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="34" fill="${fill}" stroke="#ffffff" stroke-width="8" opacity="0.78" />
+      <text x="${x + 24}" y="${y + 42}" class="district-label">${title}</text>
+      <text x="${x + 24}" y="${y + 74}" class="district-subtitle">${subtitle}</text>
+    </g>
+  `;
+}
+
+function building(x, y, label, fill, stroke, sign = "") {
   return `
     <g filter="url(#softShadow)">
       <rect x="${x}" y="${y}" width="160" height="118" rx="18" fill="${fill}" stroke="${stroke}" stroke-width="5" />
       <rect x="${x + 28}" y="${y + 34}" width="32" height="28" rx="6" fill="#ffffff" opacity="0.86" />
       <rect x="${x + 94}" y="${y + 34}" width="32" height="28" rx="6" fill="#ffffff" opacity="0.86" />
       <rect x="${x + 68}" y="${y + 76}" width="28" height="42" rx="8" fill="${stroke}" opacity="0.72" />
+      <text x="${x + 80}" y="${y + 28}" text-anchor="middle" class="building-sign">${sign}</text>
       <text x="${x + 80}" y="${y + 145}" text-anchor="middle" class="city-label">${label}</text>
+    </g>
+  `;
+}
+
+function homeCluster(x, y) {
+  return `
+    <g filter="url(#softShadow)">
+      ${smallHome(x, y, "#e7f6ea", "#1f7a52")}
+      ${smallHome(x + 92, y + 32, "#fff4cf", "#d8a21f")}
+      ${smallHome(x + 22, y + 96, "#e9f3ff", "#246b9f")}
+      <rect x="${x + 126}" y="${y + 114}" width="36" height="22" rx="8" fill="#ffffff" stroke="#1f7a52" stroke-width="4" />
+      <text x="${x + 86}" y="${y + 190}" text-anchor="middle" class="city-label">住宅花园</text>
+    </g>
+  `;
+}
+
+function smallHome(x, y, fill, stroke) {
+  return `
+    <g>
+      <path d="M${x} ${y + 42} L${x + 42} ${y} L${x + 84} ${y + 42} Z" fill="${stroke}" />
+      <rect x="${x + 8}" y="${y + 38}" width="68" height="58" rx="10" fill="${fill}" stroke="${stroke}" stroke-width="4" />
+      <rect x="${x + 36}" y="${y + 58}" width="16" height="38" rx="5" fill="${stroke}" opacity="0.72" />
+    </g>
+  `;
+}
+
+function marketBoard(x, y) {
+  return `
+    <g filter="url(#softShadow)">
+      <rect x="${x}" y="${y}" width="150" height="92" rx="16" fill="#253247" />
+      <path d="M${x + 18} ${y + 58} L${x + 48} ${y + 42} L${x + 76} ${y + 50} L${x + 116} ${y + 22}" fill="none" stroke="#9fe0b9" stroke-width="8" stroke-linecap="round" />
+      <text x="${x + 75}" y="${y + 122}" text-anchor="middle" class="city-label">行情板</text>
+    </g>
+  `;
+}
+
+function ambulance(x, y) {
+  return `
+    <g>
+      <rect x="${x}" y="${y}" width="112" height="54" rx="12" fill="#ffffff" stroke="#c84d42" stroke-width="5" />
+      <rect x="${x + 62}" y="${y + 10}" width="34" height="22" rx="6" fill="#e9f3ff" />
+      <text x="${x + 34}" y="${y + 35}" text-anchor="middle" class="building-sign">+</text>
+      <circle cx="${x + 28}" cy="${y + 58}" r="10" fill="#354740" />
+      <circle cx="${x + 86}" cy="${y + 58}" r="10" fill="#354740" />
+    </g>
+  `;
+}
+
+function officeRow(x, y) {
+  return `
+    <g filter="url(#softShadow)">
+      <rect x="${x}" y="${y}" width="62" height="126" rx="14" fill="#dff3ff" stroke="#3573a4" stroke-width="4" />
+      <rect x="${x + 80}" y="${y + 24}" width="74" height="102" rx="14" fill="#fff1ce" stroke="#b47718" stroke-width="4" />
+      ${windowGrid(x + 14, y + 20)}
+      ${windowGrid(x + 96, y + 46)}
+    </g>
+  `;
+}
+
+function windowGrid(x, y) {
+  return Array.from({ length: 6 }, (_, index) => {
+    const column = index % 2;
+    const row = Math.floor(index / 2);
+    return `<rect x="${x + column * 22}" y="${y + row * 24}" width="14" height="14" rx="4" fill="#ffffff" opacity="0.86" />`;
+  }).join("");
+}
+
+function bridge(x, y) {
+  return `
+    <g>
+      <path d="M${x} ${y} C${x + 70} ${y - 34} ${x + 142} ${y - 34} ${x + 212} ${y}" fill="none" stroke="#b77e45" stroke-width="20" stroke-linecap="round" />
+      <path d="M${x + 18} ${y - 2} L${x + 196} ${y - 2}" stroke="#fff4cf" stroke-width="6" stroke-dasharray="18 12" />
     </g>
   `;
 }
@@ -330,11 +587,76 @@ function coinsAndClouds() {
       <ellipse cx="315" cy="66" rx="38" ry="18" fill="#ffffff" />
       <ellipse cx="1300" cy="74" rx="62" ry="24" fill="#ffffff" />
       <ellipse cx="1360" cy="72" rx="42" ry="18" fill="#ffffff" />
+      <path d="M1180 110 q18 -16 36 0 q18 -16 36 0" fill="none" stroke="#5f7770" stroke-width="6" stroke-linecap="round" />
+      <path d="M395 90 q14 -12 28 0 q14 -12 28 0" fill="none" stroke="#5f7770" stroke-width="5" stroke-linecap="round" />
       <circle cx="720" cy="330" r="18" fill="#ffd86b" stroke="#d8a21f" stroke-width="5" />
       <circle cx="760" cy="340" r="14" fill="#ffd86b" stroke="#d8a21f" stroke-width="4" />
       <circle cx="1015" cy="330" r="18" fill="#ffd86b" stroke="#d8a21f" stroke-width="5" />
     </g>
   `;
+}
+
+function expressionForMood(mood = "neutral") {
+  return {
+    idle: "smile",
+    neutral: "smile",
+    happy: "smile",
+    excited: "open",
+    proud: "smile",
+    celebrating: "open",
+    celebrate: "open",
+    worried: "worry",
+    sad: "sad",
+    surprised: "open",
+    thinking: "flat",
+    tired: "flat",
+    walking: "smile",
+  }[mood] || "smile";
+}
+
+function accessoryMarkup(id = "") {
+  if (id === "teacher") return '<span class="avatar-accessory glasses"></span>';
+  if (id === "engineer") return '<span class="avatar-accessory cap"></span>';
+  if (id === "designer") return '<span class="avatar-accessory scarf"></span>';
+  if (id === "doctor") return '<span class="avatar-accessory mirror"></span>';
+  return "";
+}
+
+function illustrationKey(type = "") {
+  const text = String(type).toLowerCase();
+  if (text.includes("房") || text.includes("房地产")) return "property";
+  if (text.includes("股") || text.includes("股票")) return "stock";
+  if (text.includes("生意") || text.includes("投資") || text.includes("投资")) return "business";
+  if (text.includes("银行") || text.includes("贷款")) return "bank";
+  if (text.includes("保险") || text.includes("理赔")) return "insurance";
+  if (text.includes("医疗") || text.includes("人生") || text.includes("健康")) return "medical";
+  if (text.includes("失业") || text.includes("工作") || text.includes("升职")) return "job";
+  if (text.includes("税")) return "tax";
+  if (text.includes("家庭")) return "family";
+  if (text.includes("市场")) return "market";
+  if (text.includes("学习") || text.includes("為什麼") || text.includes("为什么")) return "learn";
+  if (text.includes("慈善")) return "charity";
+  if (text.includes("支出") || text.includes("账")) return "accident";
+  return "event";
+}
+
+function illustrationSymbol(key) {
+  return {
+    property: "房",
+    stock: "↗",
+    business: "店",
+    bank: "银",
+    insurance: "盾",
+    medical: "+",
+    job: "职",
+    tax: "税",
+    family: "家",
+    market: "风",
+    learn: "书",
+    accident: "账",
+    charity: "心",
+    event: "!",
+  }[key] || "!";
 }
 
 function dotActive(index, value) {

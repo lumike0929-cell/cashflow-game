@@ -2,14 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   boardPath,
+  avatarMarkup,
   cameraForTile,
   clampCamera,
+  contextTipMessages,
   diceMarkup,
+  eventIllustrationMarkup,
   indexAfter,
   loadExperienceSettings,
   mapSize,
   nextIndices,
   tileVisual,
+  tutorialSteps,
 } from "../gameExperience.js";
 
 test("城市棋盘维持 40 格循环，经过末尾会回到第 1 格", () => {
@@ -47,10 +51,41 @@ test("镜头可缩放、拖曳并回到玩家，偏好可恢复", () => {
   assert.ok(Number.isFinite(focused.x));
   assert.ok(Number.isFinite(focused.y));
   const fakeStorage = {
-    getItem: () => JSON.stringify({ muted: true, volume: 0.3, camera: { x: -20, y: -30, scale: 0.8, follow: false } }),
+    getItem: () => JSON.stringify({
+      muted: true,
+      volume: 0.3,
+      effectVolume: 0.4,
+      musicVolume: 0.2,
+      musicEnabled: false,
+      hapticsEnabled: false,
+      tutorialComplete: true,
+      seenTips: { firstStock: true },
+      camera: { x: -20, y: -30, scale: 0.8, follow: false },
+    }),
   };
   const settings = loadExperienceSettings(fakeStorage);
   assert.equal(settings.muted, true);
   assert.equal(settings.volume, 0.3);
+  assert.equal(settings.effectVolume, 0.4);
+  assert.equal(settings.musicVolume, 0.2);
+  assert.equal(settings.musicEnabled, false);
+  assert.equal(settings.hapticsEnabled, false);
+  assert.equal(settings.tutorialComplete, true);
+  assert.equal(settings.seenTips.firstStock, true);
   assert.equal(settings.camera.scale, 0.8);
+});
+
+test("角色表情、事件插画与教学提示资料齐全", () => {
+  const career = { id: "engineer", icon: "工", name: "软件工程师" };
+  for (const mood of ["neutral", "happy", "excited", "worried", "sad", "proud", "surprised", "thinking", "tired", "celebrating"]) {
+    const markup = avatarMarkup(career, mood);
+    assert.match(markup, new RegExp(`mood-${mood}`));
+    assert.match(markup, /avatar-mouth/);
+    assert.match(markup, /avatar-accessory/);
+  }
+  assert.ok(tutorialSteps.length >= 9);
+  assert.equal(tutorialSteps[0].id, "goal");
+  assert.ok(Object.keys(contextTipMessages).length >= 7);
+  assert.match(eventIllustrationMarkup("股票机会"), /art-stock/);
+  assert.match(eventIllustrationMarkup("保险理赔"), /art-insurance/);
 });

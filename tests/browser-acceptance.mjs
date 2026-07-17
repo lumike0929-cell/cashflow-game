@@ -38,6 +38,11 @@ page.on("pageerror", (error) => consoleErrors.push(error.message));
 try {
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle" });
   await page.evaluate(() => localStorage.clear());
+  const roleCount = await page.locator(".career-card").count();
+  assert.equal(roleCount, 4);
+  for (const roleName of ["小学老师", "软件工程师", "自由设计师", "牙科医生"]) {
+    await expectText(page, roleName);
+  }
   await page.getByText("牙科医生").click();
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => {
@@ -55,6 +60,41 @@ try {
       logs: [],
     });
   });
+
+  await page.evaluate(() => window.cashflowDebug.startTutorial(true));
+  let tutorialState = await page.evaluate(() => window.cashflowDebug.getExperience());
+  assert.equal(tutorialState.tutorialActive, true);
+  while ((await page.evaluate(() => window.cashflowDebug.getExperience().tutorialActive))) {
+    await page.evaluate(() => window.cashflowDebug.nextTutorialStep());
+  }
+  tutorialState = await page.evaluate(() => window.cashflowDebug.getExperience());
+  assert.equal(tutorialState.tutorialComplete, true);
+  await page.evaluate(() => window.cashflowDebug.startTutorial(true));
+  await page.evaluate(() => window.cashflowDebug.skipTutorial());
+  assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().tutorialActive), false);
+  await page.evaluate(() => window.cashflowDebug.startTutorial(true));
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().tutorialActive), true);
+  await page.evaluate(() => window.cashflowDebug.completeTutorial());
+
+  const moods = ["happy", "excited", "worried", "sad", "thinking"];
+  for (const mood of moods) {
+    await page.evaluate((nextMood) => window.cashflowDebug.setEmotion(nextMood, 0), mood);
+    const renderedMood = await page.evaluate(() => window.cashflowDebug.getExperience().avatarMood);
+    assert.equal(renderedMood, mood);
+  }
+
+  await page.evaluate(() => window.cashflowDebug.playIncomeEffect());
+  await page.waitForSelector(".finance-effect.positive");
+  await page.evaluate(() => window.cashflowDebug.playExpenseEffect());
+  await page.waitForSelector(".finance-effect.negative");
+
+  await page.evaluate(() => window.cashflowDebug.toggleMusic());
+  await page.evaluate(() => window.cashflowDebug.toggleHaptics());
+  await page.evaluate(() => window.cashflowDebug.dispatchVisibility());
+  const settingsAfterToggle = await page.evaluate(() => window.cashflowDebug.getExperience());
+  assert.equal(typeof settingsAfterToggle.musicEnabled, "boolean");
+  assert.equal(typeof settingsAfterToggle.hapticsEnabled, "boolean");
 
   const initialExperience = await page.evaluate(() => window.cashflowDebug.getExperience());
   assert.equal(initialExperience.boardTiles, 40);
@@ -102,6 +142,8 @@ try {
   await page.evaluate(() => window.cashflowDebug.toggleSound());
   const mutedAfterToggle = await page.evaluate(() => window.cashflowDebug.getExperience().muted);
   assert.equal(typeof mutedAfterToggle, "boolean");
+  const soundBeforeInteraction = await page.evaluate(() => window.cashflowDebug.getExperience().sound.musicPlaying);
+  assert.equal(typeof soundBeforeInteraction, "boolean");
 
   await page.evaluate(() => window.cashflowDebug.buyFirstProperty());
   await page.evaluate(() => window.cashflowDebug.closeModal());
@@ -191,6 +233,8 @@ try {
       unemployed: state.unemployment.unemployed,
       taxLiabilities: state.liabilities.filter((item) => item.type === "tax").length,
       hasMortgage: state.liabilities.some((item) => item.type === "mortgage"),
+      tutorialComplete: window.cashflowDebug.getExperience().tutorialComplete,
+      seenFirstStockTip: Boolean(window.cashflowDebug.getExperience().seenTips.firstStock),
       width: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
       text: document.body.innerText,
@@ -210,6 +254,8 @@ try {
   assert.equal(result.unemployed, false);
   assert.ok(result.taxLiabilities >= 0);
   assert.equal(result.hasMortgage, true);
+  assert.equal(result.tutorialComplete, true);
+  assert.equal(result.seenFirstStockTip, true);
   assert.ok(result.width <= result.clientWidth + 1, `horizontal overflow: ${result.width} > ${result.clientWidth}`);
   assert.match(result.text, /房地产/);
   assert.match(result.text, /小生意/);
@@ -240,4 +286,8 @@ try {
 } finally {
   await browser.close();
   await new Promise((resolve) => server.close(resolve));
+}
+
+async function expectText(page, text) {
+  await page.getByText(text).first().waitFor({ state: "visible" });
 }
