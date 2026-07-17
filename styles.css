@@ -1534,6 +1534,10 @@ p {
   box-shadow: var(--shadow);
 }
 
+.career-grid:has(.character-select-stage) {
+  display: block;
+}
+
 .character-preview-scene {
   position: relative;
   min-height: 380px;
@@ -3805,6 +3809,359 @@ body[data-quality="battery"] .finance-effect {
 
   .tutorial-actions {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Sprint 14 responsive repair: make the board the primary game surface. */
+body.modal-open {
+  overflow: hidden;
+}
+
+.menu-button {
+  min-width: 92px;
+}
+
+body.in-game {
+  overflow-x: hidden;
+}
+
+body.in-game .topbar {
+  min-height: 66px;
+  padding-block: 10px;
+}
+
+body.in-game .layout {
+  width: min(1500px, 100%);
+  padding-top: 12px;
+  padding-bottom: 136px;
+}
+
+body.in-game .hero-strip {
+  grid-template-columns: minmax(0, 1fr) 210px;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 20px;
+}
+
+body.in-game .hero-strip h1 {
+  margin-bottom: 3px;
+  font-size: clamp(22px, 2.6vw, 34px);
+}
+
+body.in-game .hero-strip p {
+  display: none;
+}
+
+body.in-game .freedom-meter {
+  gap: 5px;
+  padding: 10px 12px;
+}
+
+body.in-game .freedom-meter strong {
+  font-size: 26px;
+}
+
+body.in-game .play-grid {
+  display: block;
+}
+
+body.in-game .board-card {
+  min-height: calc(100vh - 218px);
+  padding: clamp(10px, 2vw, 18px);
+}
+
+body.in-game .board-card > .section-heading {
+  margin-bottom: 10px;
+}
+
+body.in-game .board-card > .section-heading h2 {
+  margin-bottom: 0;
+  font-size: clamp(20px, 2.5vw, 28px);
+}
+
+body.in-game .board-card > .section-heading p {
+  display: none;
+}
+
+body.in-game .board {
+  min-height: calc(100vh - 318px);
+  height: calc(100vh - 318px);
+  border-radius: 26px;
+}
+
+body.in-game .turn-card {
+  position: fixed;
+  left: max(14px, env(safe-area-inset-left));
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 40;
+  grid-template-columns: minmax(152px, 190px) minmax(0, 1fr);
+  align-items: center;
+  min-height: 108px;
+  max-height: 128px;
+  padding: 10px 14px;
+  border-radius: 24px;
+}
+
+body.in-game .turn-card .dice-box {
+  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-areas:
+    "dice label"
+    "dice button";
+  align-items: center;
+  gap: 5px 10px;
+  min-height: 86px;
+  padding: 8px 10px;
+}
+
+body.in-game .dice-box > span {
+  grid-area: label;
+  color: #1f7a52;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+body.in-game .dice-box > strong {
+  grid-area: dice;
+  min-height: 76px;
+  font-size: 0;
+}
+
+body.in-game #rollDice {
+  grid-area: button;
+  min-height: 42px;
+  padding-inline: 10px;
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: keep-all;
+  writing-mode: horizontal-tb;
+}
+
+body.in-game .action-stack {
+  grid-template-columns: minmax(120px, 170px) minmax(220px, 310px) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  max-height: none;
+  overflow: visible;
+}
+
+body.in-game .action-stack > .game-hud-status,
+body.in-game .action-stack > .hud-summary-grid,
+body.in-game .action-stack > .hud-shortcuts {
+  grid-column: auto;
+}
+
+body.in-game .game-hud-status {
+  min-height: 78px;
+  padding: 9px 10px;
+}
+
+body.in-game .game-hud-status strong,
+body.in-game .game-hud-status em {
+  white-space: nowrap;
+  word-break: keep-all;
+  writing-mode: horizontal-tb;
+}
+
+body.in-game .hud-summary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.in-game .hud-chip {
+  min-height: 72px;
+  padding: 9px 11px;
+}
+
+body.in-game .hud-chip strong {
+  overflow: hidden;
+  font-size: clamp(14px, 1.7vw, 18px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.in-game .hud-shortcuts {
+  grid-template-columns: repeat(9, minmax(50px, 1fr));
+  gap: 6px;
+}
+
+body.in-game .hud-shortcuts button {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  min-height: 64px;
+  padding: 6px 4px;
+  text-align: center;
+}
+
+body.in-game .hud-shortcuts button strong {
+  max-width: 100%;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+body.in-game .log-list {
+  display: none;
+}
+
+body.in-game .finance-grid,
+body.in-game .bank-section,
+body.in-game .life-section,
+body.in-game .real-estate-section,
+body.in-game .stock-section,
+body.in-game .business-section {
+  margin-top: 18px;
+}
+
+body.in-game .map-toolbar {
+  top: 14px;
+  right: 14px;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: var(--card-shadow);
+}
+
+.modal-card {
+  width: min(720px, calc(100vw - 28px));
+  max-height: min(86vh, 760px);
+}
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  .character-select-stage {
+    grid-template-columns: minmax(280px, 0.45fr) minmax(360px, 0.55fr);
+    max-width: min(1080px, calc(100vw - 32px));
+    margin-inline: auto;
+  }
+
+  .character-preview-scene {
+    min-height: clamp(380px, 52vh, 520px);
+  }
+
+  .career-thumb-rail {
+    grid-column: 2;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .select-start-button {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 1180px) {
+  body.in-game .hero-strip {
+    grid-template-columns: minmax(0, 1fr) 170px;
+  }
+
+  body.in-game .turn-card {
+    grid-template-columns: minmax(142px, 172px) minmax(0, 1fr);
+  }
+
+  body.in-game .action-stack {
+    grid-template-columns: minmax(112px, 146px) minmax(190px, 250px) minmax(0, 1fr);
+  }
+
+  body.in-game .hud-shortcuts {
+    grid-template-columns: repeat(5, minmax(48px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  body.in-game .topbar {
+    display: flex;
+  }
+
+  body.in-game .top-actions {
+    display: flex;
+  }
+
+  body.in-game .layout {
+    padding-inline: 10px;
+    padding-bottom: 220px;
+  }
+
+  body.in-game .hero-strip {
+    grid-template-columns: 1fr;
+    padding: 10px 12px;
+  }
+
+  body.in-game .freedom-meter {
+    display: none;
+  }
+
+  body.in-game .board-card {
+    min-height: calc(100vh - 286px);
+    padding: 10px;
+  }
+
+  body.in-game .board {
+    min-height: calc(100vh - 376px);
+    height: calc(100vh - 376px);
+    border-radius: 22px;
+  }
+
+  body.in-game .turn-card {
+    left: 8px;
+    right: 8px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    grid-template-columns: 104px minmax(0, 1fr);
+    min-height: 196px;
+    max-height: 216px;
+    padding: 9px;
+  }
+
+  body.in-game .turn-card .dice-box {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "label"
+      "dice"
+      "button";
+  }
+
+  body.in-game .dice-box > strong {
+    min-height: 70px;
+  }
+
+  body.in-game #rollDice {
+    min-height: 44px;
+    font-size: 13px;
+  }
+
+  body.in-game .action-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    max-height: 178px;
+    overflow-y: auto;
+  }
+
+  body.in-game .action-stack > .game-hud-status,
+  body.in-game .action-stack > .hud-summary-grid,
+  body.in-game .action-stack > .hud-shortcuts {
+    grid-column: span 2;
+  }
+
+  body.in-game .game-hud-status {
+    min-height: 48px;
+  }
+
+  body.in-game .hud-chip {
+    min-height: 48px;
+  }
+
+  body.in-game .hud-shortcuts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  body.in-game .hud-shortcuts button {
+    min-height: 46px;
+  }
+
+  body.in-game .map-toolbar {
+    top: 10px;
+    right: 10px;
+    bottom: auto;
+    left: auto;
   }
 }
 

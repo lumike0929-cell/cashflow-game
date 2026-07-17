@@ -285,6 +285,7 @@ const el = {
   saveGame: document.querySelector("#saveGame"),
   loadGame: document.querySelector("#loadGame"),
   resetGame: document.querySelector("#resetGame"),
+  gameMenu: document.querySelector("#gameMenu"),
   modal: document.querySelector("#cardModal"),
   modalType: document.querySelector("#modalType"),
   modalTitle: document.querySelector("#modalTitle"),
@@ -502,12 +503,14 @@ function showCharacterSelection() {
 }
 
 function showGame() {
+  document.body.classList.add("in-game");
   document.body.classList.remove("selection-active");
   el.setupPanel.classList.add("hidden");
   el.gamePanel.classList.remove("hidden");
 }
 
 function showSetup() {
+  document.body.classList.remove("in-game");
   document.body.classList.remove("selection-active");
   el.gamePanel.classList.add("hidden");
   el.setupPanel.classList.remove("hidden");
@@ -3524,11 +3527,13 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [], outcom
   });
 
   el.modal.classList.remove("hidden");
+  document.body.classList.add("modal-open");
   soundManager.setScene("event");
 }
 
 function closeModal() {
   el.modal.classList.add("hidden");
+  document.body.classList.remove("modal-open");
   soundManager.setScene(state ? "board" : "home");
   if (state && !state.gameOver && !uiState.isRolling && !uiState.isMoving) {
     setTimeout(() => el.rollDice.focus({ preventScroll: true }), 30);
@@ -3596,6 +3601,39 @@ function confirmClearSavedGame() {
     text: "这只会删除这个浏览器里的 Cashflow 进度，线上游戏不会受到影响。",
     actions: [
       { label: "确认清除", className: "danger", onClick: clearSavedGame },
+      { label: "先保留", className: "primary", onClick: closeModal },
+    ],
+    outcome: "warning",
+  });
+}
+
+function showGameMenu() {
+  openSimpleModal({
+    type: "游戏选单",
+    title: "现金流冒险城",
+    text: "保存、读取、重新开始和设置都放在这里，主画面可以专心显示棋盘。",
+    metrics: [
+      ["自动存档", "关键选择后会保存到这个浏览器"],
+      ["当前状态", state ? `第 ${state.month} 月 · 现金 ${money(state.cash)}` : "尚未开始"],
+    ],
+    actions: [
+      { label: "保存进度", className: "primary", disabled: !state, onClick: saveGame },
+      { label: "读取存档", onClick: loadGame },
+      { label: "声音与画面", onClick: showSoundSettings },
+      { label: "游戏规则", onClick: showRules },
+      { label: "重新开始", className: "danger", onClick: confirmResetGame },
+      { label: "关闭", onClick: closeModal },
+    ],
+  });
+}
+
+function confirmResetGame() {
+  openSimpleModal({
+    type: "重新开始",
+    title: "确认重新开始？",
+    text: "这会清除目前这局的本机进度，重新回到首页选角。",
+    actions: [
+      { label: "确认重开", className: "danger", onClick: resetGame },
       { label: "先保留", className: "primary", onClick: closeModal },
     ],
     outcome: "warning",
@@ -3694,9 +3732,10 @@ function cycleVisualQuality() {
 }
 
 el.rollDice.addEventListener("click", rollDice);
-el.saveGame.addEventListener("click", saveGame);
-el.loadGame.addEventListener("click", loadGame);
-el.resetGame.addEventListener("click", resetGame);
+el.saveGame?.addEventListener("click", saveGame);
+el.loadGame?.addEventListener("click", loadGame);
+el.resetGame?.addEventListener("click", confirmResetGame);
+el.gameMenu?.addEventListener("click", showGameMenu);
 el.continueGameHome?.addEventListener("click", loadGame);
 el.startAdventure?.addEventListener("click", showCharacterSelection);
 el.rulesHome?.addEventListener("click", showRules);

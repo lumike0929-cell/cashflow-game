@@ -271,7 +271,8 @@ try {
   await page.evaluate(() => window.cashflowDebug.closeModal());
 
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByText("读取").click();
+  await page.locator("#gameMenu").click();
+  await page.getByText("读取存档").click();
   await page.evaluate(() => window.cashflowDebug.closeModal());
 
   const result = await page.evaluate(() => {
@@ -323,26 +324,42 @@ try {
   for (const viewport of [
     { width: 390, height: 844 },
     { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(viewport);
     await page.reload({ waitUntil: "networkidle" });
-    await page.getByText("读取").click();
+    await page.locator("#gameMenu").click();
+    await page.getByText("读取存档").click();
     await page.evaluate(() => window.cashflowDebug.closeModal());
     const overflow = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
       hasMap: Boolean(document.querySelector(".city-map-viewport")),
       hasHud: Boolean(document.querySelector(".turn-card")),
+      hud: document.querySelector(".turn-card")?.getBoundingClientRect().toJSON(),
+      board: document.querySelector(".board")?.getBoundingClientRect().toJSON(),
+      roll: document.querySelector("#rollDice")?.getBoundingClientRect().toJSON(),
+      rollText: document.querySelector("#rollDice")?.textContent,
+      writingMode: getComputedStyle(document.querySelector("#rollDice")).writingMode,
+      whiteSpace: getComputedStyle(document.querySelector("#rollDice")).whiteSpace,
+      wordBreak: getComputedStyle(document.querySelector("#rollDice")).wordBreak,
     }));
     assert.equal(overflow.hasMap, true);
     assert.equal(overflow.hasHud, true);
+    assert.equal(overflow.writingMode, "horizontal-tb");
+    assert.equal(overflow.whiteSpace, "nowrap");
+    assert.equal(overflow.wordBreak, "keep-all");
+    assert.ok(overflow.roll.width > overflow.roll.height, `${viewport.width}px roll button became vertical`);
+    assert.ok(overflow.board.height >= viewport.height * 0.45, `${viewport.width}px board too short`);
+    assert.ok(overflow.hud.height <= Math.max(230, viewport.height * 0.28), `${viewport.width}px HUD too tall`);
     assert.ok(overflow.width <= overflow.clientWidth + 1, `${viewport.width}px overflow: ${overflow.width} > ${overflow.clientWidth}`);
   }
 
   for (const viewport of [
     { width: 390, height: 844 },
     { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(viewport);
@@ -368,10 +385,16 @@ try {
     await page.locator("#startAdventure").click();
     const selectionLayout = await page.evaluate(() => {
       const start = document.querySelector("#startSelectedCareer")?.getBoundingClientRect();
+      const stage = document.querySelector(".character-select-stage")?.getBoundingClientRect();
+      const preview = document.querySelector(".character-preview-scene")?.getBoundingClientRect();
+      const panel = document.querySelector(".selected-career-panel")?.getBoundingClientRect();
       return {
         thumbs: document.querySelectorAll(".career-thumb").length,
         selected: Boolean(document.querySelector(".career-thumb.selected")),
         startVisible: Boolean(start && start.top < window.innerHeight && start.bottom <= window.innerHeight),
+        stageWidth: stage?.width || 0,
+        previewLeft: preview?.left || 0,
+        panelLeft: panel?.left || 0,
         width: document.documentElement.scrollWidth,
         clientWidth: document.documentElement.clientWidth,
       };
@@ -379,6 +402,10 @@ try {
     assert.equal(selectionLayout.thumbs, 4);
     assert.equal(selectionLayout.selected, true);
     assert.equal(selectionLayout.startVisible, true);
+    assert.ok(selectionLayout.stageWidth >= viewport.width * 0.72, `${viewport.width}px selection uses too little width`);
+    if (viewport.width >= 768) {
+      assert.ok(selectionLayout.panelLeft > selectionLayout.previewLeft, `${viewport.width}px selection is not two-column`);
+    }
     assert.ok(selectionLayout.width <= selectionLayout.clientWidth + 1, `${viewport.width}px selection overflow: ${selectionLayout.width} > ${selectionLayout.clientWidth}`);
   }
   console.log("Browser acceptance passed.");
