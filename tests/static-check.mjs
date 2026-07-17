@@ -5,6 +5,7 @@ const requiredFiles = [
   "index.html",
   "styles.css",
   "game.js",
+  "gameExperience.js",
   "realEstateData.js",
   "realEstateCalculator.js",
   "realEstateTransactions.js",
@@ -48,7 +49,10 @@ const data = await readFile("realEstateData.js", "utf8");
 assert.match(html, /type="module" src="\.\/game\.js"/);
 assert.match(html, /realEstatePortfolio/);
 assert.match(game, /cashflowDebug/);
+assert.match(game, /movePlayerStepByStep/);
+assert.match(game, /showTilePreview/);
 assert.match(data, /realEstateOpportunities/);
+assert.match(await readFile("gameExperience.js", "utf8"), /boardPath/);
 assert.match(await readFile("stockData.js", "utf8"), /stockDefinitions/);
 assert.match(await readFile("businessData.js", "utf8"), /businessDefinitions/);
 assert.match(await readFile("bankingData.js", "utf8"), /interestProfiles/);

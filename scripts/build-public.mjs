@@ -4,6 +4,7 @@ const deployFiles = [
   "index.html",
   "styles.css",
   "game.js",
+  "gameExperience.js",
   "realEstateCalculator.js",
   "realEstateData.js",
   "realEstateEventResolver.js",

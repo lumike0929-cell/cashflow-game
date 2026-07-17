@@ -28,6 +28,7 @@ await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const { port } = server.address();
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+await page.emulateMedia({ reducedMotion: "reduce" });
 const consoleErrors = [];
 page.on("console", (message) => {
   if (message.type() === "error") consoleErrors.push(message.text());
@@ -54,6 +55,53 @@ try {
       logs: [],
     });
   });
+
+  const initialExperience = await page.evaluate(() => window.cashflowDebug.getExperience());
+  assert.equal(initialExperience.boardTiles, 40);
+  const rapidBefore = await page.evaluate(() => {
+    const state = window.cashflowDebug.getState();
+    return { position: state.position, round: state.round };
+  });
+  await page.evaluate(() => {
+    window.cashflowDebug.rollFixed(3);
+    window.cashflowDebug.rollFixed(3);
+  });
+  await page.waitForFunction(() => {
+    const experience = window.cashflowDebug.getExperience();
+    return !experience.isRolling && !experience.isMoving;
+  });
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  const rapidAfter = await page.evaluate(() => {
+    const state = window.cashflowDebug.getState();
+    return { position: state.position, round: state.round, lastRoll: state.lastRoll };
+  });
+  assert.equal(rapidAfter.position, (rapidBefore.position + 3) % 40);
+  assert.equal(rapidAfter.round, rapidBefore.round + 1);
+  assert.equal(rapidAfter.lastRoll, 3);
+
+  const rolls = [1, 2, 3, 4, 5, 6, 1, 2, 3];
+  for (const roll of rolls) {
+    const before = await page.evaluate(() => window.cashflowDebug.getState().position);
+    await page.evaluate((value) => window.cashflowDebug.rollFixed(value), roll);
+    await page.waitForFunction(() => {
+      const experience = window.cashflowDebug.getExperience();
+      return !experience.isRolling && !experience.isMoving;
+    });
+    const after = await page.evaluate(() => window.cashflowDebug.getState().position);
+    assert.equal(after, (before + roll) % 40);
+    await page.evaluate(() => window.cashflowDebug.closeModal());
+  }
+
+  const cameraBefore = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
+  await page.evaluate(() => window.cashflowDebug.zoomMap(0.18));
+  const cameraZoomed = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
+  assert.ok(cameraZoomed.scale > cameraBefore.scale);
+  await page.evaluate(() => window.cashflowDebug.focusPlayer());
+  const cameraFocused = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
+  assert.equal(cameraFocused.follow, true);
+  await page.evaluate(() => window.cashflowDebug.toggleSound());
+  const mutedAfterToggle = await page.evaluate(() => window.cashflowDebug.getExperience().muted);
+  assert.equal(typeof mutedAfterToggle, "boolean");
 
   await page.evaluate(() => window.cashflowDebug.buyFirstProperty());
   await page.evaluate(() => window.cashflowDebug.closeModal());
@@ -168,6 +216,26 @@ try {
   assert.match(result.text, /人生与保障/);
   assert.match(result.text, /预备金/);
   assert.deepEqual(consoleErrors, []);
+
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.reload({ waitUntil: "networkidle" });
+    await page.getByText("读取").click();
+    await page.evaluate(() => window.cashflowDebug.closeModal());
+    const overflow = await page.evaluate(() => ({
+      width: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+      hasMap: Boolean(document.querySelector(".city-map-viewport")),
+      hasHud: Boolean(document.querySelector(".turn-card")),
+    }));
+    assert.equal(overflow.hasMap, true);
+    assert.equal(overflow.hasHud, true);
+    assert.ok(overflow.width <= overflow.clientWidth + 1, `${viewport.width}px overflow: ${overflow.width} > ${overflow.clientWidth}`);
+  }
   console.log("Browser acceptance passed.");
 } finally {
   await browser.close();

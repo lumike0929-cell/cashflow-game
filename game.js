@@ -99,6 +99,21 @@ import {
   settleUnemploymentMonth,
   startUnemployment,
 } from "./unemploymentEngine.js";
+import {
+  boardPath,
+  cameraForTile,
+  clampCamera,
+  createCitySceneSvg,
+  createSoundManager,
+  diceMarkup,
+  haptic,
+  indexAfter,
+  loadExperienceSettings,
+  nextIndices,
+  saveExperienceSettings,
+  tileVisual,
+  avatarMarkup,
+} from "./gameExperience.js";
 
 const STORAGE_KEY = "cashflow-freedom-game-v1";
 
@@ -166,6 +181,21 @@ const boardTiles = [
   { type: "businessMarket", icon: "需", title: "需求变化", text: "不同类型生意需求会改变。" },
   { type: "jobEvent", icon: "职", title: "工作发展", text: "加薪、升职、失业或再就业。" },
   { type: "propertyEvent", icon: "管", title: "持有管理", text: "房产赚钱也需要维护。" },
+  { type: "family", icon: "家", title: "家庭责任", text: "家庭选择会影响现金与幸福。" },
+  { type: "lifeEvent", icon: "急", title: "医疗意外", text: "检查保险和预备金是否够用。" },
+  { type: "opportunity", icon: "房", title: "置产机会", text: "比较现金购买与房贷购买。" },
+  { type: "charity", icon: "善", title: "慈善分享", text: "练习在预算中安排分享。" },
+  { type: "businessOpportunity", icon: "铺", title: "小店机会", text: "评估营收、成本与时间投入。" },
+  { type: "market", icon: "风", title: "房市风向", text: "地段与租金可能改变。" },
+  { type: "insurance", icon: "险", title: "保障检查", text: "看保费是否适合月现金流。" },
+  { type: "stockOpportunity", icon: "券", title: "股票机会", text: "买入前先看风险和分散。" },
+  { type: "learn", icon: "书", title: "财商课堂", text: "知识会改善之后的选择。" },
+  { type: "tax", icon: "票", title: "税务整理", text: "用游戏规则练习预留税款。" },
+  { type: "bank", icon: "信", title: "信用柜台", text: "信用分影响额度和利率。" },
+  { type: "stockMarket", icon: "讯", title: "市场新闻", text: "价格波动不是最终结果。" },
+  { type: "businessEvent", icon: "客", title: "客流事件", text: "需求会影响小生意利润。" },
+  { type: "jobEvent", icon: "工", title: "工作机会", text: "收入可能提高，也可能中断。" },
+  { type: "doodad", icon: "修", title: "生活维修", text: "小支出也会考验现金垫。" },
   { type: "payday", icon: "薪", title: "月结日", text: "再次结算现金流与房贷本金。" },
 ];
 
@@ -186,6 +216,24 @@ const learningCards = [
 ];
 
 let state = null;
+const soundManager = createSoundManager();
+const savedExperience = loadExperienceSettings(localStorage);
+const uiState = {
+  isRolling: false,
+  isMoving: false,
+  diceRolling: false,
+  hudStatus: "准备中",
+  movingStep: 0,
+  movingTotal: 0,
+  avatarMood: "idle",
+  previewIndices: [],
+  camera: savedExperience.camera,
+  muted: savedExperience.muted,
+  volume: savedExperience.volume,
+  draggingCamera: false,
+};
+soundManager.setMuted(uiState.muted);
+soundManager.setVolume(uiState.volume);
 
 const el = {
   setupPanel: document.querySelector("#setupPanel"),
@@ -220,6 +268,10 @@ const el = {
   dealMetrics: document.querySelector("#dealMetrics"),
   modalActions: document.querySelector("#modalActions"),
   closeModal: document.querySelector("#closeModal"),
+  continueGameHome: document.querySelector("#continueGameHome"),
+  rulesHome: document.querySelector("#rulesHome"),
+  soundHome: document.querySelector("#soundHome"),
+  clearSaveHome: document.querySelector("#clearSaveHome"),
 };
 
 function createState(career) {
@@ -393,8 +445,10 @@ function render() {
   el.freedomPercent.textContent = `${freedom}%`;
   el.freedomBar.style.width = `${freedom}%`;
   el.roundLabel.textContent = `第 ${state.month} 月`;
-  el.diceValue.textContent = state.lastRoll || "-";
-  el.rollDice.disabled = state.gameOver;
+  el.diceValue.innerHTML = diceMarkup(state.lastRoll || 1, uiState.diceRolling);
+  el.rollDice.disabled = state.gameOver || uiState.isRolling || uiState.isMoving;
+  el.rollDice.textContent = uiState.isMoving ? `前进 ${uiState.movingStep} / ${uiState.movingTotal}` : uiState.isRolling ? "骰子旋转" : "掷骰前进";
+  el.rollDice.setAttribute("aria-label", el.rollDice.textContent);
   renderBoard();
   renderActions();
   renderStatements();
@@ -407,30 +461,192 @@ function render() {
 }
 
 function renderBoard() {
-  el.board.innerHTML = boardTiles
-    .map(
-      (tile, index) => `
-        <div class="tile ${tile.type} ${state.position === index ? "active" : ""}">
-          ${state.position === index ? '<span class="player-token">你</span>' : ""}
-          <span class="tile-icon">${tile.icon}</span>
-          <div>
-            <strong>${tile.title}</strong>
-            <small>${tile.text}</small>
-          </div>
+  const playerPoint = boardPath[state.position % boardPath.length] || boardPath[0];
+  el.board.innerHTML = `
+    <div class="city-map-viewport" id="cityMapViewport" aria-label="可拖曳缩放的现金流城市地图">
+      <div class="city-map-stage" id="cityMapStage">
+        ${createCitySceneSvg()}
+        <div class="board-route" aria-hidden="true"></div>
+        ${boardTiles
+          .map((tile, index) => {
+            const point = boardPath[index % boardPath.length] || boardPath[0];
+            const visual = tileVisual(tile.type);
+            const isActive = state.position === index;
+            const isPreview = uiState.previewIndices.includes(index);
+            return `
+              <button
+                class="tile map-tile ${tile.type} tone-${visual.tone} ${isActive ? "active arrived" : ""} ${isPreview ? "preview-glow" : ""}"
+                type="button"
+                data-tile-index="${index}"
+                style="left:${point.x}px; top:${point.y}px"
+                aria-label="${tile.title}，${visual.category}"
+              >
+                <span class="tile-icon">${tile.icon}</span>
+                <span class="tile-copy">
+                  <strong>${tile.title}</strong>
+                  <small>${visual.category} · ${visual.status}</small>
+                </span>
+              </button>
+            `;
+          })
+          .join("")}
+        <div class="avatar-anchor" id="avatarAnchor" style="left:${playerPoint.x}px; top:${playerPoint.y}px">
+          ${avatarMarkup(state.career, uiState.avatarMood)}
         </div>
-      `,
-    )
-    .join("");
+      </div>
+    </div>
+    <div class="map-toolbar" aria-label="地图控制">
+      <button type="button" id="zoomOutMap" aria-label="缩小地图">−</button>
+      <button type="button" id="focusPlayer" aria-label="回到玩家">回到玩家</button>
+      <button type="button" id="zoomInMap" aria-label="放大地图">＋</button>
+    </div>
+  `;
+  setupMapControls();
+  el.board.querySelectorAll("[data-tile-index]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (uiState.draggingCamera || uiState.isMoving || uiState.isRolling) return;
+      showTilePreview(Number(button.dataset.tileIndex));
+    });
+  });
+  requestAnimationFrame(() => {
+    if (uiState.camera.follow) focusCameraOnPlayer(false);
+    else applyCamera();
+  });
+}
+
+function setupMapControls() {
+  const viewport = document.querySelector("#cityMapViewport");
+  const zoomOut = document.querySelector("#zoomOutMap");
+  const zoomIn = document.querySelector("#zoomInMap");
+  const focus = document.querySelector("#focusPlayer");
+  if (!viewport) return;
+  let startX = 0;
+  let startY = 0;
+  let cameraStart = { ...uiState.camera };
+  let moved = false;
+
+  viewport.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("[data-tile-index]")) return;
+    viewport.setPointerCapture(event.pointerId);
+    startX = event.clientX;
+    startY = event.clientY;
+    cameraStart = { ...uiState.camera };
+    moved = false;
+  });
+
+  viewport.addEventListener("pointermove", (event) => {
+    if (!viewport.hasPointerCapture(event.pointerId)) return;
+    const dx = event.clientX - startX;
+    const dy = event.clientY - startY;
+    if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
+    uiState.draggingCamera = moved;
+    uiState.camera = clampCamera(
+      {
+        ...cameraStart,
+        x: cameraStart.x + dx,
+        y: cameraStart.y + dy,
+        follow: false,
+      },
+      viewport.clientWidth,
+      viewport.clientHeight,
+    );
+    saveExperience();
+    applyCamera();
+  });
+
+  viewport.addEventListener("pointerup", (event) => {
+    if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+    setTimeout(() => {
+      uiState.draggingCamera = false;
+    }, 120);
+  });
+
+  viewport.addEventListener(
+    "wheel",
+    (event) => {
+      event.preventDefault();
+      zoomCamera(event.deltaY > 0 ? -0.08 : 0.08);
+    },
+    { passive: false },
+  );
+  zoomOut?.addEventListener("click", () => zoomCamera(-0.12));
+  zoomIn?.addEventListener("click", () => zoomCamera(0.12));
+  focus?.addEventListener("click", () => {
+    soundManager.play("tap");
+    focusCameraOnPlayer(true);
+  });
+}
+
+function zoomCamera(delta) {
+  const viewport = document.querySelector("#cityMapViewport");
+  if (!viewport) return;
+  uiState.camera = clampCamera(
+    {
+      ...uiState.camera,
+      scale: uiState.camera.scale + delta,
+      follow: false,
+    },
+    viewport.clientWidth,
+    viewport.clientHeight,
+  );
+  saveExperience();
+  applyCamera();
+}
+
+function focusCameraOnPlayer(save = true, scale = uiState.isMoving ? 1.02 : uiState.camera.scale) {
+  const viewport = document.querySelector("#cityMapViewport");
+  if (!viewport || !state) return;
+  uiState.camera = cameraForTile(state.position, viewport.clientWidth, viewport.clientHeight, scale);
+  if (save) saveExperience();
+  applyCamera();
+}
+
+function applyCamera() {
+  const viewport = document.querySelector("#cityMapViewport");
+  const stage = document.querySelector("#cityMapStage");
+  if (!viewport || !stage) return;
+  uiState.camera = clampCamera(uiState.camera, viewport.clientWidth, viewport.clientHeight);
+  stage.style.transform = `translate3d(${uiState.camera.x}px, ${uiState.camera.y}px, 0) scale(${uiState.camera.scale})`;
+}
+
+function saveExperience() {
+  saveExperienceSettings(localStorage, {
+    muted: uiState.muted,
+    volume: uiState.volume,
+    camera: uiState.camera,
+  });
+}
+
+function showTilePreview(index) {
+  const tile = boardTiles[index];
+  if (!tile) return;
+  const visual = tileVisual(tile.type);
+  openSimpleModal({
+    type: "格子预览",
+    title: tile.title,
+    text: "这是格子预览，不会结算事件或改变资料。",
+    metrics: [
+      ["类别", visual.category],
+      ["状态", visual.status],
+      ["说明", tile.text],
+      ["位置", `${index + 1} / ${boardTiles.length}`],
+    ],
+    actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+  });
 }
 
 function renderActions() {
   const debt = state.liabilities.reduce((sum, item) => sum + moneyValue(item.balance), 0);
   const buttons = [
+    `<div class="hud-status"><span>目前状态</span><strong>${uiState.hudStatus}</strong></div>`,
+    `<button type="button" id="focusPlayerHud">回到玩家</button>`,
+    `<button type="button" id="toggleSound">${uiState.muted ? "开启音效" : "静音"}</button>`,
+    `<button type="button" id="openFinancePanel">财务面板</button>`,
     `<button type="button" id="openBankCenter">银行中心</button>`,
+    `<button type="button" id="openPortfolio">房地产</button>`,
+    `<button type="button" id="openStockPortfolio">股票</button>`,
+    `<button type="button" id="openBusinessPortfolio">小生意</button>`,
     `<button type="button" id="openLifeCenter">人生保障</button>`,
-    `<button type="button" id="openPortfolio">房地产中心</button>`,
-    `<button type="button" id="openStockPortfolio">股票中心</button>`,
-    `<button type="button" id="openBusinessPortfolio">小生意中心</button>`,
   ];
 
   if (debt > 0) {
@@ -442,10 +658,12 @@ function renderActions() {
   }
 
   el.actionStack.innerHTML = buttons.join("");
-  document.querySelector("#openBankCenter")?.addEventListener("click", showBankCenter);
-  document.querySelector("#openLifeCenter")?.addEventListener("click", () => {
-    document.querySelector("#lifeSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.querySelector("#focusPlayerHud")?.addEventListener("click", () => focusCameraOnPlayer(true));
+  document.querySelector("#toggleSound")?.addEventListener("click", toggleSound);
+  document.querySelector("#openFinancePanel")?.addEventListener("click", () => {
+    document.querySelector(".finance-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  document.querySelector("#openBankCenter")?.addEventListener("click", showBankCenter);
   document.querySelector("#repayDebt")?.addEventListener("click", repayDebt);
   document.querySelector("#newRun")?.addEventListener("click", resetGame);
   document.querySelector("#openPortfolio")?.addEventListener("click", () => {
@@ -457,6 +675,17 @@ function renderActions() {
   document.querySelector("#openBusinessPortfolio")?.addEventListener("click", () => {
     document.querySelector("#businessSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  document.querySelector("#openLifeCenter")?.addEventListener("click", () => {
+    document.querySelector("#lifeSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+function toggleSound() {
+  uiState.muted = !uiState.muted;
+  soundManager.setMuted(uiState.muted);
+  saveExperience();
+  if (!uiState.muted) soundManager.play("tap");
+  renderActions();
 }
 
 function renderStatements() {
@@ -843,6 +1072,22 @@ function renderLogs() {
   el.logList.innerHTML = state.logs.map((item) => `<div class="log-item">${item}</div>`).join("");
 }
 
+function emitFinanceEffect(amount, label = "现金变化", kind = "neutral") {
+  const number = moneyValue(amount);
+  const layer = document.createElement("div");
+  layer.className = `finance-effect ${number >= 0 ? "positive" : "negative"} ${kind}`;
+  layer.innerHTML = `
+    <span class="effect-icon">${number >= 0 ? "¥" : "账"}</span>
+    <strong>${number >= 0 ? "+" : "-"}${money(Math.abs(number))}</strong>
+    <small>${label}</small>
+  `;
+  document.body.append(layer);
+  if (number >= 0) soundManager.play("coin");
+  else soundManager.play("warning");
+  if (number < 0) haptic([14, 20, 14]);
+  setTimeout(() => layer.remove(), prefersReducedMotion() ? 200 : 1500);
+}
+
 function assetLabel(type) {
   return {
     property: "房产",
@@ -928,22 +1173,73 @@ function ratePulse(label) {
   return `<span class="rate-pulse">${label}</span>`;
 }
 
-function rollDice() {
-  if (!state || state.gameOver) return;
-  const roll = Math.floor(Math.random() * 6) + 1;
+async function rollDice(forcedRoll = null) {
+  if (!state || state.gameOver || uiState.isRolling || uiState.isMoving) return;
+  soundManager.play("dice");
+  haptic(12);
+  uiState.isRolling = true;
+  uiState.diceRolling = true;
+  uiState.hudStatus = "骰子旋转";
+  uiState.avatarMood = "idle";
+  render();
+  const roll = typeof forcedRoll === "number" ? Math.max(1, Math.min(6, Math.round(forcedRoll))) : Math.floor(Math.random() * 6) + 1;
   const previous = state.position;
-  const next = (state.position + roll) % boardTiles.length;
-  state.lastRoll = roll;
-
-  if (previous + roll >= boardTiles.length) {
-    collectPayday("经过月结日");
+  uiState.previewIndices = nextIndices(previous, roll, boardTiles.length);
+  const tickCount = prefersReducedMotion() ? 2 : 12;
+  for (let index = 0; index < tickCount; index += 1) {
+    state.lastRoll = (index % 6) + 1;
+    render();
+    await wait(prefersReducedMotion() ? 20 : 75);
   }
-
-  state.position = next;
-  addLog(`掷出 ${roll}，移动到「${boardTiles[next].title}」。`);
+  state.lastRoll = roll;
+  uiState.diceRolling = false;
+  soundManager.play("land");
+  haptic(22);
+  render();
+  await wait(prefersReducedMotion() ? 30 : 180);
+  await movePlayerStepByStep(previous, roll);
+  const next = state.position;
+  uiState.isRolling = false;
+  uiState.previewIndices = [];
+  uiState.movingStep = 0;
+  uiState.movingTotal = 0;
+  uiState.hudStatus = "到达";
+  uiState.avatarMood = "celebrate";
+  soundManager.play("happy");
+  addLog(`掷出 ${roll}，逐格移动到「${boardTiles[next].title}」。`);
   state.round += 1;
+  persistQuietly();
   render();
   triggerTile(boardTiles[next]);
+}
+
+async function movePlayerStepByStep(previous, roll) {
+  uiState.isMoving = true;
+  uiState.hudStatus = "移动中";
+  uiState.movingTotal = roll;
+  uiState.avatarMood = "walking";
+  for (let step = 1; step <= roll; step += 1) {
+    const nextIndex = indexAfter(previous, step, boardTiles.length);
+    uiState.movingStep = step;
+    state.position = nextIndex;
+    if (nextIndex === 0 && step < roll) {
+      collectPayday("经过月结日");
+    }
+    soundManager.play("step");
+    haptic(8);
+    render();
+    focusCameraOnPlayer(false, 1.04);
+    await wait(prefersReducedMotion() ? 30 : 210);
+  }
+  uiState.isMoving = false;
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 }
 
 function triggerTile(tile) {
@@ -998,6 +1294,16 @@ function triggerTile(tile) {
     return;
   }
 
+  if (tile.type === "family") {
+    showLifeEvent(pickLifeEvent(state, "家庭责任"));
+    return;
+  }
+
+  if (tile.type === "charity") {
+    showCharityEvent();
+    return;
+  }
+
   if (tile.type === "insurance") {
     showInsuranceCenter();
     return;
@@ -1031,6 +1337,7 @@ function triggerTile(tile) {
 function collectPayday(reason) {
   const beforeCashflow = netMonthlyCashflow();
   state.cash += beforeCashflow;
+  emitFinanceEffect(beforeCashflow, "薪水日结算", beforeCashflow >= 0 ? "payday" : "expense");
   const mortgageResults = applyMortgagePayday(state);
   const dividendResult = settleStockDividends(state);
   const priceTick = resolveStockPriceTick(state, "Payday 后股票价格更新");
@@ -1260,6 +1567,7 @@ function completePropertyPurchase(opportunity, eventId, financing = null) {
     return;
   }
   addLog(`${result.property.financingMode === "cash" ? "现金买入" : "房贷买入"}「${result.property.name}」，每月房地产现金流 ${money(result.property.monthlyCashflow)}。`);
+  emitFinanceEffect(-result.property.downPayment, "买入房地产", "buy");
   persistQuietly();
   render();
   openSimpleModal({
@@ -1359,6 +1667,7 @@ function completeStockPurchase(stockId, quantity, eventId) {
     return;
   }
   addLog(`买入 ${result.stock.name} ${result.shares} 股，花费 ${money(result.totalAmount)}。`);
+  emitFinanceEffect(-result.totalAmount, "买入股票", "buy");
   persistQuietly();
   render();
   const summary = calculateStockPortfolioSummary(state);
@@ -1502,6 +1811,7 @@ function completePersonalLoan(amount) {
     return;
   }
   addLog(`个人贷款 ${money(result.amount)}，每月还款 ${money(result.payment)}。`);
+  emitFinanceEffect(result.amount, "个人贷款入账", "loan");
   persistQuietly();
   render();
   openSimpleModal({
@@ -1626,6 +1936,7 @@ function completeRefinance(propertyId) {
     return;
   }
   addLog(`${result.after.name} 再融资成功，月供减少 ${money(result.preview.paymentSavings)}。`);
+  emitFinanceEffect(result.preview.paymentSavings, "月供减少", "refinance");
   persistQuietly();
   render();
   openSimpleModal({
@@ -1717,6 +2028,7 @@ function completeLifeEvent(event, optionId) {
     return;
   }
   addLog(`${event.title}：${result.option.label}，现金变化 ${signedMoney(result.cashChange)}。`);
+  emitFinanceEffect(result.cashChange, event.title, result.cashChange >= 0 ? "life-positive" : "life-negative");
   persistQuietly();
   render();
   openSimpleModal({
@@ -1797,6 +2109,7 @@ function completeInsurancePurchase(policyId) {
     return;
   }
   addLog(`购买 ${result.policy.name}，每月保费 ${money(result.policy.monthlyPremium)}。`);
+  emitFinanceEffect(-result.policy.monthlyPremium, "购买保险", "insurance");
   persistQuietly();
   render();
   openSimpleModal({
@@ -1890,6 +2203,7 @@ function showTaxSummary(fromTile = false) {
 function completeTaxSettlement() {
   const result = settleTax(state, `tax-${state.round}-${Date.now()}`);
   addLog(result.ok ? `税务结算：支付 ${money(result.paidNow)}，新增税务负债 ${money(result.liabilityAdded)}。` : result.reason);
+  if (result.ok) emitFinanceEffect(-result.paidNow, "税务结算", "tax");
   persistQuietly();
   render();
   openSimpleModal({
@@ -1926,6 +2240,33 @@ function showDoodad() {
           render();
         },
       },
+    ],
+  });
+}
+
+function showCharityEvent() {
+  const donation = Math.min(1800, Math.max(300, Math.round(state.cash * 0.015)));
+  openSimpleModal({
+    type: "慈善分享",
+    title: "社区爱心分享",
+    text: "在预算内分享，可以练习把善意也放进财务计划里。",
+    metrics: [
+      ["建议金额", money(donation)],
+      ["当前现金", money(state.cash)],
+      ["说明", "这是游戏中的价值选择，不是强制事件。"],
+    ],
+    actions: [
+      {
+        label: "分享一点",
+        className: "primary",
+        onClick: () => {
+          payCost(donation, "慈善分享");
+          closeModal();
+          persistQuietly();
+          render();
+        },
+      },
+      { label: "这次先保留现金", onClick: closeModal },
     ],
   });
 }
@@ -2134,6 +2475,7 @@ function completeStockSale(stockId, quantity, eventId) {
     return;
   }
   addLog(`卖出 ${result.stock.name} ${result.shares} 股，收到 ${money(result.totalAmount)}，实现损益 ${signedMoney(result.realizedGain)}。`);
+  emitFinanceEffect(result.totalAmount, "卖出股票", "sell");
   persistQuietly();
   render();
   openSimpleModal({
@@ -2240,6 +2582,7 @@ function completeBusinessInvestment(businessId, eventId) {
     return;
   }
   addLog(`投資 ${result.business.name}，每月預估淨利 ${money(result.business.monthlyProfit)}。`);
+  emitFinanceEffect(-result.business.totalInvested, "投资小生意", "buy");
   persistQuietly();
   render();
   openSimpleModal({
@@ -2355,6 +2698,7 @@ function completeBusinessUpgrade(businessId, upgradeId) {
     return;
   }
   addLog(`${result.business.name} 完成升級「${result.upgrade.name}」。`);
+  emitFinanceEffect(-result.upgrade.cost, "小生意升级", "upgrade");
   persistQuietly();
   render();
   openSimpleModal({
@@ -2481,6 +2825,7 @@ function completeBusinessSale(businessId) {
     return;
   }
   addLog(`出售 ${result.business.name}，收到 ${money(result.preview.cashReceived)}。`);
+  emitFinanceEffect(result.preview.cashReceived, "出售小生意", "sell");
   persistQuietly();
   render();
   openSimpleModal({
@@ -2651,6 +2996,7 @@ function completePropertySale(propertyId) {
     return;
   }
   addLog(`卖出「${result.property.name}」，实际收到 ${money(result.preview.cashReceived)}。`);
+  emitFinanceEffect(result.preview.cashReceived, "出售房地产", "sell");
   persistQuietly();
   render();
   openSimpleModal({
@@ -2670,6 +3016,7 @@ function completePropertySale(propertyId) {
 function payCost(cost, reason) {
   state.cash -= cost;
   addLog(`${reason}：支出 ${money(cost)}。`);
+  emitFinanceEffect(-cost, reason, "expense");
   if (state.cash < 0) {
     const protection = evaluateBankruptcyProtection(state);
     addLog(protection.message);
@@ -2732,6 +3079,7 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [] }) {
   el.modalType.textContent = type;
   el.modalTitle.textContent = title;
   el.modalText.textContent = text;
+  el.modal.querySelector(".modal-card")?.setAttribute("data-event-type", type);
   el.dealMetrics.innerHTML = metrics
     .map(
       ([label, value]) => `
@@ -2753,6 +3101,7 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [] }) {
     button.addEventListener("click", () => {
       if (button.disabled) return;
       button.disabled = true;
+      soundManager.play(action.className === "danger" ? "warning" : "tap");
       action.onClick();
     });
     el.modalActions.append(button);
@@ -2803,10 +3152,60 @@ function resetGame() {
   showSetup();
 }
 
+function clearSavedGame() {
+  localStorage.removeItem(STORAGE_KEY);
+  state = null;
+  soundManager.play("warning");
+  openSimpleModal({
+    type: "清除存档",
+    title: "本机存档已清除",
+    text: "只清除这个浏览器里的游戏进度，不影响线上版本。",
+    actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+  });
+  renderSetup();
+  showSetup();
+}
+
+function showRules() {
+  openSimpleModal({
+    type: "游戏规则",
+    title: "现金流城市挑战",
+    text: "掷骰在城市地图中前进，遇到收入、支出、投资、保险、银行和人生事件。目标是让被动收入覆盖总支出。",
+    metrics: [
+      ["行动", "掷骰前进，最终落点才触发事件"],
+      ["胜利", "被动收入 ≥ 总支出"],
+      ["地图", "可拖曳、缩放，并可回到玩家"],
+      ["提醒", "所有税务、保险、投资内容都是游戏学习规则"],
+    ],
+    actions: [{ label: "开始吧", className: "primary", onClick: closeModal }],
+  });
+}
+
+function showSoundSettings() {
+  openSimpleModal({
+    type: "音效设置",
+    title: uiState.muted ? "音效已关闭" : "音效已开启",
+    text: "音效使用浏览器 Web Audio 即时生成；如果设备不支持，会安静降级，不影响游戏。",
+    metrics: [
+      ["状态", uiState.muted ? "静音" : "开启"],
+      ["音量", `${Math.round(uiState.volume * 100)}%`],
+      ["震动", navigator?.vibrate ? "轻量开启" : "此设备不支持"],
+    ],
+    actions: [
+      { label: uiState.muted ? "开启音效" : "关闭音效", className: "primary", onClick: () => { toggleSound(); showSoundSettings(); } },
+      { label: "关闭", onClick: closeModal },
+    ],
+  });
+}
+
 el.rollDice.addEventListener("click", rollDice);
 el.saveGame.addEventListener("click", saveGame);
 el.loadGame.addEventListener("click", loadGame);
 el.resetGame.addEventListener("click", resetGame);
+el.continueGameHome?.addEventListener("click", loadGame);
+el.rulesHome?.addEventListener("click", showRules);
+el.soundHome?.addEventListener("click", showSoundSettings);
+el.clearSaveHome?.addEventListener("click", clearSavedGame);
 el.closeModal.addEventListener("click", closeModal);
 el.modal.addEventListener("click", (event) => {
   if (event.target === el.modal) closeModal();
@@ -2937,6 +3336,22 @@ window.cashflowDebug = {
     collectPayday("验收月结日");
     render();
   },
+  rollFixed: (roll) => rollDice(roll),
+  getExperience: () => ({
+    position: state?.position,
+    lastRoll: state?.lastRoll,
+    hudStatus: uiState.hudStatus,
+    isRolling: uiState.isRolling,
+    isMoving: uiState.isMoving,
+    movingStep: uiState.movingStep,
+    movingTotal: uiState.movingTotal,
+    camera: uiState.camera,
+    muted: uiState.muted,
+    boardTiles: boardTiles.length,
+  }),
+  focusPlayer: () => focusCameraOnPlayer(true),
+  zoomMap: (delta) => zoomCamera(delta),
+  toggleSound,
   closeModal,
 };
 
