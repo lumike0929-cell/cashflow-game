@@ -137,11 +137,20 @@ export function createCitySceneSvg() {
           <stop offset="0" stop-color="#c8d1ca" />
           <stop offset="1" stop-color="#e3e7df" />
         </linearGradient>
+        <linearGradient id="zoneGlow" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0" stop-color="#ffffff" stop-opacity="0.86" />
+          <stop offset="1" stop-color="#ffffff" stop-opacity="0.28" />
+        </linearGradient>
         <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="0" dy="14" stdDeviation="10" flood-color="#1b3128" flood-opacity="0.18" />
         </filter>
+        <filter id="tinyShadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="7" stdDeviation="4" flood-color="#24332d" flood-opacity="0.16" />
+        </filter>
       </defs>
       <rect width="${mapSize.width}" height="${mapSize.height}" rx="48" fill="#dff2d7" />
+      <circle cx="220" cy="250" r="190" fill="#fff8dc" opacity="0.28" />
+      <circle cx="1430" cy="810" r="210" fill="#d8f0ff" opacity="0.26" />
       ${district(372, 360, 270, 225, "#e7f6ea", "住宅区", "花园小路")}
       ${district(690, 340, 260, 210, "#fff4cf", "金融区", "银行与行情")}
       ${district(1010, 365, 285, 225, "#e9f3ff", "商业区", "商店与办公")}
@@ -154,10 +163,16 @@ export function createCitySceneSvg() {
       <path d="M80 600 C300 510 390 680 560 610 C750 530 890 590 1040 520 C1230 430 1370 520 1600 430" fill="none" stroke="#e8fbff" stroke-width="12" stroke-linecap="round" opacity="0.85" />
       <path d="M170 140 L1480 170 L1545 740 L1360 930 L230 890 L125 420 Z" fill="none" stroke="url(#road)" stroke-width="118" stroke-linejoin="round" stroke-linecap="round" opacity="0.78" />
       <path d="M170 140 L1480 170 L1545 740 L1360 930 L230 890 L125 420 Z" fill="none" stroke="#f8faf4" stroke-width="14" stroke-dasharray="32 28" stroke-linejoin="round" stroke-linecap="round" opacity="0.86" />
+      <path d="M450 330 L1240 330 M450 820 L1240 820 M620 330 L620 840 M1020 330 L1020 840" stroke="#f8faf4" stroke-width="34" stroke-linecap="round" opacity="0.42" />
+      <path d="M450 330 L1240 330 M450 820 L1240 820 M620 330 L620 840 M1020 330 L1020 840" stroke="#becac4" stroke-width="4" stroke-dasharray="18 18" opacity="0.36" />
       ${homeCluster(420, 420)}
+      ${apartmentBlock(520, 360)}
       ${building(700, 390, "银行", "#ffe8a6", "#d8a21f", "¥")}
       ${building(875, 390, "股票", "#efe9ff", "#6c5aa8", "↗")}
       ${marketBoard(1045, 390)}
+      ${building(595, 500, "房产中心", "#e7f8ee", "#1f7a52", "房")}
+      ${building(1188, 602, "保险中心", "#e5f2fb", "#246b9f", "盾")}
+      ${building(1325, 620, "税务中心", "#f2f5f4", "#53625c", "税")}
       ${building(1145, 440, "医院", "#ffe5e0", "#c84d42", "+")}
       ${ambulance(1260, 540)}
       ${building(515, 675, "创业街", "#fff1ce", "#b47718", "店")}
@@ -165,6 +180,10 @@ export function createCitySceneSvg() {
       ${building(1110, 700, "商业区", "#e9f3ff", "#3573a4", "商")}
       ${officeRow(1135, 610)}
       ${bridge(930, 535)}
+      ${bench(730, 590)}
+      ${bench(930, 615)}
+      ${vehicle(332, 790, "#f0bb63")}
+      ${vehicle(1390, 360, "#9ccfec")}
       <circle cx="835" cy="555" r="72" fill="#ccebd2" filter="url(#softShadow)" />
       <circle cx="835" cy="555" r="36" fill="#8ed0eb" />
       <circle cx="835" cy="555" r="16" fill="#ffffff" opacity="0.85" />
@@ -176,14 +195,14 @@ export function createCitySceneSvg() {
   `;
 }
 
-export function avatarMarkup(career, mood = "neutral") {
+export function avatarMarkup(career, mood = "neutral", direction = "right") {
   const icon = career?.icon || "你";
   const id = career?.id || "teacher";
   const color = careerColor(id);
   const expression = expressionForMood(mood);
   const accessory = accessoryMarkup(id);
   return `
-    <div class="player-avatar mood-${mood}" aria-label="玩家角色">
+    <div class="player-avatar mood-${mood} facing-${direction}" aria-label="玩家角色">
       <span class="avatar-shadow"></span>
       <span class="avatar-leg left"></span>
       <span class="avatar-leg right"></span>
@@ -203,6 +222,7 @@ export function avatarMarkup(career, mood = "neutral") {
         <span class="avatar-face-label">${icon}</span>
       </span>
       <span class="avatar-spark"></span>
+      <span class="avatar-direction" aria-hidden="true"></span>
     </div>
   `;
 }
@@ -443,6 +463,7 @@ function district(x, y, width, height, fill, title, subtitle) {
   return `
     <g class="city-district">
       <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="34" fill="${fill}" stroke="#ffffff" stroke-width="8" opacity="0.78" />
+      <rect x="${x + 12}" y="${y + 12}" width="${width - 24}" height="${height - 24}" rx="26" fill="url(#zoneGlow)" opacity="0.34" />
       <text x="${x + 24}" y="${y + 42}" class="district-label">${title}</text>
       <text x="${x + 24}" y="${y + 74}" class="district-subtitle">${subtitle}</text>
     </g>
@@ -452,12 +473,26 @@ function district(x, y, width, height, fill, title, subtitle) {
 function building(x, y, label, fill, stroke, sign = "") {
   return `
     <g filter="url(#softShadow)">
+      <path d="M${x + 12} ${y - 14} L${x + 148} ${y - 14} L${x + 160} ${y} L${x} ${y} Z" fill="${stroke}" opacity="0.38" />
       <rect x="${x}" y="${y}" width="160" height="118" rx="18" fill="${fill}" stroke="${stroke}" stroke-width="5" />
+      <path d="M${x + 12} ${y + 12} H${x + 148}" stroke="#ffffff" stroke-width="6" stroke-linecap="round" opacity="0.62" />
       <rect x="${x + 28}" y="${y + 34}" width="32" height="28" rx="6" fill="#ffffff" opacity="0.86" />
       <rect x="${x + 94}" y="${y + 34}" width="32" height="28" rx="6" fill="#ffffff" opacity="0.86" />
       <rect x="${x + 68}" y="${y + 76}" width="28" height="42" rx="8" fill="${stroke}" opacity="0.72" />
       <text x="${x + 80}" y="${y + 28}" text-anchor="middle" class="building-sign">${sign}</text>
       <text x="${x + 80}" y="${y + 145}" text-anchor="middle" class="city-label">${label}</text>
+    </g>
+  `;
+}
+
+function apartmentBlock(x, y) {
+  return `
+    <g filter="url(#tinyShadow)">
+      <rect x="${x}" y="${y}" width="88" height="150" rx="14" fill="#dff3ff" stroke="#246b9f" stroke-width="4" />
+      <rect x="${x + 100}" y="${y + 30}" width="70" height="120" rx="14" fill="#e7f6ea" stroke="#1f7a52" stroke-width="4" />
+      ${windowGrid(x + 18, y + 24)}
+      ${windowGrid(x + 116, y + 52)}
+      <text x="${x + 84}" y="${y + 180}" text-anchor="middle" class="city-label">公寓</text>
     </g>
   `;
 }
@@ -530,6 +565,28 @@ function bridge(x, y) {
     <g>
       <path d="M${x} ${y} C${x + 70} ${y - 34} ${x + 142} ${y - 34} ${x + 212} ${y}" fill="none" stroke="#b77e45" stroke-width="20" stroke-linecap="round" />
       <path d="M${x + 18} ${y - 2} L${x + 196} ${y - 2}" stroke="#fff4cf" stroke-width="6" stroke-dasharray="18 12" />
+    </g>
+  `;
+}
+
+function bench(x, y) {
+  return `
+    <g filter="url(#tinyShadow)">
+      <rect x="${x}" y="${y}" width="76" height="14" rx="7" fill="#b77e45" />
+      <rect x="${x + 10}" y="${y + 18}" width="56" height="10" rx="5" fill="#d8a21f" />
+      <rect x="${x + 12}" y="${y + 28}" width="8" height="22" rx="4" fill="#53625c" />
+      <rect x="${x + 56}" y="${y + 28}" width="8" height="22" rx="4" fill="#53625c" />
+    </g>
+  `;
+}
+
+function vehicle(x, y, color) {
+  return `
+    <g filter="url(#tinyShadow)">
+      <rect x="${x}" y="${y}" width="92" height="42" rx="14" fill="${color}" stroke="#ffffff" stroke-width="4" />
+      <rect x="${x + 48}" y="${y + 8}" width="28" height="16" rx="5" fill="#ffffff" opacity="0.72" />
+      <circle cx="${x + 20}" cy="${y + 42}" r="9" fill="#354740" />
+      <circle cx="${x + 70}" cy="${y + 42}" r="9" fill="#354740" />
     </g>
   `;
 }

@@ -163,6 +163,7 @@ try {
 
   await page.evaluate(() => window.cashflowDebug.buyFirstProperty());
   await page.evaluate(() => window.cashflowDebug.closeModal());
+  assert.equal(await page.locator(".map-asset-marker").count() >= 1, true);
   await page.evaluate(() => window.cashflowDebug.buyFirstProperty());
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.payday());
@@ -176,6 +177,7 @@ try {
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.buyFirstStock());
   await page.evaluate(() => window.cashflowDebug.closeModal());
+  assert.equal(await page.locator(".map-asset-marker").count() >= 3, true);
   await page.evaluate(() => window.cashflowDebug.triggerStockMarket());
   await page.evaluate(() => window.cashflowDebug.payday());
   await page.evaluate(() => window.cashflowDebug.closeModal());
@@ -183,6 +185,7 @@ try {
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.buyFirstBusiness());
   await page.evaluate(() => window.cashflowDebug.closeModal());
+  assert.equal(await page.locator(".map-asset-marker").count() >= 4, true);
   await page.evaluate(() => window.cashflowDebug.buySecondBusiness());
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.upgradeFirstBusiness());

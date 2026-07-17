@@ -1,6 +1,6 @@
 :root {
-  --bg: #eef3ed;
-  --bg-2: #f8faf4;
+  --bg: #e8f3ec;
+  --bg-2: #fbfbf2;
   --panel: #ffffff;
   --panel-2: #f7fbf7;
   --ink: #17201d;
@@ -17,8 +17,12 @@
   --red-soft: #fde8e4;
   --violet: #6c5aa8;
   --violet-soft: #eeeafe;
-  --shadow: 0 18px 48px rgba(25, 42, 34, 0.12);
-  --card-shadow: 0 10px 28px rgba(25, 42, 34, 0.08);
+  --radius-lg: 24px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+  --shadow: 0 18px 42px rgba(25, 42, 34, 0.13);
+  --card-shadow: 0 10px 24px rgba(25, 42, 34, 0.09);
+  --game-pop: cubic-bezier(0.2, 0.9, 0.22, 1);
   color: var(--ink);
   font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   font-size: 16px;
@@ -41,18 +45,24 @@ button {
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 0 16px;
-  background: var(--panel);
+  background: linear-gradient(180deg, #ffffff, #f4f8f5);
   color: var(--ink);
   cursor: pointer;
   font: inherit;
   font-weight: 800;
   letter-spacing: 0;
-  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  box-shadow: 0 4px 0 rgba(23, 32, 29, 0.08);
+  transition: transform 160ms var(--game-pop), box-shadow 160ms ease, border-color 160ms ease;
 }
 
 button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(25, 42, 34, 0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 0 rgba(23, 32, 29, 0.1), 0 14px 20px rgba(25, 42, 34, 0.1);
+}
+
+button:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 rgba(23, 32, 29, 0.14);
 }
 
 button:disabled {
@@ -159,8 +169,10 @@ p {
 .career-card,
 .modal-card {
   border: 1px solid var(--line);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.92);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 244, 0.9)),
+    rgba(255, 255, 255, 0.92);
   box-shadow: var(--card-shadow);
 }
 
@@ -170,6 +182,9 @@ p {
   align-content: center;
   padding: clamp(24px, 6vw, 68px);
   overflow: hidden;
+  background:
+    radial-gradient(circle at 82% 20%, rgba(255, 216, 107, 0.25), transparent 22%),
+    linear-gradient(140deg, rgba(255, 255, 255, 0.96), rgba(227, 244, 235, 0.86));
 }
 
 .intro-copy p {
@@ -198,11 +213,13 @@ p {
   min-height: 260px;
   padding: 18px;
   text-align: left;
+  transform-origin: center bottom;
 }
 
 .career-card:hover {
   border-color: rgba(31, 122, 82, 0.44);
   box-shadow: var(--shadow);
+  transform: translateY(-4px) scale(1.01);
 }
 
 .career-icon {
@@ -448,6 +465,9 @@ p {
   align-self: start;
   display: grid;
   gap: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(231, 246, 234, 0.88)),
+    rgba(255, 255, 255, 0.9);
 }
 
 .dice-box {
@@ -455,7 +475,11 @@ p {
   gap: 10px;
   padding: 16px;
   border-radius: 20px;
-  background: var(--green-soft);
+  border: 1px solid rgba(31, 122, 82, 0.18);
+  background:
+    radial-gradient(circle at 50% 22%, rgba(255, 255, 255, 0.86), transparent 34%),
+    linear-gradient(180deg, rgba(227, 244, 235, 0.98), rgba(196, 231, 207, 0.9));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.72);
 }
 
 .dice-box span {
@@ -476,6 +500,10 @@ p {
 .action-stack button,
 .modal-actions button {
   width: 100%;
+}
+
+.action-stack button {
+  border-radius: var(--radius-sm);
 }
 
 .log-list {
@@ -551,9 +579,10 @@ p {
 }
 
 .primary {
-  border-color: transparent;
-  background: linear-gradient(180deg, var(--green-2), var(--green));
+  border-color: rgba(31, 122, 82, 0.28);
+  background: linear-gradient(180deg, #45b879, var(--green));
   color: #ffffff;
+  box-shadow: 0 7px 0 #146544, 0 14px 28px rgba(31, 122, 82, 0.22);
 }
 
 .ghost {
@@ -562,8 +591,8 @@ p {
 
 .danger {
   border-color: rgba(200, 77, 66, 0.28);
-  background: var(--red-soft);
-  color: var(--red);
+  background: linear-gradient(180deg, #fff0ed, #ffd0c8);
+  color: #9f3028;
 }
 
 .modal {
@@ -1097,7 +1126,9 @@ p {
   min-height: clamp(560px, 62vh, 760px);
   border-radius: 28px;
   overflow: hidden;
-  background: #dff2d7;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(255, 248, 220, 0.72), transparent 24%),
+    linear-gradient(180deg, #dff2d7, #cfe9d4);
   touch-action: none;
   box-shadow: inset 0 0 0 1px rgba(31, 122, 82, 0.18);
 }
@@ -1182,19 +1213,31 @@ p {
   position: absolute;
   z-index: 2;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  justify-items: center;
   align-items: center;
-  width: 136px;
-  min-height: 62px;
-  padding: 9px;
+  width: 92px;
+  min-height: 86px;
+  padding: 8px 7px 12px;
   border: 3px solid rgba(255, 255, 255, 0.78);
-  border-bottom-color: rgba(23, 32, 29, 0.16);
-  border-radius: 20px;
-  text-align: left;
+  border-bottom-color: rgba(23, 32, 29, 0.22);
+  border-radius: 26px 26px 22px 22px;
+  text-align: center;
   transform: translate(-50%, -50%);
-  box-shadow: 0 13px 22px rgba(24, 42, 33, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  box-shadow: 0 11px 0 rgba(23, 32, 29, 0.15), 0 17px 24px rgba(24, 42, 33, 0.16), inset 0 2px 0 rgba(255, 255, 255, 0.72);
   overflow: hidden;
+}
+
+.map-tile::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 5px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(23, 32, 29, 0.1);
 }
 
 .map-tile::before {
@@ -1209,24 +1252,28 @@ p {
 .map-tile .tile-icon {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 13px;
-  background: rgba(255, 255, 255, 0.72);
-  font-size: 22px;
+  width: 44px;
+  height: 44px;
+  border: 2px solid rgba(255, 255, 255, 0.78);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 24px;
   font-weight: 950;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.92), 0 5px 10px rgba(24, 42, 33, 0.1);
 }
 
 .tile-copy strong {
   display: block;
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.05;
 }
 
 .tile-copy small {
   display: block;
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.2;
+  font-weight: 900;
 }
 
 .tile-copy em {
@@ -1289,7 +1336,8 @@ p {
 }
 
 .map-tile.active {
-  box-shadow: 0 0 0 6px rgba(216, 162, 31, 0.26), 0 20px 38px rgba(24, 42, 33, 0.22);
+  box-shadow: 0 0 0 8px rgba(255, 216, 107, 0.18), 0 0 0 16px rgba(255, 216, 107, 0.12), 0 11px 0 rgba(23, 32, 29, 0.15), 0 20px 34px rgba(24, 42, 33, 0.24);
+  animation: active-node-pulse 1200ms ease-in-out infinite alternate;
 }
 
 .map-tile.active .tile-particle {
@@ -1303,6 +1351,24 @@ p {
 
 .map-tile.arrived {
   animation: tile-arrive 440ms ease both;
+}
+
+.map-asset-marker {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  transform: translate(-50%, -50%);
+  border: 3px solid rgba(255, 255, 255, 0.82);
+  border-radius: 16px;
+  box-shadow: 0 8px 0 rgba(23, 32, 29, 0.12), 0 12px 18px rgba(24, 42, 33, 0.14);
+}
+
+.map-asset-marker span {
+  font-size: 18px;
+  font-weight: 950;
 }
 
 .avatar-anchor {
@@ -1320,6 +1386,19 @@ p {
   width: 68px;
   height: 88px;
   animation: avatar-breathe 1500ms ease-in-out infinite;
+  transition: transform 180ms var(--game-pop), filter 180ms ease;
+}
+
+.player-avatar.facing-left {
+  transform: scaleX(-1);
+}
+
+.player-avatar.facing-up {
+  transform: translateY(-2px);
+}
+
+.player-avatar.facing-down {
+  transform: translateY(2px);
 }
 
 .avatar-shadow {
@@ -1341,6 +1420,17 @@ p {
   border-radius: 18px 18px 12px 12px;
   background: var(--avatar-color, var(--green));
   box-shadow: inset 0 5px 0 rgba(255, 255, 255, 0.24);
+}
+
+.avatar-body::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .avatar-badge {
@@ -1562,12 +1652,16 @@ p {
 
 .mood-walking .avatar-arm.left,
 .mood-walking .avatar-leg.right {
-  animation: avatar-walk 260ms ease-in-out infinite alternate;
+  animation: avatar-walk 240ms ease-in-out infinite alternate;
 }
 
 .mood-walking .avatar-arm.right,
 .mood-walking .avatar-leg.left {
-  animation: avatar-walk 260ms ease-in-out infinite alternate-reverse;
+  animation: avatar-walk 240ms ease-in-out infinite alternate-reverse;
+}
+
+.mood-walking {
+  animation: avatar-stride 360ms ease-in-out infinite alternate;
 }
 
 .mood-celebrate .avatar-body,
@@ -1619,6 +1713,7 @@ p {
   width: 82px;
   height: 82px;
   transform-style: preserve-3d;
+  filter: drop-shadow(0 18px 16px rgba(23, 32, 29, 0.18));
 }
 
 .dice-corner {
@@ -1644,9 +1739,11 @@ p {
   height: 76px;
   padding: 12px;
   border-radius: 20px;
-  background: linear-gradient(145deg, #ffffff, #e5ece8);
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.95), transparent 32%),
+    linear-gradient(145deg, #ffffff, #e5ece8);
   border: 3px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 16px 0 #c4d0c9, 0 22px 28px rgba(24, 42, 33, 0.22);
+  box-shadow: 9px 11px 0 #b9c8bf, 0 18px 0 #c4d0c9, 0 25px 30px rgba(24, 42, 33, 0.22), inset -8px -8px 16px rgba(23, 32, 29, 0.07);
 }
 
 .dice-face span {
@@ -1981,6 +2078,16 @@ p {
   }
 }
 
+@keyframes active-node-pulse {
+  from {
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  to {
+    transform: translate(-50%, -52%) scale(1.04);
+  }
+}
+
 @keyframes tile-arrive {
   0% {
     transform: translate(-50%, -50%) scale(0.96);
@@ -2045,6 +2152,16 @@ p {
 
   to {
     transform: rotate(24deg);
+  }
+}
+
+@keyframes avatar-stride {
+  from {
+    translate: 0 0;
+  }
+
+  to {
+    translate: 0 -4px;
   }
 }
 

@@ -229,6 +229,7 @@ const uiState = {
   movingStep: 0,
   movingTotal: 0,
   avatarMood: "neutral",
+  avatarDirection: "right",
   avatarTimer: null,
   previewIndices: [],
   camera: savedExperience.camera,
@@ -504,6 +505,7 @@ function renderBoard() {
       <div class="city-map-stage" id="cityMapStage">
         ${createCitySceneSvg()}
         <div class="board-route" aria-hidden="true"></div>
+        ${renderMapAssetMarkers()}
         ${boardTiles
           .map((tile, index) => {
             const point = boardPath[index % boardPath.length] || boardPath[0];
@@ -520,8 +522,8 @@ function renderBoard() {
               >
                 <span class="tile-icon">${tile.icon}</span>
                 <span class="tile-copy">
-                  <strong>${tile.title}</strong>
-                  <small>${visual.category} · ${visual.status}</small>
+                  <strong>${shortTileTitle(tile)}</strong>
+                  <small>${visual.category}</small>
                   <em>${visual.badge}</em>
                 </span>
                 <span class="tile-particle one"></span>
@@ -531,7 +533,7 @@ function renderBoard() {
           })
           .join("")}
         <div class="avatar-anchor" id="avatarAnchor" style="left:${playerPoint.x}px; top:${playerPoint.y}px">
-          ${avatarMarkup(state.career, uiState.avatarMood)}
+          ${avatarMarkup(state.career, uiState.avatarMood, uiState.avatarDirection)}
         </div>
       </div>
     </div>
@@ -552,6 +554,65 @@ function renderBoard() {
     if (uiState.camera.follow) focusCameraOnPlayer(false);
     else applyCamera();
   });
+}
+
+function shortTileTitle(tile) {
+  return {
+    payday: "月结",
+    opportunity: "房产",
+    propertyEvent: "持有",
+    stockOpportunity: "股票",
+    stockMarket: "行情",
+    businessOpportunity: "小店",
+    businessEvent: "经营",
+    businessMarket: "需求",
+    bank: "银行",
+    insurance: "保险",
+    lifeEvent: "医疗",
+    tax: "税务",
+    jobEvent: "工作",
+    market: "市场",
+    doodad: "账单",
+    learn: "学习",
+    family: "家庭",
+    charity: "慈善",
+  }[tile.type] || tile.title.slice(0, 4);
+}
+
+function renderMapAssetMarkers() {
+  if (!state) return "";
+  const markers = [
+    ...state.ownedProperties.slice(0, 4).map((item, index) => ({
+      x: 450 + index * 48,
+      y: 392 + (index % 2) * 38,
+      icon: propertyIcon(item.category),
+      label: "房产",
+      tone: "green",
+    })),
+    ...state.stockHoldings.slice(0, 4).map((item, index) => ({
+      x: 920 + index * 46,
+      y: 360 + (index % 2) * 36,
+      icon: stockIcon(item.sector),
+      label: "股票",
+      tone: "violet",
+    })),
+    ...state.businessHoldings.slice(0, 4).map((item, index) => ({
+      x: 560 + index * 48,
+      y: 665 + (index % 2) * 36,
+      icon: businessIcon(item.category),
+      label: "生意",
+      tone: "amber",
+    })),
+  ];
+  return markers
+    .map(
+      (marker) => `
+        <div class="map-asset-marker tone-${marker.tone}" style="left:${marker.x}px; top:${marker.y}px" aria-label="${marker.label}">
+          <span>${marker.icon}</span>
+        </div>
+      `,
+    )
+    .join("");
 }
 
 function setupMapControls() {
@@ -749,6 +810,15 @@ function setAvatarMood(mood, duration = 1500) {
     }, prefersReducedMotion() ? 120 : duration);
   }
   if (state) renderBoard();
+}
+
+function directionBetween(fromIndex, toIndex) {
+  const from = boardPath[fromIndex % boardPath.length] || boardPath[0];
+  const to = boardPath[toIndex % boardPath.length] || from;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "right" : "left";
+  return dy >= 0 ? "down" : "up";
 }
 
 function animationScale() {
@@ -1415,8 +1485,10 @@ async function movePlayerStepByStep(previous, roll) {
   uiState.movingTotal = roll;
   uiState.avatarMood = "walking";
   for (let step = 1; step <= roll; step += 1) {
+    const beforeIndex = state.position;
     const nextIndex = indexAfter(previous, step, boardTiles.length);
     uiState.movingStep = step;
+    uiState.avatarDirection = directionBetween(beforeIndex, nextIndex);
     state.position = nextIndex;
     if (nextIndex === 0 && step < roll) {
       collectPayday("经过月结日");
@@ -3660,6 +3732,7 @@ window.cashflowDebug = {
     hapticsEnabled: uiState.hapticsEnabled,
     animationSpeed: uiState.animationSpeed,
     avatarMood: uiState.avatarMood,
+    avatarDirection: uiState.avatarDirection,
     tutorialComplete: uiState.tutorialComplete,
     tutorialActive: uiState.tutorial.active,
     tutorialIndex: uiState.tutorial.index,
