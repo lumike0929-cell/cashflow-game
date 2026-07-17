@@ -48,8 +48,10 @@ export function recalculateProperty(property) {
   };
 }
 
-export function createPropertyFromOpportunity(opportunity, month, round) {
-  const originalMortgage = clampMoney(opportunity.purchasePrice - opportunity.downPayment);
+export function createPropertyFromOpportunity(opportunity, month, round, financing = null) {
+  const downPayment = clampMoney(financing?.downPayment ?? opportunity.downPayment);
+  const originalMortgage = clampMoney(financing?.loanAmount ?? opportunity.purchasePrice - downPayment);
+  const mortgagePayment = originalMortgage > 0 ? clampMoney(financing?.monthlyPayment ?? opportunity.mortgagePayment) : 0;
   return recalculateProperty({
     id: `property-${opportunity.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     opportunityId: opportunity.id,
@@ -58,10 +60,12 @@ export function createPropertyFromOpportunity(opportunity, month, round) {
     description: opportunity.description,
     illustrationKey: opportunity.illustrationKey,
     purchasePrice: clampMoney(opportunity.purchasePrice),
-    downPayment: clampMoney(opportunity.downPayment),
+    downPayment,
     originalMortgage,
     mortgageBalance: originalMortgage,
-    mortgagePayment: clampMoney(opportunity.mortgagePayment),
+    mortgagePayment,
+    financingMode: financing?.mode || "mortgage",
+    interestRate: Number.isFinite(Number(financing?.interestRate)) ? Number(financing.interestRate) : 0,
     principalPaid: 0,
     monthlyRent: clampMoney(opportunity.monthlyRent),
     monthlyExpenses: clampMoney(opportunity.managementFee + opportunity.repairReserve),
@@ -92,6 +96,19 @@ export function calculateOpportunity(opportunity) {
     monthlyExpenses,
     monthlyCashflow,
     projectedEquity,
+  };
+}
+
+export function calculateOpportunityWithFinancing(opportunity, financing = null) {
+  if (!financing) return calculateOpportunity(opportunity);
+  const loanAmount = clampMoney(financing.loanAmount);
+  const monthlyExpenses = clampMoney(opportunity.managementFee + opportunity.repairReserve);
+  const monthlyCashflow = moneyNumber(opportunity.monthlyRent - clampMoney(financing.monthlyPayment) - monthlyExpenses);
+  return {
+    loanAmount,
+    monthlyExpenses,
+    monthlyCashflow,
+    projectedEquity: clampMoney(financing.projectedEquity ?? opportunity.purchasePrice - loanAmount),
   };
 }
 
@@ -139,26 +156,30 @@ export function emergencyReserveRequiredMonths(riskLevel) {
   return 1;
 }
 
-export function buyProperty(state, opportunity, eventId) {
+export function buyProperty(state, opportunity, eventId, financing = null) {
   if (!state || !opportunity) return { ok: false, reason: "没有可购买的房地产机会。" };
   ensureRealEstateState(state);
   if (state.settledEvents.includes(eventId)) return { ok: false, reason: "这个机会已经结算过了。" };
-  if (state.cash < opportunity.downPayment) {
-    return { ok: false, reason: `现金不足，还差 ${opportunity.downPayment - state.cash}。` };
+  const cashRequired = clampMoney(financing?.cashRequired ?? financing?.downPayment ?? opportunity.downPayment);
+  if (state.cash < cashRequired) {
+    return { ok: false, reason: `现金不足，还差 ${cashRequired - state.cash}。` };
   }
 
-  const property = createPropertyFromOpportunity(opportunity, state.month, state.round || state.month);
+  const property = createPropertyFromOpportunity(opportunity, state.month, state.round || state.month, financing);
   const previousCashflow = calculatePortfolioSummary(state.ownedProperties).monthlyCashflow;
-  state.cash = moneyNumber(state.cash - property.downPayment);
+  state.cash = moneyNumber(state.cash - cashRequired);
   state.ownedProperties.push(property);
-  state.liabilities.push({
-    id: `mortgage-${property.id}`,
-    propertyId: property.id,
-    type: "mortgage",
-    name: `${property.name} 房贷`,
-    balance: property.mortgageBalance,
-    payment: property.mortgagePayment,
-  });
+  if (property.mortgageBalance > 0) {
+    state.liabilities.push({
+      id: `mortgage-${property.id}`,
+      propertyId: property.id,
+      type: "mortgage",
+      name: `${property.name} 房贷`,
+      balance: property.mortgageBalance,
+      payment: property.mortgagePayment,
+      interestRate: property.interestRate,
+    });
+  }
   state.settledEvents.push(eventId);
   syncMortgageLiabilities(state);
   const nextCashflow = calculatePortfolioSummary(state.ownedProperties).monthlyCashflow;
@@ -169,8 +190,11 @@ export function buyProperty(state, opportunity, eventId) {
       round: state.round || state.month,
       propertyId: property.id,
       type: "购买",
-      description: `买入${property.name}，首付 ${property.downPayment}，新增房贷 ${property.originalMortgage}。`,
-      cashChange: -property.downPayment,
+      description:
+        property.mortgageBalance > 0
+          ? `买入${property.name}，首付 ${cashRequired}，新增房贷 ${property.originalMortgage}。`
+          : `现金买入${property.name}，没有新增房贷。`,
+      cashChange: -cashRequired,
       valueChange: property.currentValue,
       liabilityChange: property.originalMortgage,
       cashflowChange: nextCashflow - previousCashflow,
@@ -417,6 +441,7 @@ export function syncMortgageLiabilities(state) {
       name: `${property.name} 房贷`,
       balance: property.mortgageBalance,
       payment: property.mortgagePayment,
+      interestRate: property.interestRate,
     }));
   state.ownedProperties = [...mortgagesById.values()];
   state.liabilities = [...nonMortgageLiabilities, ...mortgageLiabilities];

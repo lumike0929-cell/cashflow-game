@@ -7,8 +7,9 @@ import {
 import { createPropertyTransaction } from "./realEstateTransactions.js";
 import { migrateStockStatePart } from "./stockStorageMigration.js";
 import { migrateBusinessStatePart } from "./businessStorageMigration.js";
+import { migrateBankingStatePart } from "./bankingStorageMigration.js";
 
-export const CURRENT_SAVE_VERSION = 2;
+export const CURRENT_SAVE_VERSION = 3;
 
 export function migrateSavedState(candidate) {
   if (!candidate || typeof candidate !== "object") return null;
@@ -57,6 +58,7 @@ export function migrateSavedState(candidate) {
   syncMortgageLiabilities(state);
   migrateStockStatePart(state, candidate);
   migrateBusinessStatePart(state, candidate);
+  migrateBankingStatePart(state, candidate);
   return state;
 }
 

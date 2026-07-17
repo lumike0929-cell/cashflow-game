@@ -776,6 +776,60 @@ p {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.bank-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.bank-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.bank-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.credit-gauge {
+  width: min(190px, 100%);
+  height: 12px;
+  margin-bottom: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--red-soft), var(--gold-soft), var(--green-soft));
+  overflow: hidden;
+}
+
+.credit-gauge span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--red), var(--gold), var(--green));
+}
+
+.rate-pulse {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 0 11px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 950;
+  animation: rate-glow 1300ms ease-in-out infinite alternate;
+}
+
+@keyframes rate-glow {
+  from {
+    box-shadow: 0 0 0 rgba(36, 107, 159, 0);
+  }
+
+  to {
+    box-shadow: 0 0 0 5px rgba(36, 107, 159, 0.1);
+  }
+}
+
 .risk-panel {
   display: grid;
   gap: 8px;
@@ -963,7 +1017,9 @@ p {
   }
 
   .stock-summary-grid,
-  .business-summary-grid {
+  .business-summary-grid,
+  .bank-summary-grid,
+  .bank-actions {
     grid-template-columns: 1fr;
   }
 

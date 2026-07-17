@@ -6,6 +6,7 @@ import {
   calculateMonthlyCashflow,
   calculateNetWorth,
   calculateOpportunity,
+  calculateOpportunityWithFinancing,
   calculatePassiveIncome,
   calculatePortfolioSummary,
   calculatePropertyCashflow,
@@ -59,6 +60,19 @@ import {
   resolveBusinessMarketEvent,
   resolveBusinessRiskEvent,
 } from "./businessEventResolver.js";
+import { bankingLearningNotes, interestEvents, personalLoanProducts } from "./bankingData.js";
+import {
+  applyInterestEvent,
+  calculateBankSummary,
+  calculateCreditLimit,
+  calculateDebtTotals,
+  calculateMortgagePurchasePlan,
+  calculateRefinancePreview,
+  ensureBankingState,
+  evaluateBankruptcyProtection,
+  refinancePropertyMortgage,
+  takePersonalLoan,
+} from "./bankingCalculator.js";
 
 const STORAGE_KEY = "cashflow-freedom-game-v1";
 
@@ -161,6 +175,7 @@ const el = {
   incomeStatement: document.querySelector("#incomeStatement"),
   assetList: document.querySelector("#assetList"),
   liabilityList: document.querySelector("#liabilityList"),
+  bankPanel: document.querySelector("#bankPanel"),
   realEstatePortfolio: document.querySelector("#realEstatePortfolio"),
   stockPortfolio: document.querySelector("#stockPortfolio"),
   businessPortfolio: document.querySelector("#businessPortfolio"),
@@ -201,6 +216,13 @@ function createState(career) {
     businessMarketRecords: [],
     settledBusinessEvents: [],
     settledBusinessMonths: [],
+    bank: {
+      creditScore: 650,
+      interestLevel: "normal",
+      bankruptcyWarning: false,
+    },
+    bankTransactions: [],
+    settledBankEvents: [],
     settledEvents: [],
     emergencyDebt: 0,
     financialIq: 0,
@@ -313,6 +335,7 @@ function render() {
   ensureRealEstateState(state);
   ensureStockState(state);
   ensureBusinessState(state);
+  ensureBankingState(state);
   syncMortgageLiabilities(state);
   showGame();
   const freedom = freedomRatio();
@@ -329,6 +352,7 @@ function render() {
   renderBoard();
   renderActions();
   renderStatements();
+  renderBankPanel();
   renderRealEstatePortfolio();
   renderStockPortfolio();
   renderBusinessPortfolio();
@@ -355,7 +379,7 @@ function renderBoard() {
 function renderActions() {
   const debt = state.liabilities.reduce((sum, item) => sum + moneyValue(item.balance), 0);
   const buttons = [
-    `<button type="button" id="borrowSmall">借入 ${money(5000)}</button>`,
+    `<button type="button" id="openBankCenter">银行中心</button>`,
     `<button type="button" id="openPortfolio">房地产中心</button>`,
     `<button type="button" id="openStockPortfolio">股票中心</button>`,
     `<button type="button" id="openBusinessPortfolio">小生意中心</button>`,
@@ -370,7 +394,7 @@ function renderActions() {
   }
 
   el.actionStack.innerHTML = buttons.join("");
-  document.querySelector("#borrowSmall")?.addEventListener("click", () => borrowMoney(5000, "主动借款"));
+  document.querySelector("#openBankCenter")?.addEventListener("click", showBankCenter);
   document.querySelector("#repayDebt")?.addEventListener("click", repayDebt);
   document.querySelector("#newRun")?.addEventListener("click", resetGame);
   document.querySelector("#openPortfolio")?.addEventListener("click", () => {
@@ -388,6 +412,7 @@ function renderStatements() {
   const summary = calculatePortfolioSummary(state.ownedProperties);
   const stockSummary = calculateStockPortfolioSummary(state);
   const businessSummary = calculateBusinessSummary(state);
+  const bankSummary = calculateBankSummary(state);
   const rows = [
     ["工资收入", "主动收入", state.salary],
     ["小生意主動收入", "需要你投入時間的淨利", businessSummary.activeIncome],
@@ -399,6 +424,9 @@ function renderStatements() {
     ["房贷月供", "房地产贷款月付款", -summary.monthlyMortgage],
     ["房产支出", "管理费与维修准备金", -summary.monthlyExpenses],
     ["其他贷款月供", "非房贷负债月付款", -(liabilityPayments() - summary.monthlyMortgage)],
+    ["贷款总额", "银行、个人贷款与房贷余额", -bankSummary.totalDebt],
+    ["信用分", `${bankSummary.creditTier} · 影响额度和利率`, bankSummary.creditScore],
+    ["当前利率", `${bankSummary.interestLevel} · 个人月利率 ${percentText(bankSummary.personalLoanMonthlyRate)}`, 0],
     ["净月现金流", "月结日实际增加的现金", netMonthlyCashflow()],
     ["手上现金", "可以投资或应急", state.cash],
     ["净资产", "现金 + 资产 - 负债", calculateNetWorth(state)],
@@ -412,7 +440,7 @@ function renderStatements() {
             <strong>${label}</strong>
             <small>${help}</small>
           </div>
-          <b>${money(value)}</b>
+              <b>${label === "信用分" ? `${value}` : label === "当前利率" ? bankSummary.interestLevel : money(value)}</b>
         </div>
       `,
     )
@@ -442,7 +470,7 @@ function renderStatements() {
             <div class="asset-row negative">
               <div>
                 <strong>${item.name}</strong>
-                <small>${item.type === "mortgage" ? "房贷" : "负债"}余额 ${money(item.balance)}</small>
+                <small>${liabilityLabel(item.type)}余额 ${money(item.balance)} · 月供 ${money(item.payment)}</small>
               </div>
               <b>-${money(item.payment)}</b>
             </div>
@@ -450,6 +478,50 @@ function renderStatements() {
         )
         .join("")
     : '<div class="asset-row"><strong>暂无负债</strong><small>借款或买入房产后会增加月供。</small></div>';
+}
+
+function renderBankPanel() {
+  const summary = calculateBankSummary(state);
+  const debt = calculateDebtTotals(state);
+  const latestHtml = state.bankTransactions.length
+    ? state.bankTransactions
+        .slice(0, 5)
+        .map(
+          (tx) => `
+            <div class="history-row">
+              <strong>${tx.type}</strong>
+              <span>第 ${tx.month} 月 · ${tx.description}</span>
+            </div>
+          `,
+        )
+        .join("")
+    : '<div class="history-row"><strong>暂无记录</strong><span>贷款、利率变化、再融资和破产保护会记录在这里。</span></div>';
+
+  el.bankPanel.innerHTML = `
+    <div class="portfolio-summary bank-summary-grid">
+      ${summaryMetric("信用额度", `${money(summary.availableCredit)} / ${money(summary.creditLimit)}`)}
+      ${summaryMetric("贷款总额", money(debt.totalDebt))}
+      ${summaryMetric("每月月供", money(debt.monthlyPayment))}
+      ${summaryMetric("信用分", creditGauge(summary.creditScore))}
+      ${summaryMetric("利率", ratePulse(summary.interestLevel))}
+      ${summaryMetric("现金", money(summary.cash))}
+      ${summaryMetric("净资产", money(summary.netWorth))}
+      ${summaryMetric("房贷余额", money(debt.mortgageDebt))}
+    </div>
+    <div class="bank-actions">
+      <button class="primary" type="button" id="bankPanelOpen">打开银行中心</button>
+      <button type="button" id="bankPanelLoan">个人贷款</button>
+      <button type="button" id="bankPanelRefinance">再融资</button>
+    </div>
+    <div class="transaction-history">
+      <h3>银行记录</h3>
+      ${latestHtml}
+    </div>
+  `;
+
+  document.querySelector("#bankPanelOpen")?.addEventListener("click", () => showBankCenter());
+  document.querySelector("#bankPanelLoan")?.addEventListener("click", showPersonalLoanOptions);
+  document.querySelector("#bankPanelRefinance")?.addEventListener("click", showRefinanceOptions);
 }
 
 function renderRealEstatePortfolio() {
@@ -713,6 +785,30 @@ function signedPercent(value) {
   return `${number >= 0 ? "+" : "-"}${Math.abs(number)}%`;
 }
 
+function percentText(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "0%";
+  return `${(number * 100).toFixed(2)}%`;
+}
+
+function liabilityLabel(type = "") {
+  return {
+    mortgage: "房贷",
+    personalLoan: "个人贷款",
+    emergency: "紧急负债",
+  }[type] || "负债";
+}
+
+function creditGauge(score) {
+  const safeScore = Math.max(300, Math.min(850, moneyValue(score)));
+  const percent = Math.round(((safeScore - 300) / 550) * 100);
+  return `<div class="credit-gauge" aria-label="信用分 ${safeScore}"><span style="width:${percent}%"></span></div>${safeScore}`;
+}
+
+function ratePulse(label) {
+  return `<span class="rate-pulse">${label}</span>`;
+}
+
 function rollDice() {
   if (!state || state.gameOver) return;
   const roll = Math.floor(Math.random() * 6) + 1;
@@ -789,12 +885,7 @@ function triggerTile(tile) {
   }
 
   if (tile.type === "bank") {
-    openSimpleModal({
-      type: "银行",
-      title: "银行柜台",
-      text: "你可以在右侧操作区借入现金或偿还部分债务。借钱能解决短期现金问题，但每月会多一笔支出。",
-      actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
-    });
+    showBankCenter(true);
   }
 }
 
@@ -829,8 +920,14 @@ function collectPayday(reason) {
     }
   });
   if (state.cash < 0) {
-    const needed = Math.abs(state.cash) + 2000;
-    borrowMoney(needed, "现金为负自动借款", false);
+    const protection = evaluateBankruptcyProtection(state);
+    addLog(protection.message);
+    if (protection.status === "bankrupt") {
+      persistQuietly();
+      render();
+      showBankruptcyProtection(protection);
+      return;
+    }
   }
   persistQuietly();
   checkWin();
@@ -843,10 +940,13 @@ function showOpportunity() {
     ...card,
     downPayment: Math.round(card.downPayment * (1 - iqDiscount)),
   };
-  const calculation = calculateOpportunity(opportunity);
+  const mortgagePlan = calculateMortgagePurchasePlan(state, opportunity, "mortgage");
+  const cashPlan = calculateMortgagePurchasePlan(state, opportunity, "cash");
+  const calculation = calculateOpportunityWithFinancing(opportunity, mortgagePlan);
   const eventId = `opportunity-${state.round}-${state.position}-${opportunity.id}`;
-  const shortfall = Math.max(0, opportunity.downPayment - state.cash);
-  const cashAfter = state.cash - opportunity.downPayment;
+  const shortfall = Math.max(0, mortgagePlan.cashRequired - state.cash);
+  const cashShortfall = Math.max(0, cashPlan.cashRequired - state.cash);
+  const cashAfter = state.cash - mortgagePlan.cashRequired;
   const reserveMonths = calculateEmergencyReserveMonths(state, cashAfter);
   const requiredMonths = emergencyReserveRequiredMonths(opportunity.riskLevel);
 
@@ -857,20 +957,25 @@ function showOpportunity() {
     metrics: propertyOpportunityMetrics(opportunity, calculation),
     actions: [
       {
-        label: shortfall > 0 ? `现金不足，还差 ${money(shortfall)}` : "购买",
+        label: shortfall > 0 ? `房贷购买还差 ${money(shortfall)}` : "房贷购买",
         className: "primary",
         disabled: shortfall > 0,
         onClick: () => {
           if (shortfall > 0) return;
           if (reserveMonths < requiredMonths) {
-            showEmergencyReserveConfirm(opportunity, eventId, reserveMonths, requiredMonths);
+            showEmergencyReserveConfirm(opportunity, eventId, reserveMonths, requiredMonths, mortgagePlan);
             return;
           }
-          completePropertyPurchase(opportunity, eventId);
+          completePropertyPurchase(opportunity, eventId, mortgagePlan);
         },
       },
+      {
+        label: cashShortfall > 0 ? `现金购买还差 ${money(cashShortfall)}` : "现金购买",
+        disabled: cashShortfall > 0,
+        onClick: () => completePropertyPurchase(opportunity, `${eventId}-cash`, cashPlan),
+      },
       { label: "为什么？", onClick: () => showOpportunityWhy(opportunity, calculation, eventId) },
-      { label: "查看计算", onClick: () => showOpportunityCalculation(opportunity, calculation, eventId) },
+      { label: "查看计算", onClick: () => showOpportunityCalculation(opportunity, calculation, eventId, mortgagePlan, cashPlan) },
       {
         label: "放弃",
         onClick: () => {
@@ -886,13 +991,15 @@ function showOpportunity() {
 }
 
 function propertyOpportunityMetrics(opportunity, calculation) {
+  const mortgagePlan = calculateMortgagePurchasePlan(state, opportunity, "mortgage");
   return [
     ["类型", opportunity.category],
     ["总价", money(opportunity.purchasePrice)],
-    ["首付款", money(opportunity.downPayment)],
-    ["贷款金额", money(calculation.loanAmount)],
+    ["首付款", money(mortgagePlan.downPayment)],
+    ["贷款金额", money(mortgagePlan.loanAmount)],
+    ["当前房贷利率", percentText(mortgagePlan.interestRate)],
     ["每月租金", money(opportunity.monthlyRent)],
-    ["每月房贷", money(opportunity.mortgagePayment)],
+    ["每月房贷", money(mortgagePlan.monthlyPayment)],
     ["管理与维修", money(calculation.monthlyExpenses)],
     ["每月净现金流", money(calculation.monthlyCashflow)],
     ["预计房产净值", money(calculation.projectedEquity)],
@@ -921,16 +1028,19 @@ function showOpportunityWhy(opportunity, calculation, eventId) {
 }
 
 function showOpportunityCalculation(opportunity, calculation, eventId) {
+  const mortgagePlan = calculateMortgagePurchasePlan(state, opportunity, "mortgage");
+  const cashPlan = calculateMortgagePurchasePlan(state, opportunity, "cash");
   openSimpleModal({
     type: "查看计算",
     title: `${opportunity.name} 每月现金流`,
     text: "每月租金 − 每月房贷 − 管理费 − 维修准备金 ＝ 每月净现金流。",
     metrics: [
       ["每月租金", money(opportunity.monthlyRent)],
-      ["− 每月房贷", money(-opportunity.mortgagePayment)],
+      ["− 每月房贷", money(-mortgagePlan.monthlyPayment)],
       ["− 管理费", money(-opportunity.managementFee)],
       ["− 维修准备金", money(-opportunity.repairReserve)],
       ["＝ 每月净现金流", money(calculation.monthlyCashflow)],
+      ["现金购买净现金流", money(cashPlan.monthlyCashflow)],
     ],
     actions: [
       { label: "返回机会卡", className: "primary", onClick: () => showOpportunityByCard(opportunity, eventId) },
@@ -940,8 +1050,11 @@ function showOpportunityCalculation(opportunity, calculation, eventId) {
 }
 
 function showOpportunityByCard(opportunity, eventId) {
-  const calculation = calculateOpportunity(opportunity);
-  const shortfall = Math.max(0, opportunity.downPayment - state.cash);
+  const mortgagePlan = calculateMortgagePurchasePlan(state, opportunity, "mortgage");
+  const cashPlan = calculateMortgagePurchasePlan(state, opportunity, "cash");
+  const calculation = calculateOpportunityWithFinancing(opportunity, mortgagePlan);
+  const shortfall = Math.max(0, mortgagePlan.cashRequired - state.cash);
+  const cashShortfall = Math.max(0, cashPlan.cashRequired - state.cash);
   openSimpleModal({
     type: "房地产机会",
     title: opportunity.name,
@@ -949,18 +1062,23 @@ function showOpportunityByCard(opportunity, eventId) {
     metrics: propertyOpportunityMetrics(opportunity, calculation),
     actions: [
       {
-        label: shortfall > 0 ? `现金不足，还差 ${money(shortfall)}` : "购买",
+        label: shortfall > 0 ? `房贷购买还差 ${money(shortfall)}` : "房贷购买",
         className: "primary",
         disabled: shortfall > 0,
-        onClick: () => completePropertyPurchase(opportunity, eventId),
+        onClick: () => completePropertyPurchase(opportunity, eventId, mortgagePlan),
       },
-      { label: "查看计算", onClick: () => showOpportunityCalculation(opportunity, calculation, eventId) },
+      {
+        label: cashShortfall > 0 ? `现金购买还差 ${money(cashShortfall)}` : "现金购买",
+        disabled: cashShortfall > 0,
+        onClick: () => completePropertyPurchase(opportunity, `${eventId}-cash`, cashPlan),
+      },
+      { label: "查看计算", onClick: () => showOpportunityCalculation(opportunity, calculation, eventId, mortgagePlan, cashPlan) },
       { label: "放弃", onClick: closeModal },
     ],
   });
 }
 
-function showEmergencyReserveConfirm(opportunity, eventId, reserveMonths, requiredMonths) {
+function showEmergencyReserveConfirm(opportunity, eventId, reserveMonths, requiredMonths, financing) {
   openSimpleModal({
     type: "现金安全垫提醒",
     title: "购买后现金会偏低",
@@ -972,15 +1090,15 @@ function showEmergencyReserveConfirm(opportunity, eventId, reserveMonths, requir
       ["风险等级", opportunity.riskLevel],
     ],
     actions: [
-      { label: "仍然购买", className: "primary", onClick: () => completePropertyPurchase(opportunity, eventId) },
+      { label: "仍然购买", className: "primary", onClick: () => completePropertyPurchase(opportunity, eventId, financing) },
       { label: "先不买", onClick: closeModal },
     ],
   });
 }
 
-function completePropertyPurchase(opportunity, eventId) {
+function completePropertyPurchase(opportunity, eventId, financing = null) {
   if (state.settledEvents.includes(eventId)) return;
-  const result = buyProperty(state, opportunity, eventId);
+  const result = buyProperty(state, opportunity, eventId, financing);
   if (!result.ok) {
     openSimpleModal({
       type: "无法购买",
@@ -990,13 +1108,16 @@ function completePropertyPurchase(opportunity, eventId) {
     });
     return;
   }
-  addLog(`买入「${result.property.name}」，每月房地产现金流 ${money(result.property.monthlyCashflow)}。`);
+  addLog(`${result.property.financingMode === "cash" ? "现金买入" : "房贷买入"}「${result.property.name}」，每月房地产现金流 ${money(result.property.monthlyCashflow)}。`);
   persistQuietly();
   render();
   openSimpleModal({
     type: "购买成功",
     title: "新房地产加入资产中心",
-    text: `扣除首付 ${money(result.property.downPayment)}，新增房贷 ${money(result.property.originalMortgage)}。`,
+    text:
+      result.property.mortgageBalance > 0
+        ? `扣除首付 ${money(result.property.downPayment)}，新增房贷 ${money(result.property.originalMortgage)}。`
+        : `一次支付 ${money(result.property.downPayment)}，没有新增房贷。`,
     metrics: [
       ["剩余现金", money(state.cash)],
       ["每月租金", money(result.property.monthlyRent)],
@@ -1160,6 +1281,242 @@ function miniTrend(history) {
     })
     .join(" ");
   return `<svg class="mini-chart" viewBox="0 0 100 44" role="img" aria-label="最近价格折线"><polyline points="${points}" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></svg>`;
+}
+
+function showBankCenter(fromTile = false) {
+  ensureBankingState(state);
+  const summary = calculateBankSummary(state);
+  const debt = calculateDebtTotals(state);
+  const credit = calculateCreditLimit(state);
+  const latest = state.bankTransactions.slice(0, 4).map((tx) => `第 ${tx.month} 月 ${tx.type}`).join(" · ") || "暂无记录";
+  openSimpleModal({
+    type: fromTile ? "银行格" : "银行中心",
+    title: "银行与贷款",
+    text: "贷款会马上增加现金，但之后每个月都要还款。信用分数和利率会影响可借额度与月供。",
+    metrics: [
+      ["现金", money(summary.cash)],
+      ["净资产", money(summary.netWorth)],
+      ["信用额度", `${money(credit.available)} / ${money(credit.totalLimit)}`],
+      ["信用分", creditGauge(summary.creditScore)],
+      ["贷款总额", money(debt.totalDebt)],
+      ["每月总月供", money(debt.monthlyPayment)],
+      ["当前利率", ratePulse(summary.interestLevel)],
+      ["个人贷款月利率", percentText(summary.personalLoanMonthlyRate)],
+      ["房贷月利率", percentText(summary.mortgageMonthlyRate)],
+      ["最近银行记录", latest],
+    ],
+    actions: [
+      { label: "申请个人贷款", className: "primary", onClick: showPersonalLoanOptions },
+      { label: "利率事件", onClick: showInterestEvent },
+      { label: "查看再融资", onClick: showRefinanceOptions },
+      { label: "破产保护", onClick: () => showBankruptcyProtection(evaluateBankruptcyProtection(state)) },
+      { label: "关闭", onClick: closeModal },
+    ],
+  });
+}
+
+function showPersonalLoanOptions() {
+  const summary = calculateBankSummary(state);
+  openSimpleModal({
+    type: "Personal Loan",
+    title: "选择个人贷款",
+    text: bankingLearningNotes.loan,
+    metrics: [
+      ["可用信用额度", money(summary.availableCredit)],
+      ["信用分", creditGauge(summary.creditScore)],
+      ["当前利率", `${summary.interestLevel} · ${percentText(summary.personalLoanMonthlyRate)}/月`],
+      ["提醒", "借款会加入现金，也会增加负债和每月还款金额。"],
+    ],
+    actions: [
+      ...personalLoanProducts.map((amount) => ({
+        label: `贷款 ${money(amount)}`,
+        className: amount <= summary.availableCredit ? "primary" : "",
+        disabled: amount > summary.availableCredit,
+        onClick: () => completePersonalLoan(amount),
+      })),
+      { label: "返回银行", onClick: () => showBankCenter() },
+    ],
+  });
+}
+
+function completePersonalLoan(amount) {
+  const result = takePersonalLoan(state, amount, `personal-loan-${state.round}-${amount}-${Date.now()}`);
+  if (!result.ok) {
+    openSimpleModal({
+      type: "贷款失败",
+      title: "无法完成个人贷款",
+      text: result.reason,
+      actions: [{ label: "知道了", className: "primary", onClick: () => showBankCenter() }],
+    });
+    return;
+  }
+  addLog(`个人贷款 ${money(result.amount)}，每月还款 ${money(result.payment)}。`);
+  persistQuietly();
+  render();
+  openSimpleModal({
+    type: "贷款成功",
+    title: "现金增加，但月供也增加",
+    text: "贷款不是免费的钱。每个月的还款会降低你的净现金流。",
+    metrics: [
+      ["现金增加", money(result.amount)],
+      ["每月还款", money(result.payment)],
+      ["贷款利率", `${percentText(result.rate)}/月`],
+      ["剩余现金", money(state.cash)],
+      ["信用分", creditGauge(state.bank.creditScore)],
+    ],
+    actions: [{ label: "回银行中心", className: "primary", onClick: () => showBankCenter() }],
+  });
+}
+
+function showInterestEvent() {
+  const event = pick(interestEvents);
+  openSimpleModal({
+    type: "利率事件",
+    title: event.title,
+    text: event.text,
+    metrics: [["当前利率", calculateBankSummary(state).interestLevel]],
+    actions: [
+      {
+        label: "应用利率变化",
+        className: "primary",
+        onClick: () => completeInterestEvent(event),
+      },
+      { label: "返回银行", onClick: () => showBankCenter() },
+    ],
+  });
+}
+
+function completeInterestEvent(event) {
+  const result = applyInterestEvent(state, event, `interest-${state.round}-${event.id}`);
+  addLog(result.ok ? `${event.title}：${result.before.label} 变为 ${result.after.label}。` : result.reason);
+  persistQuietly();
+  render();
+  openSimpleModal({
+    type: "利率变化",
+    title: event.title,
+    text: result.ok ? "利率会影响新的个人贷款、房贷购买和再融资。" : result.reason,
+    metrics: result.ok
+      ? [
+          ["变化前", result.before.label],
+          ["变化后", ratePulse(result.after.label)],
+          ["个人贷款月利率", percentText(calculateBankSummary(state).personalLoanMonthlyRate)],
+          ["房贷月利率", percentText(calculateBankSummary(state).mortgageMonthlyRate)],
+        ]
+      : [["结果", "未变化"]],
+    actions: [{ label: "回银行中心", className: "primary", onClick: () => showBankCenter() }],
+  });
+}
+
+function showRefinanceOptions() {
+  const properties = state.ownedProperties.filter((property) => property.mortgageBalance > 0);
+  if (!properties.length) {
+    openSimpleModal({
+      type: "Refinance",
+      title: "目前没有可再融资房贷",
+      text: bankingLearningNotes.refinance,
+      actions: [{ label: "回银行中心", className: "primary", onClick: () => showBankCenter() }],
+    });
+    return;
+  }
+  openSimpleModal({
+    type: "Refinance",
+    title: "选择要再融资的房贷",
+    text: bankingLearningNotes.refinance,
+    metrics: properties.flatMap((property) => {
+      const preview = calculateRefinancePreview(state, property);
+      return [[property.name, `${money(preview.oldPayment)} -> ${money(preview.newPayment)}，节省 ${money(preview.paymentSavings)}`]];
+    }),
+    actions: [
+      ...properties.map((property) => {
+        const preview = calculateRefinancePreview(state, property);
+        return {
+          label: preview.canRefinance ? `再融资 ${property.name}` : `${property.name} 暂不划算`,
+          className: preview.canRefinance ? "primary" : "",
+          disabled: !preview.canRefinance,
+          onClick: () => showRefinanceConfirm(property.id),
+        };
+      }),
+      { label: "返回银行", onClick: () => showBankCenter() },
+    ],
+  });
+}
+
+function showRefinanceConfirm(propertyId) {
+  const property = state.ownedProperties.find((item) => item.id === propertyId);
+  if (!property) return;
+  const preview = calculateRefinancePreview(state, property);
+  openSimpleModal({
+    type: "确认再融资",
+    title: property.name,
+    text: "如果利率下降，重新贷款可以减少月供，但贷款本金仍然要继续还。",
+    metrics: [
+      ["剩余房贷", money(property.mortgageBalance)],
+      ["旧月供", money(preview.oldPayment)],
+      ["新月供", money(preview.newPayment)],
+      ["每月减少", money(preview.paymentSavings)],
+      ["新房贷利率", percentText(preview.newRate)],
+    ],
+    actions: [
+      { label: "确认再融资", className: "primary", disabled: !preview.canRefinance, onClick: () => completeRefinance(property.id) },
+      { label: "取消", onClick: () => showPropertyDetail(property.id) },
+    ],
+  });
+}
+
+function completeRefinance(propertyId) {
+  const result = refinancePropertyMortgage(state, propertyId, `refinance-${state.round}-${propertyId}`);
+  if (!result.ok) {
+    openSimpleModal({
+      type: "再融资失败",
+      title: "无法完成再融资",
+      text: result.reason,
+      actions: [{ label: "知道了", className: "primary", onClick: () => showBankCenter() }],
+    });
+    return;
+  }
+  addLog(`${result.after.name} 再融资成功，月供减少 ${money(result.preview.paymentSavings)}。`);
+  persistQuietly();
+  render();
+  openSimpleModal({
+    type: "再融资成功",
+    title: result.after.name,
+    text: "月供下降后，每月现金流会改善，但房贷余额仍需要继续偿还。",
+    metrics: [
+      ["旧月供", money(result.preview.oldPayment)],
+      ["新月供", money(result.preview.newPayment)],
+      ["每月减少", money(result.preview.paymentSavings)],
+      ["房产现金流", money(result.after.monthlyCashflow)],
+    ],
+    actions: [{ label: "完成", className: "primary", onClick: closeModal }],
+  });
+}
+
+function showBankruptcyProtection(protection) {
+  const currentProtection = protection || evaluateBankruptcyProtection(state);
+  const needed = Math.abs(Math.min(0, moneyValue(state.cash)));
+  openSimpleModal({
+    type: "破产保护",
+    title: currentProtection.status === "bankrupt" ? "破产" : "现金不足警报",
+    text: `${bankingLearningNotes.bankruptcy} ${currentProtection.message}`,
+    metrics: [
+      ["当前现金", money(state.cash)],
+      ["需要补足", money(needed)],
+      ["可用信用额度", money(calculateBankSummary(state).availableCredit)],
+      ["可出售资产", `${state.ownedProperties.length + state.stockHoldings.length + state.businessHoldings.length} 项`],
+    ],
+    actions:
+      currentProtection.status === "loan"
+        ? [
+            { label: "申请保护贷款", className: "primary", onClick: () => completePersonalLoan(Math.ceil((needed + 1000) / 1000) * 1000) },
+            { label: "先卖资产", onClick: closeModal },
+          ]
+        : currentProtection.status === "sellAssets"
+          ? [
+              { label: "查看房地产", className: "primary", onClick: closeModal },
+              { label: "回银行中心", onClick: () => showBankCenter() },
+            ]
+          : [{ label: "知道了", className: "primary", onClick: closeModal }],
+  });
 }
 
 function showDoodad() {
@@ -1836,6 +2193,7 @@ function showLearning() {
 function showPropertyDetail(propertyId) {
   const property = state.ownedProperties.find((item) => item.id === propertyId);
   if (!property) return;
+  const refinancePreview = calculateRefinancePreview(state, property);
   openSimpleModal({
     type: "房地产详情",
     title: property.name,
@@ -1847,6 +2205,7 @@ function showPropertyDetail(propertyId) {
       ["房产净值", money(property.equity)],
       ["每月租金", money(property.monthlyRent)],
       ["房贷月供", money(property.mortgagePayment)],
+      ["房贷利率", property.interestRate ? percentText(property.interestRate) : "旧房贷"],
       ["每月支出", money(property.monthlyExpenses)],
       ["每月净现金流", money(calculatePropertyCashflow(property))],
       ["已还本金", money(property.principalPaid)],
@@ -1855,6 +2214,11 @@ function showPropertyDetail(propertyId) {
       ["状态", property.status === "paidOff" ? "房贷已还清" : "持有中"],
     ],
     actions: [
+      {
+        label: refinancePreview.canRefinance ? "再融资降低月供" : "再融资暂不划算",
+        disabled: !refinancePreview.canRefinance,
+        onClick: () => showRefinanceConfirm(property.id),
+      },
       { label: "出售房产", className: "danger", onClick: () => showPropertySellModal(property.id) },
       { label: "关闭", className: "primary", onClick: closeModal },
     ],
@@ -1920,22 +2284,15 @@ function payCost(cost, reason) {
   state.cash -= cost;
   addLog(`${reason}：支出 ${money(cost)}。`);
   if (state.cash < 0) {
-    const needed = Math.abs(state.cash) + 1000;
-    borrowMoney(needed, "现金不足自动借款", false);
+    const protection = evaluateBankruptcyProtection(state);
+    addLog(protection.message);
   }
 }
 
 function borrowMoney(amount, name = "银行借款", shouldRender = true) {
   const rounded = Math.ceil(amount / 1000) * 1000;
-  state.cash += rounded;
-  state.liabilities.push({
-    id: `loan-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    type: "loan",
-    name,
-    balance: rounded,
-    payment: Math.ceil(rounded * 0.03),
-  });
-  addLog(`${name}：现金增加 ${money(rounded)}，月供增加 ${money(Math.ceil(rounded * 0.03))}。`);
+  const result = takePersonalLoan(state, rounded, `legacy-loan-${state.round}-${Date.now()}`);
+  addLog(result.ok ? `${name}：现金增加 ${money(result.amount)}，月供增加 ${money(result.payment)}。` : result.reason);
   persistQuietly();
   if (shouldRender) render();
 }
@@ -1946,6 +2303,9 @@ function repayDebt() {
   const payment = Math.min(5000, loan.balance, state.cash);
   loan.balance -= payment;
   state.cash -= payment;
+  if (loan.type === "personalLoan") {
+    state.bank.creditScore = Math.min(850, state.bank.creditScore + 2);
+  }
   addLog(`偿还债务 ${money(payment)}。`);
   if (loan.balance <= 0) {
     addLog(`清偿「${loan.name}」，月供减少 ${money(loan.payment)}。`);
