@@ -572,10 +572,13 @@ function renderBoard() {
             const point = boardPath[index % boardPath.length] || boardPath[0];
             const visual = tileVisual(tile.type);
             const isActive = state.position === index;
-            const isPreview = uiState.previewIndices.includes(index);
+            const previewOrder = uiState.previewIndices.indexOf(index);
+            const isPreview = previewOrder >= 0;
+            const isPassed = uiState.isMoving && previewOrder >= 0 && previewOrder < uiState.movingStep - 1;
+            const isUpcoming = isPreview && !isPassed;
             return `
               <button
-                class="tile map-tile ${tile.type} tone-${visual.tone} ${isActive ? "active arrived" : ""} ${isPreview ? "preview-glow" : ""}"
+                class="tile map-tile ${tile.type} tone-${visual.tone} ${isActive ? "active arrived" : ""} ${isPassed ? "path-passed" : ""} ${isUpcoming ? "preview-glow" : ""}"
                 type="button"
                 data-tile-index="${index}"
                 style="left:${point.x}px; top:${point.y}px"
@@ -996,6 +999,18 @@ function queueContextTip(tipId) {
   return true;
 }
 
+function statementIcon(label = "") {
+  if (label.includes("现金")) return "¥";
+  if (label.includes("收入") || label.includes("租金") || label.includes("股息")) return "↑";
+  if (label.includes("支出") || label.includes("月供") || label.includes("保费") || label.includes("税")) return "↓";
+  if (label.includes("资产")) return "资";
+  if (label.includes("贷款") || label.includes("负债")) return "债";
+  if (label.includes("信用")) return "信";
+  if (label.includes("利率")) return "%";
+  if (label.includes("景气")) return "风";
+  return "•";
+}
+
 function renderStatements() {
   const summary = calculatePortfolioSummary(state.ownedProperties);
   const stockSummary = calculateStockPortfolioSummary(state);
@@ -1032,12 +1047,13 @@ function renderStatements() {
   el.incomeStatement.innerHTML = rows
     .map(
       ([label, help, value]) => `
-        <div class="stat-row ${Number(value) < 0 ? "negative-line" : ""}">
+        <div class="stat-row hud-metric ${Number(value) < 0 ? "negative-line" : "positive-line"}">
+          <span class="hud-metric-icon" aria-hidden="true">${statementIcon(label)}</span>
           <div>
             <strong>${label}</strong>
             <small>${help}</small>
           </div>
-              <b>${label === "信用分" ? `${value}` : label === "当前利率" ? bankSummary.interestLevel : label === "景气状态" ? economy.label : money(value)}</b>
+          <b>${label === "信用分" ? `${value}` : label === "当前利率" ? bankSummary.interestLevel : label === "景气状态" ? economy.label : money(value)}</b>
         </div>
       `,
     )
@@ -1395,11 +1411,15 @@ function emitFinanceEffect(amount, label = "现金变化", kind = "neutral") {
     <strong>${number >= 0 ? "+" : "-"}${money(Math.abs(number))}</strong>
     <small>${effectLabel} · ${label}</small>
     <span class="effect-trail" aria-hidden="true"></span>
+    <span class="effect-particle one" aria-hidden="true"></span>
+    <span class="effect-particle two" aria-hidden="true"></span>
+    <span class="effect-particle three" aria-hidden="true"></span>
   `;
   document.body.append(layer);
-  if (number >= 0) soundManager.play("coin");
-  else soundManager.play("warning");
-  if (number < 0) haptic([14, 20, 14], uiState.hapticsEnabled);
+  soundManager.play(number >= 0 ? "income" : "expense");
+  if (number >= 0) haptic([8, 24, 8], uiState.hapticsEnabled);
+  else haptic([14, 20, 14], uiState.hapticsEnabled);
+  setAvatarMood(moodFromAmount(number), 1400);
   setTimeout(() => layer.remove(), prefersReducedMotion() ? 260 : 1800);
 }
 

@@ -38,6 +38,7 @@ test("骰子显示正确点数，格子视觉类别可取得", () => {
     const markup = diceMarkup(value, false);
     const activeDots = markup.match(/class="active"/g)?.length || 0;
     assert.equal(activeDots, value);
+    assert.match(markup, new RegExp(`dice-pop" aria-hidden="true">${value}`));
   }
   assert.equal(tileVisual("payday").category, "薪水日");
   assert.equal(tileVisual("insurance").category, "保险");
@@ -103,4 +104,7 @@ test("城市地图包含商业手机游戏级核心地标", () => {
     assert.match(city, new RegExp(label));
   }
   assert.match(city, /小桥|bridge|行情板/);
+  for (const detail of ["background-layer", "midground-layer", "building-layer", "foreground-layer", "flower-bed", "foreground-detail", "map-building"]) {
+    assert.match(city, new RegExp(detail));
+  }
 });

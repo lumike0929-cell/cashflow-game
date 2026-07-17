@@ -149,8 +149,12 @@ export function createCitySceneSvg() {
         </filter>
       </defs>
       <rect width="${mapSize.width}" height="${mapSize.height}" rx="48" fill="#dff2d7" />
-      <circle cx="220" cy="250" r="190" fill="#fff8dc" opacity="0.28" />
-      <circle cx="1430" cy="810" r="210" fill="#d8f0ff" opacity="0.26" />
+      <g class="scene-layer background-layer">
+        <circle cx="220" cy="250" r="190" fill="#fff8dc" opacity="0.28" />
+        <circle cx="1430" cy="810" r="210" fill="#d8f0ff" opacity="0.26" />
+        <path d="M0 910 C220 820 380 900 560 835 C780 755 950 850 1160 785 C1370 720 1500 790 1680 720 V1120 H0 Z" fill="#bfe4bd" opacity="0.42" />
+      </g>
+      <g class="scene-layer midground-layer">
       ${district(372, 360, 270, 225, "#e7f6ea", "住宅区", "花园小路")}
       ${district(690, 340, 260, 210, "#fff4cf", "金融区", "银行与行情")}
       ${district(1010, 365, 285, 225, "#e9f3ff", "商业区", "商店与办公")}
@@ -165,6 +169,9 @@ export function createCitySceneSvg() {
       <path d="M170 140 L1480 170 L1545 740 L1360 930 L230 890 L125 420 Z" fill="none" stroke="#f8faf4" stroke-width="14" stroke-dasharray="32 28" stroke-linejoin="round" stroke-linecap="round" opacity="0.86" />
       <path d="M450 330 L1240 330 M450 820 L1240 820 M620 330 L620 840 M1020 330 L1020 840" stroke="#f8faf4" stroke-width="34" stroke-linecap="round" opacity="0.42" />
       <path d="M450 330 L1240 330 M450 820 L1240 820 M620 330 L620 840 M1020 330 L1020 840" stroke="#becac4" stroke-width="4" stroke-dasharray="18 18" opacity="0.36" />
+      ${flowerbeds()}
+      </g>
+      <g class="scene-layer building-layer">
       ${homeCluster(420, 420)}
       ${apartmentBlock(520, 360)}
       ${building(700, 390, "银行", "#ffe8a6", "#d8a21f", "¥")}
@@ -184,6 +191,8 @@ export function createCitySceneSvg() {
       ${bench(930, 615)}
       ${vehicle(332, 790, "#f0bb63")}
       ${vehicle(1390, 360, "#9ccfec")}
+      </g>
+      <g class="scene-layer foreground-layer">
       <circle cx="835" cy="555" r="72" fill="#ccebd2" filter="url(#softShadow)" />
       <circle cx="835" cy="555" r="36" fill="#8ed0eb" />
       <circle cx="835" cy="555" r="16" fill="#ffffff" opacity="0.85" />
@@ -191,6 +200,8 @@ export function createCitySceneSvg() {
       ${trees()}
       ${lamps()}
       ${coinsAndClouds()}
+      ${foregroundDecor()}
+      </g>
     </svg>
   `;
 }
@@ -231,9 +242,11 @@ export function diceMarkup(value = 1, rolling = false) {
   const dots = Array.from({ length: 9 }, (_, index) => `<span class="${dotActive(index, value) ? "active" : ""}"></span>`).join("");
   return `
     <div class="dice3d ${rolling ? "rolling" : ""}" aria-label="骰子 ${value}">
+      <span class="dice-flight-trail" aria-hidden="true"></span>
       <span class="dice-corner top"></span>
       <div class="dice-face">${dots}</div>
       <span class="dice-shadow"></span>
+      <span class="dice-pop" aria-hidden="true">${value}</span>
       <strong class="dice-result-text">前进 ${value} 格</strong>
     </div>
   `;
@@ -472,14 +485,16 @@ function district(x, y, width, height, fill, title, subtitle) {
 
 function building(x, y, label, fill, stroke, sign = "") {
   return `
-    <g filter="url(#softShadow)">
-      <path d="M${x + 12} ${y - 14} L${x + 148} ${y - 14} L${x + 160} ${y} L${x} ${y} Z" fill="${stroke}" opacity="0.38" />
+    <g class="map-building" filter="url(#softShadow)">
+      <ellipse cx="${x + 82}" cy="${y + 126}" rx="88" ry="22" fill="#173126" opacity="0.12" />
+      <path d="M${x + 12} ${y - 14} L${x + 148} ${y - 14} L${x + 160} ${y} L${x} ${y} Z" fill="${stroke}" opacity="0.48" />
       <rect x="${x}" y="${y}" width="160" height="118" rx="18" fill="${fill}" stroke="${stroke}" stroke-width="5" />
+      <rect x="${x + 24}" y="${y - 29}" width="112" height="24" rx="10" fill="#ffffff" stroke="${stroke}" stroke-width="4" opacity="0.94" />
       <path d="M${x + 12} ${y + 12} H${x + 148}" stroke="#ffffff" stroke-width="6" stroke-linecap="round" opacity="0.62" />
       <rect x="${x + 28}" y="${y + 34}" width="32" height="28" rx="6" fill="#ffffff" opacity="0.86" />
       <rect x="${x + 94}" y="${y + 34}" width="32" height="28" rx="6" fill="#ffffff" opacity="0.86" />
       <rect x="${x + 68}" y="${y + 76}" width="28" height="42" rx="8" fill="${stroke}" opacity="0.72" />
-      <text x="${x + 80}" y="${y + 28}" text-anchor="middle" class="building-sign">${sign}</text>
+      <text x="${x + 80}" y="${y - 10}" text-anchor="middle" class="building-sign">${sign}</text>
       <text x="${x + 80}" y="${y + 145}" text-anchor="middle" class="city-label">${label}</text>
     </g>
   `;
@@ -655,6 +670,41 @@ function coinsAndClouds() {
   `;
 }
 
+function flowerbeds() {
+  const beds = [
+    [300, 515, "#f4aaa1"],
+    [1225, 520, "#c7b9ff"],
+    [675, 622, "#ffd86b"],
+    [1010, 735, "#9fe0b9"],
+  ];
+  return beds
+    .map(
+      ([x, y, color]) => `
+        <g class="flower-bed">
+          <rect x="${x}" y="${y}" width="92" height="30" rx="15" fill="#77bf78" stroke="#ffffff" stroke-width="4" opacity="0.9" />
+          <circle cx="${x + 20}" cy="${y + 14}" r="7" fill="${color}" />
+          <circle cx="${x + 44}" cy="${y + 11}" r="7" fill="${color}" />
+          <circle cx="${x + 68}" cy="${y + 16}" r="7" fill="${color}" />
+        </g>
+      `,
+    )
+    .join("");
+}
+
+function foregroundDecor() {
+  return `
+    <g class="foreground-detail" opacity="0.86">
+      <path d="M70 1015 C210 980 320 1036 470 1002 C610 970 760 1018 910 994 C1070 966 1220 1016 1610 980" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" opacity="0.38" />
+      <rect x="118" y="988" width="108" height="18" rx="9" fill="#9b6a3a" />
+      <rect x="138" y="1008" width="10" height="34" rx="5" fill="#53625c" />
+      <rect x="194" y="1008" width="10" height="34" rx="5" fill="#53625c" />
+      <circle cx="1510" cy="958" r="32" fill="#79c98b" />
+      <circle cx="1542" cy="970" r="28" fill="#65b976" />
+      <circle cx="1482" cy="976" r="26" fill="#8ad79a" />
+    </g>
+  `;
+}
+
 function expressionForMood(mood = "neutral") {
   return {
     idle: "smile",
@@ -750,6 +800,11 @@ const soundProfiles = {
   land: { type: "triangle", start: 180, end: 90, duration: 0.2, gain: 0.12 },
   step: { type: "sine", start: 310, end: 240, duration: 0.07, gain: 0.06 },
   coin: { type: "sine", start: 640, end: 1040, duration: 0.16, gain: 0.12 },
+  income: { type: "sine", start: 720, end: 1180, duration: 0.2, gain: 0.11 },
+  expense: { type: "triangle", start: 360, end: 170, duration: 0.2, gain: 0.1 },
+  property: { type: "triangle", start: 420, end: 720, duration: 0.22, gain: 0.12 },
+  stock: { type: "sine", start: 520, end: 780, duration: 0.14, gain: 0.1 },
+  bank: { type: "triangle", start: 260, end: 520, duration: 0.18, gain: 0.09 },
   buy: { type: "triangle", start: 460, end: 760, duration: 0.18, gain: 0.12 },
   sell: { type: "triangle", start: 540, end: 320, duration: 0.16, gain: 0.1 },
   error: { type: "sawtooth", start: 220, end: 120, duration: 0.18, gain: 0.08 },
