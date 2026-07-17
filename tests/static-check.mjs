@@ -15,6 +15,11 @@ const requiredFiles = [
   "stockTransactions.js",
   "stockStorageMigration.js",
   "stockEventResolver.js",
+  "businessData.js",
+  "businessCalculator.js",
+  "businessTransactions.js",
+  "businessStorageMigration.js",
+  "businessEventResolver.js",
 ];
 
 for (const file of requiredFiles) {
@@ -30,5 +35,6 @@ assert.match(html, /realEstatePortfolio/);
 assert.match(game, /cashflowDebug/);
 assert.match(data, /realEstateOpportunities/);
 assert.match(await readFile("stockData.js", "utf8"), /stockDefinitions/);
+assert.match(await readFile("businessData.js", "utf8"), /businessDefinitions/);
 
 console.log("Static build check passed.");

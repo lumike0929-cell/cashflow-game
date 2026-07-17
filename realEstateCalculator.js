@@ -451,10 +451,13 @@ export function calculateNetWorth(state) {
   const stocks = Array.isArray(state.stockHoldings)
     ? state.stockHoldings.reduce((sum, holding) => sum + moneyNumber(holding.currentValue), 0)
     : 0;
+  const businesses = Array.isArray(state.businessHoldings)
+    ? state.businessHoldings.reduce((sum, business) => sum + moneyNumber(business.currentValue), 0)
+    : 0;
   const liabilities = Array.isArray(state.liabilities)
     ? state.liabilities.reduce((sum, item) => sum + moneyNumber(item.balance), 0)
     : 0;
-  return moneyNumber((state.cash || 0) + assets + stocks + calculatePortfolioSummary(state.ownedProperties).totalValue - liabilities);
+  return moneyNumber((state.cash || 0) + assets + stocks + businesses + calculatePortfolioSummary(state.ownedProperties).totalValue - liabilities);
 }
 
 export function ensureRealEstateState(state) {

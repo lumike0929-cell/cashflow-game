@@ -40,6 +40,25 @@ import {
   resolveStockMarketEvent,
   resolveStockPriceTick,
 } from "./stockEventResolver.js";
+import { businessDefinitions, businessLearningNotes } from "./businessData.js";
+import {
+  businessMoney,
+  calculateBusinessDefinition,
+  calculateBusinessSellPreview,
+  calculateBusinessSummary,
+  ensureBusinessState,
+  findBusinessDefinition,
+  investBusiness,
+  sellBusiness,
+  settleBusinessPayday,
+  upgradeBusiness,
+} from "./businessCalculator.js";
+import {
+  pickBusinessMarketEvent,
+  pickBusinessRiskEvent,
+  resolveBusinessMarketEvent,
+  resolveBusinessRiskEvent,
+} from "./businessEventResolver.js";
 
 const STORAGE_KEY = "cashflow-freedom-game-v1";
 
@@ -93,12 +112,15 @@ const boardTiles = [
   { type: "doodad", icon: "账", title: "账单", text: "突发开销直接扣现金。" },
   { type: "opportunity", icon: "租", title: "租赁机会", text: "找到能产生租金的资产。" },
   { type: "market", icon: "价", title: "市场", text: "持有资产会被市场影响。" },
+  { type: "businessOpportunity", icon: "店", title: "小生意机会", text: "投资能产生收入的小系统。" },
   { type: "learn", icon: "课", title: "课程", text: "用知识换取更好的判断力。" },
   { type: "propertyEvent", icon: "修", title: "房产持有", text: "维修、空置、续约或翻修。" },
   { type: "stockOpportunity", icon: "投", title: "基金机会", text: "练习分散和价格波动。" },
   { type: "bank", icon: "贷", title: "银行", text: "借贷能加速，也会增加月支出。" },
   { type: "stockMarket", icon: "涨", title: "市场消息", text: "产业和公司事件影响价格。" },
   { type: "doodad", icon: "购", title: "消费", text: "想要和需要不总是一回事。" },
+  { type: "businessEvent", icon: "营", title: "生意事件", text: "生意可能遇到机会或风险。" },
+  { type: "businessMarket", icon: "需", title: "需求变化", text: "不同类型生意需求会改变。" },
   { type: "propertyEvent", icon: "管", title: "持有管理", text: "房产赚钱也需要维护。" },
   { type: "payday", icon: "薪", title: "月结日", text: "再次结算现金流与房贷本金。" },
 ];
@@ -141,6 +163,7 @@ const el = {
   liabilityList: document.querySelector("#liabilityList"),
   realEstatePortfolio: document.querySelector("#realEstatePortfolio"),
   stockPortfolio: document.querySelector("#stockPortfolio"),
+  businessPortfolio: document.querySelector("#businessPortfolio"),
   saveGame: document.querySelector("#saveGame"),
   loadGame: document.querySelector("#loadGame"),
   resetGame: document.querySelector("#resetGame"),
@@ -173,6 +196,11 @@ function createState(career) {
     stockMarketRecords: [],
     settledStockEvents: [],
     realizedStockGain: 0,
+    businessHoldings: [],
+    businessTransactions: [],
+    businessMarketRecords: [],
+    settledBusinessEvents: [],
+    settledBusinessMonths: [],
     settledEvents: [],
     emergencyDebt: 0,
     financialIq: 0,
@@ -284,6 +312,7 @@ function render() {
   }
   ensureRealEstateState(state);
   ensureStockState(state);
+  ensureBusinessState(state);
   syncMortgageLiabilities(state);
   showGame();
   const freedom = freedomRatio();
@@ -302,6 +331,7 @@ function render() {
   renderStatements();
   renderRealEstatePortfolio();
   renderStockPortfolio();
+  renderBusinessPortfolio();
   renderLogs();
 }
 
@@ -328,6 +358,7 @@ function renderActions() {
     `<button type="button" id="borrowSmall">借入 ${money(5000)}</button>`,
     `<button type="button" id="openPortfolio">房地产中心</button>`,
     `<button type="button" id="openStockPortfolio">股票中心</button>`,
+    `<button type="button" id="openBusinessPortfolio">小生意中心</button>`,
   ];
 
   if (debt > 0) {
@@ -348,13 +379,19 @@ function renderActions() {
   document.querySelector("#openStockPortfolio")?.addEventListener("click", () => {
     document.querySelector("#stockSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  document.querySelector("#openBusinessPortfolio")?.addEventListener("click", () => {
+    document.querySelector("#businessSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 function renderStatements() {
   const summary = calculatePortfolioSummary(state.ownedProperties);
   const stockSummary = calculateStockPortfolioSummary(state);
+  const businessSummary = calculateBusinessSummary(state);
   const rows = [
     ["工资收入", "主动收入", state.salary],
+    ["小生意主動收入", "需要你投入時間的淨利", businessSummary.activeIncome],
+    ["小生意被動收入", "系統建立後較少時間維持", businessSummary.passiveIncome],
     ["租金收入", "房地产每月租金", summary.monthlyRent],
     ["股票股息", "Payday 发放时进入现金", stockSummary.dividendsReceived],
     ["其他被动收入", "生意或证券流入", passiveIncome() - summary.monthlyRent],
@@ -540,6 +577,73 @@ function renderStockPortfolio() {
   });
 }
 
+function renderBusinessPortfolio() {
+  const summary = calculateBusinessSummary(state);
+  const holdingsHtml = state.businessHoldings.length
+    ? state.businessHoldings
+        .map(
+          (business) => `
+            <button class="business-row motion-pop" type="button" data-business="${business.businessId}">
+              <span class="business-icon">${businessIcon(business.category)}</span>
+              <span>
+                <strong>${business.name}</strong>
+                <small>等級 ${business.level} · ${business.condition} · 需求 ${Math.round(business.demandModifier * 100)}%</small>
+              </span>
+              <span class="business-numbers ${business.monthlyProfit >= 0 ? "gain" : "loss"}">
+                <b>${business.monthlyProfit >= 0 ? "淨利" : "虧損"} ${signedMoney(business.monthlyProfit)}</b>
+                <small>價值 ${money(business.currentValue)} · 被動 ${Math.round(business.passiveRatio * 100)}%</small>
+              </span>
+            </button>
+          `,
+        )
+        .join("")
+    : '<div class="asset-row"><strong>還沒有小生意</strong><small>落到小生意機會格後，可以從營收、成本和淨利開始判斷。</small></div>';
+
+  const warningsHtml = summary.warnings.length
+    ? summary.warnings.map((warning) => `<div class="risk-note">${warning}</div>`).join("")
+    : '<div class="risk-note">目前沒有明顯集中提醒。分散可以降低一次事件的影響，但不能消除所有風險。</div>';
+
+  const historyHtml = state.businessTransactions.length
+    ? state.businessTransactions
+        .slice(0, 8)
+        .map(
+          (tx) => `
+            <div class="history-row">
+              <strong>${tx.type}</strong>
+              <span>第 ${tx.month} 月 · ${tx.description}</span>
+            </div>
+          `,
+        )
+        .join("")
+    : '<div class="history-row"><strong>暂无记录</strong><span>投資、升級、收入、事件和出售會記錄在這裡。</span></div>';
+
+  el.businessPortfolio.innerHTML = `
+    <div class="portfolio-summary business-summary-grid">
+      ${summaryMetric("持有數量", `${summary.count} 個`)}
+      ${summaryMetric("總市值", money(summary.totalValue))}
+      ${summaryMetric("每月營收", money(summary.monthlyRevenue))}
+      ${summaryMetric("每月成本", money(summary.monthlyExpenses))}
+      ${summaryMetric("每月淨利", money(summary.monthlyProfit))}
+      ${summaryMetric("累計獲利", money(summary.cumulativeProfit))}
+      ${summaryMetric("平均風險", summary.averageRisk)}
+      ${summaryMetric("被動占比", `${summary.passiveRatio}%`)}
+    </div>
+    <div class="risk-panel">${warningsHtml}</div>
+    <div class="business-list">${holdingsHtml}</div>
+    <div class="transaction-history">
+      <h3>小生意交易記錄</h3>
+      <div class="filter-row">
+        ${["全部", "投資", "升級", "收入", "支出", "市場變化", "出售"].map((filter) => `<span>${filter}</span>`).join("")}
+      </div>
+      ${historyHtml}
+    </div>
+  `;
+
+  el.businessPortfolio.querySelectorAll("[data-business]").forEach((button) => {
+    button.addEventListener("click", () => showBusinessDetail(button.dataset.business));
+  });
+}
+
 function summaryMetric(label, value) {
   return `<div class="summary-metric"><span>${label}</span><strong>${value}</strong></div>`;
 }
@@ -584,6 +688,19 @@ function stockIcon(sector = "") {
     零售: "店",
     基金: "篮",
   }[sector] || "股";
+}
+
+function businessIcon(category = "") {
+  return {
+    食品: "食",
+    寵物服務: "寵",
+    零售: "店",
+    手作: "作",
+    教育: "課",
+    自動化: "自",
+    線上服務: "雲",
+    維修服務: "修",
+  }[category] || "生";
 }
 
 function signedMoney(value) {
@@ -631,6 +748,11 @@ function triggerTile(tile) {
     return;
   }
 
+  if (tile.type === "businessOpportunity") {
+    showBusinessOpportunity();
+    return;
+  }
+
   if (tile.type === "doodad") {
     showDoodad();
     return;
@@ -643,6 +765,16 @@ function triggerTile(tile) {
 
   if (tile.type === "stockMarket") {
     showStockMarket();
+    return;
+  }
+
+  if (tile.type === "businessEvent") {
+    showBusinessRiskEvent();
+    return;
+  }
+
+  if (tile.type === "businessMarket") {
+    showBusinessMarket();
     return;
   }
 
@@ -672,6 +804,7 @@ function collectPayday(reason) {
   const mortgageResults = applyMortgagePayday(state);
   const dividendResult = settleStockDividends(state);
   const priceTick = resolveStockPriceTick(state, "Payday 后股票价格更新");
+  const businessResult = settleBusinessPayday(state);
   state.month += 1;
   addLog(`${reason}：结算净现金流 ${money(beforeCashflow)}。`);
   if (dividendResult.totalDividend > 0) {
@@ -679,6 +812,9 @@ function collectPayday(reason) {
   }
   if (priceTick.affected.length) {
     addLog(`股票价格更新：${priceTick.affected.slice(0, 2).map((item) => `${item.symbol}${item.direction}${signedPercent(item.percent)}`).join("，")}。`);
+  }
+  if (!businessResult.skipped && businessResult.details.length) {
+    addLog(`小生意月結：營收 ${money(businessResult.totalRevenue)}，成本 ${money(businessResult.totalExpenses)}，淨利 ${money(businessResult.totalProfit)}。`);
   }
   mortgageResults.forEach((result) => {
     addLog(`${result.propertyName} 本月偿还本金 ${money(result.principal)}，剩余房贷 ${money(result.afterBalance)}。`);
@@ -1270,6 +1406,352 @@ function completeStockSale(stockId, quantity, eventId) {
   });
 }
 
+function showBusinessOpportunity(business = pick(businessDefinitions)) {
+  const calculation = calculateBusinessDefinition(business);
+  const eventId = `business-buy-${state.round}-${state.position}-${business.id}`;
+  const shortfall = Math.max(0, business.startupCost - state.cash);
+  const cashAfter = state.cash - business.startupCost;
+  const reserveMonths = Math.round(cashAfter / Math.max(1, totalExpenses()));
+  openSimpleModal({
+    type: "小生意機會",
+    title: business.name,
+    text: `${business.description} ${business.childNote}`,
+    metrics: [
+      ["類型", business.category],
+      ["起始成本", money(business.startupCost)],
+      ["每月收入", money(business.monthlyRevenue)],
+      ["固定成本", money(business.monthlyFixedCost)],
+      ["變動成本", money(business.monthlyVariableCost)],
+      ["每月淨利", money(calculation.monthlyProfit)],
+      ["風險等級", business.riskLevel],
+      ["成長潛力", `${business.maxLevel} 級`],
+      ["所需時間", `${business.ownerTimeRequired} 小時/月`],
+      ["被動程度", `${Math.round(business.passiveRatio * 100)}%`],
+      ["投資後現金", money(cashAfter)],
+      ["預備金提醒", reserveMonths < 2 ? "投資後現金偏低，仍要留錢處理意外。" : "現金安全墊看起來較充足。"],
+    ],
+    actions: [
+      {
+        label: shortfall > 0 ? `現金不足，還差 ${money(shortfall)}` : "投資",
+        className: "primary",
+        disabled: shortfall > 0,
+        onClick: () => completeBusinessInvestment(business.id, eventId),
+      },
+      { label: "為什麼？", onClick: () => showBusinessWhy(() => showBusinessOpportunity(business)) },
+      { label: "查看計算", onClick: () => showBusinessCalculation(business, () => showBusinessOpportunity(business)) },
+      { label: "放棄", onClick: closeModal },
+    ],
+  });
+}
+
+function showBusinessCalculation(business, backAction) {
+  const calculation = calculateBusinessDefinition(business);
+  openSimpleModal({
+    type: "查看計算",
+    title: `${business.name} 每月淨利`,
+    text: "每月營收 − 固定成本 − 變動成本 ＝ 每月淨利。",
+    metrics: [
+      ["每月營收", money(business.monthlyRevenue)],
+      ["− 固定成本", money(-business.monthlyFixedCost)],
+      ["− 變動成本", money(-business.monthlyVariableCost)],
+      ["＝ 每月淨利", money(calculation.monthlyProfit)],
+    ],
+    actions: [
+      { label: "返回", className: "primary", onClick: backAction },
+      { label: "關閉", onClick: closeModal },
+    ],
+  });
+}
+
+function showBusinessWhy(backAction) {
+  openSimpleModal({
+    type: "為什麼",
+    title: "小生意學習說明",
+    text: "這些是遊戲中的財商概念，不是真實投資建議。",
+    metrics: [
+      ["營收", businessLearningNotes.revenue],
+      ["淨利", businessLearningNotes.profit],
+      ["固定成本", businessLearningNotes.fixedCost],
+      ["變動成本", businessLearningNotes.variableCost],
+      ["升級", businessLearningNotes.upgrade],
+      ["被動收入", businessLearningNotes.passive],
+    ],
+    actions: [
+      { label: "返回", className: "primary", onClick: backAction },
+      { label: "關閉", onClick: closeModal },
+    ],
+  });
+}
+
+function completeBusinessInvestment(businessId, eventId) {
+  const definition = findBusinessDefinition(businessId);
+  const result = investBusiness(state, definition, eventId);
+  if (!result.ok) {
+    openSimpleModal({
+      type: "無法投資",
+      title: "小生意投資未完成",
+      text: result.reason,
+      actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+    });
+    return;
+  }
+  addLog(`投資 ${result.business.name}，每月預估淨利 ${money(result.business.monthlyProfit)}。`);
+  persistQuietly();
+  render();
+  openSimpleModal({
+    type: "投資成功",
+    title: `${result.business.name} 加入小生意中心`,
+    text: "營收不是全部賺到的錢，扣除成本後留下的才是淨利。",
+    metrics: [
+      ["剩餘現金", money(state.cash)],
+      ["每月營收", money(result.business.monthlyRevenue)],
+      ["每月成本", money(result.business.monthlyExpenses)],
+      ["每月淨利", money(result.business.monthlyProfit)],
+      ["目前價值", money(result.business.currentValue)],
+      ["淨資產", money(calculateNetWorth(state))],
+    ],
+    actions: [{ label: "查看小生意中心", className: "primary", onClick: closeModal }],
+  });
+}
+
+function showBusinessDetail(businessId) {
+  const business = state.businessHoldings.find((item) => item.businessId === businessId);
+  const definition = findBusinessDefinition(businessId);
+  if (!business || !definition) return;
+  const progress = Math.min(100, Math.max(0, Math.round((business.cumulativeProfit / Math.max(1, business.totalInvested)) * 100)));
+  const upgrades = definition.upgradeOptions
+    .filter((upgrade) => !business.purchasedUpgrades.includes(upgrade.id))
+    .map((upgrade) => `${upgrade.name} ${money(upgrade.cost)}`)
+    .join(" · ") || "已無可用升級";
+  openSimpleModal({
+    type: "小生意詳情",
+    title: business.name,
+    text: `${definition.childNote} 投資回收進度不是保證回本，只是用累計獲利和投入金額做比較。`,
+    metrics: [
+      ["類型", business.category],
+      ["等級", `${business.level} / ${business.maxLevel}`],
+      ["總投入", money(business.totalInvested)],
+      ["當前價值", money(business.currentValue)],
+      ["每月收入", money(business.monthlyRevenue)],
+      ["每月成本", money(business.monthlyExpenses)],
+      ["每月淨利", money(business.monthlyProfit)],
+      ["累計獲利", money(business.cumulativeProfit)],
+      ["投資回收進度", `<div class="mini-progress"><span style="width:${progress}%"></span></div>${progress}%`],
+      ["風險等級", business.riskLevel],
+      ["顧客需求", `${Math.round(business.demandModifier * 100)}%`],
+      ["員工數量", `${business.staffCount} 人`],
+      ["所需時間", `${business.ownerTimeRequired} 小時/月`],
+      ["被動程度", `${Math.round(business.passiveRatio * 100)}%`],
+      ["可用升級", upgrades],
+      ["最近事件", business.recentEvent || "暫無"],
+    ],
+    actions: [
+      { label: "升級", className: "primary", onClick: () => showBusinessUpgradeModal(business.businessId) },
+      { label: "出售生意", className: "danger", onClick: () => showBusinessSellModal(business.businessId) },
+      { label: "為什麼？", onClick: () => showBusinessWhy(() => showBusinessDetail(business.businessId)) },
+      { label: "關閉", onClick: closeModal },
+    ],
+  });
+}
+
+function showBusinessUpgradeModal(businessId) {
+  const business = state.businessHoldings.find((item) => item.businessId === businessId);
+  const definition = findBusinessDefinition(businessId);
+  if (!business || !definition) return;
+  const actions = definition.upgradeOptions
+    .filter((upgrade) => !business.purchasedUpgrades.includes(upgrade.id))
+    .map((upgrade) => ({
+      label: `${upgrade.name} ${money(upgrade.cost)}`,
+      className: state.cash >= upgrade.cost ? "primary" : "",
+      disabled: state.cash < upgrade.cost,
+      onClick: () => showBusinessUpgradeConfirm(business.businessId, upgrade.id),
+    }));
+  openSimpleModal({
+    type: "小生意升級",
+    title: `${business.name} 可用升級`,
+    text: "升級可以增加收入，但也可能增加成本，所以要看最後留下多少。",
+    metrics: [
+      ["目前淨利", money(business.monthlyProfit)],
+      ["目前被動程度", `${Math.round(business.passiveRatio * 100)}%`],
+      ["現金", money(state.cash)],
+    ],
+    actions: actions.length ? [...actions, { label: "返回", onClick: () => showBusinessDetail(business.businessId) }] : [{ label: "返回", className: "primary", onClick: () => showBusinessDetail(business.businessId) }],
+  });
+}
+
+function showBusinessUpgradeConfirm(businessId, upgradeId) {
+  const business = state.businessHoldings.find((item) => item.businessId === businessId);
+  const upgrade = findBusinessDefinition(businessId)?.upgradeOptions.find((item) => item.id === upgradeId);
+  if (!business || !upgrade) return;
+  const nextRevenue = business.monthlyRevenue + upgrade.revenueChange;
+  const nextExpenses = business.monthlyExpenses + upgrade.costChange;
+  const nextProfit = nextRevenue - nextExpenses;
+  openSimpleModal({
+    type: "確認升級",
+    title: upgrade.name,
+    text: "請比較升級前後。收入增加不代表全部都是淨利。",
+    metrics: [
+      ["升級成本", money(upgrade.cost)],
+      ["收入變化", `${money(business.monthlyRevenue)} -> ${money(nextRevenue)}`],
+      ["成本變化", `${money(business.monthlyExpenses)} -> ${money(nextExpenses)}`],
+      ["淨利變化", `${money(business.monthlyProfit)} -> ${money(nextProfit)}`],
+      ["被動程度", `${Math.round(business.passiveRatio * 100)}% -> ${Math.round((business.passiveRatio + upgrade.passiveChange) * 100)}%`],
+    ],
+    actions: [
+      { label: "確認升級", className: "primary", onClick: () => completeBusinessUpgrade(businessId, upgradeId) },
+      { label: "取消", onClick: () => showBusinessDetail(businessId) },
+    ],
+  });
+}
+
+function completeBusinessUpgrade(businessId, upgradeId) {
+  const result = upgradeBusiness(state, businessId, upgradeId, `business-upgrade-${state.round}-${businessId}-${upgradeId}`);
+  if (!result.ok) {
+    openSimpleModal({ type: "升級失敗", title: "沒有完成升級", text: result.reason, actions: [{ label: "知道了", className: "primary", onClick: closeModal }] });
+    return;
+  }
+  addLog(`${result.business.name} 完成升級「${result.upgrade.name}」。`);
+  persistQuietly();
+  render();
+  openSimpleModal({
+    type: "升級成功",
+    title: result.upgrade.name,
+    text: "升級完成，小生意收入、成本、淨利與價值已更新。",
+    metrics: [
+      ["新每月營收", money(result.business.monthlyRevenue)],
+      ["新每月成本", money(result.business.monthlyExpenses)],
+      ["新每月淨利", money(result.business.monthlyProfit)],
+      ["新價值", money(result.business.currentValue)],
+    ],
+    actions: [{ label: "完成", className: "primary", onClick: closeModal }],
+  });
+}
+
+function showBusinessRiskEvent(positive = null) {
+  if (!state.businessHoldings.length) {
+    openSimpleModal({
+      type: "小生意事件",
+      title: "目前沒有小生意",
+      text: "你還沒有持有小生意，所以不會抽取這類事件。",
+      actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+    });
+    return;
+  }
+  const business = pick(state.businessHoldings);
+  const event = pickBusinessRiskEvent(positive);
+  openSimpleModal({
+    type: event.positive ? "正面事件" : "風險事件",
+    title: event.title,
+    text: `${business.name}：${event.text}`,
+    metrics: [
+      ["作用生意", business.name],
+      ["目前營收", money(business.monthlyRevenue)],
+      ["目前成本", money(business.monthlyExpenses)],
+      ["目前淨利", money(business.monthlyProfit)],
+    ],
+    actions: [
+      { label: "結算事件", className: "primary", onClick: () => completeBusinessRiskEvent(event, business.businessId) },
+    ],
+  });
+}
+
+function completeBusinessRiskEvent(event, businessId) {
+  const result = resolveBusinessRiskEvent(state, event, businessId, `business-risk-${state.round}-${businessId}-${event.id}`);
+  addLog(result.ok ? `${event.title} 影響了 ${result.after.name}。` : result.reason);
+  persistQuietly();
+  render();
+  openSimpleModal({
+    type: "事件結果",
+    title: event.title,
+    text: result.ok ? event.text : result.reason,
+    metrics: result.ok
+      ? [
+          ["營收", `${money(result.before.monthlyRevenue)} -> ${money(result.after.monthlyRevenue)}`],
+          ["成本", `${money(result.before.monthlyExpenses)} -> ${money(result.after.monthlyExpenses)}`],
+          ["淨利", `${money(result.before.monthlyProfit)} -> ${money(result.after.monthlyProfit)}`],
+          ["現金變化", money(-result.cashCost)],
+        ]
+      : [["結果", "未影響"]],
+    actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+  });
+}
+
+function showBusinessMarket() {
+  const event = pickBusinessMarketEvent();
+  openSimpleModal({
+    type: "需求變化",
+    title: event.title,
+    text: event.text,
+    actions: [
+      { label: "套用需求變化", className: "primary", onClick: () => completeBusinessMarketEvent(event) },
+    ],
+  });
+}
+
+function completeBusinessMarketEvent(event) {
+  const result = resolveBusinessMarketEvent(state, event, `business-market-${state.round}-${event.id}`);
+  addLog(result.affected?.length ? `${event.title} 影響 ${result.affected.length} 個小生意。` : `${event.title} 沒有影響目前持有的小生意。`);
+  persistQuietly();
+  render();
+  openSimpleModal({
+    type: "需求變化結果",
+    title: event.title,
+    text: result.affected?.length ? "以下是需求變化前後。" : "你目前沒有相關類型的小生意。",
+    metrics: result.affected?.length
+      ? result.affected.slice(0, 5).flatMap((item) => [
+          [item.after.name, `${money(item.before.monthlyRevenue)} -> ${money(item.after.monthlyRevenue)}`],
+          ["淨利", `${money(item.before.monthlyProfit)} -> ${money(item.after.monthlyProfit)}`],
+        ])
+      : [["影響", "無"]],
+    actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+  });
+}
+
+function showBusinessSellModal(businessId) {
+  const business = state.businessHoldings.find((item) => item.businessId === businessId);
+  if (!business) return;
+  const preview = calculateBusinessSellPreview(business);
+  openSimpleModal({
+    type: "出售小生意",
+    title: `出售 ${business.name}`,
+    text: "賣出生意時，要看收到的錢、之前投入的錢，以及經營期間已經賺到的錢。",
+    metrics: [
+      ["當前價值", money(preview.currentValue)],
+      ["出售費用", money(preview.sellingFee)],
+      ["實際收到現金", money(preview.cashReceived)],
+      ["總投入", money(preview.totalInvested)],
+      ["累計獲利", money(preview.cumulativeProfit)],
+      ["預計總結果", signedMoney(preview.totalResult)],
+    ],
+    actions: [
+      { label: "確認出售", className: "danger", onClick: () => completeBusinessSale(business.businessId) },
+      { label: "取消", className: "primary", onClick: () => showBusinessDetail(business.businessId) },
+    ],
+  });
+}
+
+function completeBusinessSale(businessId) {
+  const result = sellBusiness(state, businessId, `business-sell-${state.round}-${businessId}`);
+  if (!result.ok) {
+    openSimpleModal({ type: "出售失敗", title: "沒有完成出售", text: result.reason, actions: [{ label: "知道了", className: "primary", onClick: closeModal }] });
+    return;
+  }
+  addLog(`出售 ${result.business.name}，收到 ${money(result.preview.cashReceived)}。`);
+  persistQuietly();
+  render();
+  openSimpleModal({
+    type: "出售結算",
+    title: `${result.business.name} 已出售`,
+    text: "小生意已移出資產中心，相關收入與成本也已移除。",
+    metrics: [
+      ["現金增加", money(result.preview.cashReceived)],
+      ["出售費用", money(result.preview.sellingFee)],
+      ["總結果", signedMoney(result.preview.totalResult)],
+    ],
+    actions: [{ label: "完成", className: "primary", onClick: closeModal }],
+  });
+}
+
 function showPropertyHoldingEvent() {
   const event = pickPropertyHoldingEvent(state);
   if (!event) {
@@ -1607,6 +2089,38 @@ window.cashflowDebug = {
     state.cash = Math.max(state.cash, 50000);
     const stock = state.stockMarket.find((item) => item.dividendFrequency === 1) || state.stockMarket[0];
     completeStockPurchase(stock.id, 5, `debug-stock-${Date.now()}`);
+  },
+  buyFirstBusiness: () => {
+    if (!state) state = createState(careers[3]);
+    state.cash = Math.max(state.cash, 120000);
+    completeBusinessInvestment(businessDefinitions[0].id, `debug-business-1-${Date.now()}`);
+  },
+  buySecondBusiness: () => {
+    if (!state) state = createState(careers[3]);
+    state.cash = Math.max(state.cash, 120000);
+    completeBusinessInvestment(businessDefinitions[5].id, `debug-business-2-${Date.now()}`);
+  },
+  upgradeFirstBusiness: () => {
+    if (!state?.businessHoldings?.length) return;
+    const business = state.businessHoldings[0];
+    const upgrade = findBusinessDefinition(business.businessId)?.upgradeOptions.find((item) => !business.purchasedUpgrades.includes(item.id));
+    if (upgrade) completeBusinessUpgrade(business.businessId, upgrade.id);
+  },
+  triggerPositiveBusinessEvent: () => {
+    if (!state?.businessHoldings?.length) return;
+    completeBusinessRiskEvent(pickBusinessRiskEvent(true, () => 0), state.businessHoldings[0].businessId);
+  },
+  triggerNegativeBusinessEvent: () => {
+    if (!state?.businessHoldings?.length) return;
+    completeBusinessRiskEvent(pickBusinessRiskEvent(false, () => 0), state.businessHoldings[0].businessId);
+  },
+  triggerBusinessMarket: () => {
+    if (!state) return;
+    completeBusinessMarketEvent(pickBusinessMarketEvent(() => 0));
+  },
+  sellFirstBusiness: () => {
+    if (!state?.businessHoldings?.length) return;
+    completeBusinessSale(state.businessHoldings[0].businessId);
   },
   sellFirstStock: () => {
     if (!state?.stockHoldings?.length) return;

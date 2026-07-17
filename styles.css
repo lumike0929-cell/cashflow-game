@@ -396,7 +396,10 @@ p {
 }
 
 .tile.stockMarket,
-.tile.stockOpportunity {
+.tile.stockOpportunity,
+.tile.businessOpportunity,
+.tile.businessEvent,
+.tile.businessMarket {
   background: #edf5ff;
 }
 
@@ -631,10 +634,16 @@ p {
   margin-top: 18px;
 }
 
+.business-section {
+  margin-top: 18px;
+}
+
 .real-estate-portfolio,
 .stock-portfolio,
+.business-portfolio,
 .property-list,
 .stock-list,
+.business-list,
 .transaction-history {
   display: grid;
   gap: 12px;
@@ -672,7 +681,8 @@ p {
 }
 
 .property-row,
-.stock-row {
+.stock-row,
+.business-row {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr) minmax(96px, auto);
   gap: 12px;
@@ -685,7 +695,8 @@ p {
 }
 
 .property-icon,
-.stock-icon {
+.stock-icon,
+.business-icon {
   display: grid;
   place-items: center;
   width: 44px;
@@ -701,17 +712,26 @@ p {
   color: var(--violet);
 }
 
+.business-icon {
+  background: var(--gold-soft);
+  color: #725315;
+}
+
 .property-row strong,
 .property-row small,
 .property-numbers,
 .stock-row strong,
 .stock-row small,
-.stock-numbers {
+.stock-numbers,
+.business-row strong,
+.business-row small,
+.business-numbers {
   min-width: 0;
 }
 
 .property-row small,
-.stock-row small {
+.stock-row small,
+.business-row small {
   display: block;
   margin-top: 4px;
   color: var(--muted);
@@ -728,24 +748,31 @@ p {
 }
 
 .property-numbers,
-.stock-numbers {
+.stock-numbers,
+.business-numbers {
   display: grid;
   justify-items: end;
   gap: 3px;
 }
 
 .property-numbers b,
-.stock-numbers.gain b {
+.stock-numbers.gain b,
+.business-numbers.gain b {
   color: var(--green);
   font-size: 20px;
 }
 
-.stock-numbers.loss b {
+.stock-numbers.loss b,
+.business-numbers.loss b {
   color: var(--red);
   font-size: 20px;
 }
 
 .stock-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.business-summary-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
@@ -785,6 +812,38 @@ p {
   border-radius: 12px;
   background: #ffffff;
   padding: 6px;
+}
+
+.mini-progress {
+  width: min(220px, 100%);
+  height: 12px;
+  margin-bottom: 6px;
+  border-radius: 999px;
+  background: rgba(31, 122, 82, 0.12);
+  overflow: hidden;
+}
+
+.mini-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--green);
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filter-row span {
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
 }
 
 .transaction-history {
@@ -891,17 +950,20 @@ p {
   }
 
   .property-row,
-  .stock-row {
+  .stock-row,
+  .business-row {
     grid-template-columns: 42px minmax(0, 1fr);
   }
 
   .property-numbers,
-  .stock-numbers {
+  .stock-numbers,
+  .business-numbers {
     grid-column: 2;
     justify-items: start;
   }
 
-  .stock-summary-grid {
+  .stock-summary-grid,
+  .business-summary-grid {
     grid-template-columns: 1fr;
   }
 

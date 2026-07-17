@@ -75,6 +75,24 @@ try {
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.sellFirstStock());
   await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.buyFirstBusiness());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.buySecondBusiness());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.upgradeFirstBusiness());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.payday());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.payday());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.triggerPositiveBusinessEvent());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.triggerNegativeBusinessEvent());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.triggerBusinessMarket());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.sellFirstBusiness());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
 
   const beforeSaleCount = await page.evaluate(() => window.cashflowDebug.getState().ownedProperties.length);
   assert.equal(beforeSaleCount, 2);
@@ -94,6 +112,9 @@ try {
       transactions: state.propertyTransactions.length,
       stockHoldings: state.stockHoldings.length,
       stockTransactions: state.stockTransactions.length,
+      businessHoldings: state.businessHoldings.length,
+      businessTransactions: state.businessTransactions.length,
+      hasBusinessUpgrade: state.businessTransactions.some((item) => item.type === "升級"),
       hasMortgage: state.liabilities.some((item) => item.type === "mortgage"),
       width: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
@@ -105,9 +126,13 @@ try {
   assert.ok(result.transactions >= 6);
   assert.equal(result.stockHoldings, 1);
   assert.ok(result.stockTransactions >= 3);
+  assert.equal(result.businessHoldings, 1);
+  assert.ok(result.businessTransactions >= 7);
+  assert.equal(result.hasBusinessUpgrade, true);
   assert.equal(result.hasMortgage, true);
   assert.ok(result.width <= result.clientWidth + 1, `horizontal overflow: ${result.width} > ${result.clientWidth}`);
   assert.match(result.text, /房地产/);
+  assert.match(result.text, /小生意/);
   assert.deepEqual(consoleErrors, []);
   console.log("Browser acceptance passed.");
 } finally {
