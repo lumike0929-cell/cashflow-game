@@ -167,6 +167,7 @@ export function createCitySceneSvg() {
       <path d="M80 600 C300 510 390 680 560 610 C750 530 890 590 1040 520 C1230 430 1370 520 1600 430" fill="none" stroke="#e8fbff" stroke-width="12" stroke-linecap="round" opacity="0.85" />
       <path d="M170 140 L1480 170 L1545 740 L1360 930 L230 890 L125 420 Z" fill="none" stroke="url(#road)" stroke-width="118" stroke-linejoin="round" stroke-linecap="round" opacity="0.78" />
       <path d="M170 140 L1480 170 L1545 740 L1360 930 L230 890 L125 420 Z" fill="none" stroke="#f8faf4" stroke-width="14" stroke-dasharray="32 28" stroke-linejoin="round" stroke-linecap="round" opacity="0.86" />
+      ${roadDirections()}
       <path d="M450 330 L1240 330 M450 820 L1240 820 M620 330 L620 840 M1020 330 L1020 840" stroke="#f8faf4" stroke-width="34" stroke-linecap="round" opacity="0.42" />
       <path d="M450 330 L1240 330 M450 820 L1240 820 M620 330 L620 840 M1020 330 L1020 840" stroke="#becac4" stroke-width="4" stroke-dasharray="18 18" opacity="0.36" />
       ${flowerbeds()}
@@ -293,6 +294,7 @@ export function normalizeSettings(settings) {
     musicEnabled: settings?.musicEnabled !== false,
     hapticsEnabled: settings?.hapticsEnabled !== false,
     animationSpeed: settings?.animationSpeed === "fast" ? "fast" : "standard",
+    visualQuality: ["high", "standard", "battery"].includes(settings?.visualQuality) ? settings.visualQuality : "standard",
     tutorialComplete: Boolean(settings?.tutorialComplete),
     seenTips: Object.fromEntries(Object.entries(seenTips).map(([key, value]) => [key, Boolean(value)])),
     camera: {
@@ -701,6 +703,40 @@ function foregroundDecor() {
       <circle cx="1510" cy="958" r="32" fill="#79c98b" />
       <circle cx="1542" cy="970" r="28" fill="#65b976" />
       <circle cx="1482" cy="976" r="26" fill="#8ad79a" />
+    </g>
+  `;
+}
+
+function roadDirections() {
+  const arrows = [
+    [370, 128, 0],
+    [835, 122, 0],
+    [1450, 285, 86],
+    [1495, 680, 96],
+    [1210, 948, 180],
+    [610, 950, 180],
+    [140, 650, -92],
+    [154, 300, -76],
+  ];
+  return `
+    <g class="road-directions" opacity="0.72">
+      ${arrows
+        .map(
+          ([x, y, rotation]) => `
+            <g transform="translate(${x} ${y}) rotate(${rotation})">
+              <path d="M-22 -11 H14 L14 -22 L36 0 L14 22 L14 11 H-22 Z" fill="#ffffff" stroke="#d8a21f" stroke-width="4" stroke-linejoin="round" />
+            </g>
+          `,
+        )
+        .join("")}
+      <g transform="translate(250 214)">
+        <rect x="-48" y="-20" width="96" height="40" rx="14" fill="#ffffff" stroke="#1f7a52" stroke-width="5" />
+        <text x="0" y="8" text-anchor="middle" class="road-sign">起点</text>
+      </g>
+      <g transform="translate(1375 826)">
+        <rect x="-56" y="-20" width="112" height="40" rx="14" fill="#ffffff" stroke="#d8a21f" stroke-width="5" />
+        <text x="0" y="8" text-anchor="middle" class="road-sign">现金流路</text>
+      </g>
     </g>
   `;
 }

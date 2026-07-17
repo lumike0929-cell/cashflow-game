@@ -80,6 +80,7 @@ try {
       logs: [],
     });
   });
+  assert.equal(await page.locator(".map-asset-marker").count(), 0);
 
   await page.evaluate(() => window.cashflowDebug.startTutorial(true));
   let tutorialState = await page.evaluate(() => window.cashflowDebug.getExperience());
@@ -112,11 +113,13 @@ try {
   await page.evaluate(() => window.cashflowDebug.toggleMusic());
   await page.evaluate(() => window.cashflowDebug.toggleHaptics());
   await page.evaluate(() => window.cashflowDebug.toggleAnimationSpeed());
+  await page.evaluate(() => window.cashflowDebug.cycleVisualQuality());
   await page.evaluate(() => window.cashflowDebug.dispatchVisibility());
   const settingsAfterToggle = await page.evaluate(() => window.cashflowDebug.getExperience());
   assert.equal(typeof settingsAfterToggle.musicEnabled, "boolean");
   assert.equal(typeof settingsAfterToggle.hapticsEnabled, "boolean");
   assert.equal(settingsAfterToggle.animationSpeed, "fast");
+  assert.equal(settingsAfterToggle.visualQuality, "battery");
 
   await page.evaluate(() => window.cashflowDebug.showContextTip("firstDebt", true));
   await page.locator("#cardModal").click({ position: { x: 4, y: 4 } });
@@ -158,6 +161,21 @@ try {
     assert.equal(after, (before + roll) % 40);
     await page.evaluate(() => window.cashflowDebug.closeModal());
   }
+
+  const performanceRolls = Array.from({ length: 20 }, (_, index) => (index % 6) + 1);
+  for (const roll of performanceRolls) {
+    const before = await page.evaluate(() => window.cashflowDebug.getState().position);
+    await page.evaluate((value) => window.cashflowDebug.rollFixed(value), roll);
+    await page.waitForFunction(() => {
+      const experience = window.cashflowDebug.getExperience();
+      return !experience.isRolling && !experience.isMoving;
+    });
+    const after = await page.evaluate(() => window.cashflowDebug.getState().position);
+    assert.equal(after, (before + roll) % 40);
+    await page.evaluate(() => window.cashflowDebug.closeModal());
+  }
+  await page.waitForTimeout(420);
+  assert.equal(await page.locator(".finance-effect").count(), 0);
 
   const cameraBefore = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
   await page.evaluate(() => window.cashflowDebug.zoomMap(0.18));

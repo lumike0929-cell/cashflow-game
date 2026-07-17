@@ -74,6 +74,7 @@ test("镜头可缩放、拖曳并回到玩家，偏好可恢复", () => {
   assert.equal(settings.musicEnabled, false);
   assert.equal(settings.hapticsEnabled, false);
   assert.equal(settings.animationSpeed, "fast");
+  assert.equal(settings.visualQuality, "standard");
   assert.equal(settings.tutorialComplete, true);
   assert.equal(settings.seenTips.firstStock, true);
   assert.equal(settings.camera.scale, 0.8);
@@ -104,7 +105,7 @@ test("城市地图包含商业手机游戏级核心地标", () => {
     assert.match(city, new RegExp(label));
   }
   assert.match(city, /小桥|bridge|行情板/);
-  for (const detail of ["background-layer", "midground-layer", "building-layer", "foreground-layer", "flower-bed", "foreground-detail", "map-building"]) {
+  for (const detail of ["background-layer", "midground-layer", "building-layer", "foreground-layer", "flower-bed", "foreground-detail", "map-building", "road-directions", "现金流路"]) {
     assert.match(city, new RegExp(detail));
   }
 });

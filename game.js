@@ -242,6 +242,7 @@ const uiState = {
   musicEnabled: savedExperience.musicEnabled,
   hapticsEnabled: savedExperience.hapticsEnabled,
   animationSpeed: savedExperience.animationSpeed,
+  visualQuality: savedExperience.visualQuality,
   tutorialComplete: savedExperience.tutorialComplete,
   seenTips: savedExperience.seenTips,
   tutorial: {
@@ -519,6 +520,7 @@ function unlockAudio() {
 }
 
 function render() {
+  applyExperienceMode();
   if (!state) {
     showSetup();
     return;
@@ -614,6 +616,17 @@ function renderBoard() {
       showTilePreview(Number(button.dataset.tileIndex));
     });
   });
+  el.board.querySelectorAll("[data-map-asset]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (uiState.draggingCamera || uiState.isMoving || uiState.isRolling) return;
+      const assetType = button.dataset.mapAsset;
+      const assetId = button.dataset.mapId;
+      if (assetType === "property") showPropertyDetail(assetId);
+      if (assetType === "stock") showStockDetail(assetId);
+      if (assetType === "business") showBusinessDetail(assetId);
+    });
+  });
   requestAnimationFrame(() => {
     if (uiState.camera.follow) focusCameraOnPlayer(false);
     else applyCamera();
@@ -652,6 +665,9 @@ function renderMapAssetMarkers() {
       icon: propertyIcon(item.category),
       label: "房产",
       tone: "green",
+      id: item.id,
+      type: "property",
+      status: item.mortgageBalance <= 0 ? "owned" : "mortgage",
     })),
     ...state.stockHoldings.slice(0, 4).map((item, index) => ({
       x: 920 + index * 46,
@@ -659,6 +675,9 @@ function renderMapAssetMarkers() {
       icon: stockIcon(item.sector),
       label: "股票",
       tone: "violet",
+      id: item.stockId,
+      type: "stock",
+      status: item.unrealizedGain >= 0 ? "up" : "down",
     })),
     ...state.businessHoldings.slice(0, 4).map((item, index) => ({
       x: 560 + index * 48,
@@ -666,14 +685,17 @@ function renderMapAssetMarkers() {
       icon: businessIcon(item.category),
       label: "生意",
       tone: "amber",
+      id: item.businessId,
+      type: "business",
+      status: item.level > 1 ? "upgraded" : "base",
     })),
   ];
   return markers
     .map(
       (marker) => `
-        <div class="map-asset-marker tone-${marker.tone}" style="left:${marker.x}px; top:${marker.y}px" aria-label="${marker.label}">
+        <button class="map-asset-marker tone-${marker.tone} status-${marker.status}" type="button" data-map-asset="${marker.type}" data-map-id="${marker.id}" style="left:${marker.x}px; top:${marker.y}px" aria-label="${marker.label}">
           <span>${marker.icon}</span>
-        </div>
+        </button>
       `,
     )
     .join("");
@@ -783,10 +805,16 @@ function saveExperience() {
     musicEnabled: uiState.musicEnabled,
     hapticsEnabled: uiState.hapticsEnabled,
     animationSpeed: uiState.animationSpeed,
+    visualQuality: uiState.visualQuality,
     tutorialComplete: uiState.tutorialComplete,
     seenTips: uiState.seenTips,
     camera: uiState.camera,
   });
+}
+
+function applyExperienceMode() {
+  document.body.dataset.quality = uiState.visualQuality;
+  document.body.dataset.motion = prefersReducedMotion() ? "reduced" : "full";
 }
 
 function showTilePreview(index) {
@@ -809,27 +837,32 @@ function showTilePreview(index) {
 
 function renderActions() {
   const debt = state.liabilities.reduce((sum, item) => sum + moneyValue(item.balance), 0);
-  const buttons = [
-    `<div class="hud-status"><span>目前状态</span><strong>${uiState.hudStatus}</strong></div>`,
-    `<button type="button" id="focusPlayerHud">回到玩家</button>`,
-    `<button type="button" id="toggleSound">${uiState.muted ? "开启音效" : "静音"}</button>`,
-    `<button type="button" id="openFinancePanel">财务面板</button>`,
-    `<button type="button" id="openBankCenter">银行中心</button>`,
-    `<button type="button" id="openPortfolio">房地产</button>`,
-    `<button type="button" id="openStockPortfolio">股票</button>`,
-    `<button type="button" id="openBusinessPortfolio">小生意</button>`,
-    `<button type="button" id="openLifeCenter">人生保障</button>`,
-  ];
-
-  if (debt > 0) {
-    buttons.push(`<button type="button" id="repayDebt">偿还 ${money(Math.min(5000, debt))}</button>`);
-  }
-
-  if (state.gameOver) {
-    buttons.push(`<button class="primary" type="button" id="newRun">再开一局</button>`);
-  }
-
-  el.actionStack.innerHTML = buttons.join("");
+  const progressText = uiState.isMoving ? `${uiState.movingStep} / ${uiState.movingTotal}` : state.lastRoll ? `前进 ${state.lastRoll}` : "待掷骰";
+  const debtButton = debt > 0 ? `<button type="button" id="repayDebt"><span>债</span><strong>偿还</strong></button>` : "";
+  const newRunButton = state.gameOver ? `<button class="primary" type="button" id="newRun"><span>★</span><strong>再开</strong></button>` : "";
+  el.actionStack.innerHTML = `
+    <div class="hud-status game-hud-status">
+      <span>目前状态</span>
+      <strong>${uiState.hudStatus}</strong>
+      <em>${progressText}</em>
+    </div>
+    <div class="hud-summary-grid">
+      <div class="hud-chip cash"><span>现金</span><strong>${money(state.cash)}</strong></div>
+      <div class="hud-chip flow"><span>月现金流</span><strong>${money(netMonthlyCashflow())}</strong></div>
+    </div>
+    <div class="hud-shortcuts" aria-label="游戏快捷入口">
+      <button type="button" id="focusPlayerHud"><span>◎</span><strong>玩家</strong></button>
+      <button type="button" id="openFinancePanel"><span>¥</span><strong>财务</strong></button>
+      <button type="button" id="openBankCenter"><span>银</span><strong>银行</strong></button>
+      <button type="button" id="openPortfolio"><span>房</span><strong>房产</strong></button>
+      <button type="button" id="openStockPortfolio"><span>股</span><strong>股票</strong></button>
+      <button type="button" id="openBusinessPortfolio"><span>店</span><strong>生意</strong></button>
+      <button type="button" id="openLifeCenter"><span>盾</span><strong>保障</strong></button>
+      <button type="button" id="toggleSound"><span>${uiState.muted ? "静" : "声"}</span><strong>${uiState.muted ? "开启" : "静音"}</strong></button>
+      ${debtButton}
+      ${newRunButton}
+    </div>
+  `;
   document.querySelector("#focusPlayerHud")?.addEventListener("click", () => focusCameraOnPlayer(true));
   document.querySelector("#toggleSound")?.addEventListener("click", toggleSound);
   document.querySelector("#openFinancePanel")?.addEventListener("click", () => {
@@ -1533,6 +1566,9 @@ async function rollDice(forcedRoll = null) {
     haptic(22, uiState.hapticsEnabled);
     render();
     await wait(animationMs(160, 90));
+    if (uiState.camera.follow) {
+      focusCameraOnPlayer(false, Math.min(1.08, uiState.camera.scale + 0.08));
+    }
     await movePlayerStepByStep(previous, roll);
     const next = state.position;
     uiState.isRolling = false;
@@ -1546,6 +1582,7 @@ async function rollDice(forcedRoll = null) {
     state.round += 1;
     persistQuietly();
     render();
+    if (uiState.camera.follow) focusCameraOnPlayer(false, uiState.camera.scale);
     await wait(animationMs(380, 230));
     uiState.hudStatus = "处理事件";
     renderActions();
@@ -3597,6 +3634,7 @@ function showSoundSettings() {
       ["背景音乐", `${uiState.musicEnabled ? "开启" : "关闭"} · ${Math.round(uiState.musicVolume * 100)}%`],
       ["震动", uiState.hapticsEnabled && navigator?.vibrate ? "轻量开启" : uiState.hapticsEnabled ? "设备不支持" : "关闭"],
       ["动画速度", uiState.animationSpeed === "fast" ? "快速" : "标准"],
+      ["画面品质", qualityLabel(uiState.visualQuality)],
       ["音乐状态", soundSnapshot.musicPlaying ? "正在播放" : "等待互动或已暂停"],
       ["教学", uiState.tutorialComplete ? "已完成，可重播" : "尚未完成"],
     ],
@@ -3605,6 +3643,7 @@ function showSoundSettings() {
       { label: uiState.musicEnabled ? "关闭音乐" : "开启音乐", onClick: () => { toggleMusic(); showSoundSettings(); } },
       { label: uiState.hapticsEnabled ? "关闭震动" : "开启震动", onClick: () => { toggleHaptics(); showSoundSettings(); } },
       { label: uiState.animationSpeed === "fast" ? "标准动画" : "快速动画", onClick: () => { toggleAnimationSpeed(); showSoundSettings(); } },
+      { label: `画面：${qualityLabel(nextQuality(uiState.visualQuality))}`, onClick: () => { cycleVisualQuality(); showSoundSettings(); } },
       { label: "音效小一点", onClick: () => { adjustEffectVolume(-0.15); showSoundSettings(); } },
       { label: "音效大一点", onClick: () => { adjustEffectVolume(0.15); showSoundSettings(); } },
       { label: "重新观看教学", onClick: () => { closeModal(); startTutorial(true); } },
@@ -3637,6 +3676,21 @@ function adjustEffectVolume(delta) {
 function toggleAnimationSpeed() {
   uiState.animationSpeed = uiState.animationSpeed === "fast" ? "standard" : "fast";
   saveExperience();
+}
+
+function nextQuality(value) {
+  return { high: "standard", standard: "battery", battery: "high" }[value] || "standard";
+}
+
+function qualityLabel(value) {
+  return { high: "高品质", standard: "标准", battery: "省电" }[value] || "标准";
+}
+
+function cycleVisualQuality() {
+  uiState.visualQuality = nextQuality(uiState.visualQuality);
+  applyExperienceMode();
+  saveExperience();
+  if (state) renderBoard();
 }
 
 el.rollDice.addEventListener("click", rollDice);
@@ -3813,6 +3867,7 @@ window.cashflowDebug = {
     musicEnabled: uiState.musicEnabled,
     hapticsEnabled: uiState.hapticsEnabled,
     animationSpeed: uiState.animationSpeed,
+    visualQuality: uiState.visualQuality,
     avatarMood: uiState.avatarMood,
     avatarDirection: uiState.avatarDirection,
     tutorialComplete: uiState.tutorialComplete,
@@ -3828,6 +3883,7 @@ window.cashflowDebug = {
   toggleMusic,
   toggleHaptics,
   toggleAnimationSpeed,
+  cycleVisualQuality,
   startTutorial,
   nextTutorialStep,
   previousTutorialStep,
