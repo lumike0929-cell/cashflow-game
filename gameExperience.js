@@ -241,10 +241,18 @@ export function avatarMarkup(career, mood = "neutral", direction = "right") {
 
 export function diceMarkup(value = 1, rolling = false) {
   const dots = Array.from({ length: 9 }, (_, index) => `<span class="${dotActive(index, value) ? "active" : ""}"></span>`).join("");
+  const sideFaces = Array.from({ length: 6 }, (_, index) => {
+    const faceValue = index + 1;
+    const faceDots = Array.from({ length: 9 }, (_, dotIndex) => `<span class="${dotActive(dotIndex, faceValue) ? "lit" : ""}"></span>`).join("");
+    return `<div class="dice-side dice-side-${faceValue}" aria-hidden="true">${faceDots}</div>`;
+  }).join("");
   return `
     <div class="dice3d ${rolling ? "rolling" : ""}" aria-label="骰子 ${value}">
       <span class="dice-flight-trail" aria-hidden="true"></span>
       <span class="dice-corner top"></span>
+      <div class="dice-cube" data-result="${value}" aria-hidden="true">
+        ${sideFaces}
+      </div>
       <div class="dice-face">${dots}</div>
       <span class="dice-shadow"></span>
       <span class="dice-pop" aria-hidden="true">${value}</span>

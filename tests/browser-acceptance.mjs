@@ -104,6 +104,9 @@ try {
     const renderedMood = await page.evaluate(() => window.cashflowDebug.getExperience().avatarMood);
     assert.equal(renderedMood, mood);
   }
+  await page.evaluate(() => window.cashflowDebug.setEmotion("happy", 180));
+  await page.waitForFunction(() => window.cashflowDebug.getExperience().avatarState === "idle");
+  assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().avatarMood), "neutral");
 
   await page.evaluate(() => window.cashflowDebug.playIncomeEffect());
   await page.waitForSelector(".finance-effect.positive");
@@ -140,7 +143,14 @@ try {
     const experience = window.cashflowDebug.getExperience();
     return !experience.isRolling && !experience.isMoving;
   });
+  const rapidExperience = await page.evaluate(() => window.cashflowDebug.getExperience());
+  assert.equal(rapidExperience.isRolling && rapidExperience.isMoving, false);
+  for (const phase of ["rolling", "diceResult", "preparingMove", "moving", "arriving", "openingEvent"]) {
+    assert.ok(rapidExperience.turnPhaseHistory.includes(phase), `missing turn phase ${phase}`);
+  }
+  assert.ok(rapidExperience.turnPhaseHistory.indexOf("rolling") < rapidExperience.turnPhaseHistory.indexOf("moving"));
   await page.evaluate(() => window.cashflowDebug.closeModal());
+  assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().turnPhase), "idle");
   const rapidAfter = await page.evaluate(() => {
     const state = window.cashflowDebug.getState();
     return { position: state.position, round: state.round, lastRoll: state.lastRoll };
@@ -159,10 +169,12 @@ try {
     });
     const after = await page.evaluate(() => window.cashflowDebug.getState().position);
     assert.equal(after, (before + roll) % 40);
+    assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().lastRoll), roll);
     await page.evaluate(() => window.cashflowDebug.closeModal());
+    assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().turnPhase), "idle");
   }
 
-  const performanceRolls = Array.from({ length: 20 }, (_, index) => (index % 6) + 1);
+  const performanceRolls = Array.from({ length: 30 }, (_, index) => (index % 6) + 1);
   for (const roll of performanceRolls) {
     const before = await page.evaluate(() => window.cashflowDebug.getState().position);
     await page.evaluate((value) => window.cashflowDebug.rollFixed(value), roll);
@@ -173,7 +185,13 @@ try {
     const after = await page.evaluate(() => window.cashflowDebug.getState().position);
     assert.equal(after, (before + roll) % 40);
     await page.evaluate(() => window.cashflowDebug.closeModal());
+    assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().turnPhase), "idle");
   }
+  await page.waitForTimeout(420);
+  assert.equal(await page.locator(".finance-effect").count(), 0);
+  await page.evaluate(() => window.cashflowDebug.playDuplicateEffect());
+  await page.waitForSelector(".finance-effect.debug-duplicate");
+  assert.equal(await page.locator(".finance-effect.debug-duplicate").count(), 1);
   await page.waitForTimeout(420);
   assert.equal(await page.locator(".finance-effect").count(), 0);
 
@@ -244,6 +262,7 @@ try {
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.buyAccidentInsurance());
   await page.evaluate(() => window.cashflowDebug.closeModal());
+  assert.equal(await page.locator('.map-asset-marker[data-map-asset="insurance"]').count() >= 1, true);
   await page.evaluate(() => window.cashflowDebug.triggerCoveredMedicalEvent());
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.triggerUncoveredEvent());

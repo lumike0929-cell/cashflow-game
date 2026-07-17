@@ -224,6 +224,8 @@ let state = null;
 const soundManager = createSoundManager();
 const savedExperience = loadExperienceSettings(localStorage);
 const uiState = {
+  turnPhase: "idle",
+  turnPhaseHistory: ["idle"],
   isRolling: false,
   isMoving: false,
   diceRolling: false,
@@ -252,6 +254,8 @@ const uiState = {
   },
   pendingTips: [],
   draggingCamera: false,
+  playedEffectIds: new Set(),
+  avatarState: "idle",
 };
 soundManager.setMuted(uiState.muted);
 soundManager.setVolume(uiState.volume);
@@ -549,8 +553,8 @@ function render() {
   el.freedomBar.style.width = `${freedom}%`;
   el.roundLabel.textContent = `第 ${state.month} 月`;
   el.diceValue.innerHTML = diceMarkup(state.lastRoll || 1, uiState.diceRolling);
-  el.rollDice.disabled = state.gameOver || uiState.isRolling || uiState.isMoving;
-  el.rollDice.textContent = uiState.isMoving ? `前进 ${uiState.movingStep} / ${uiState.movingTotal}` : uiState.isRolling ? "骰子旋转" : "掷骰前进";
+  el.rollDice.disabled = !canRoll();
+  el.rollDice.textContent = uiState.turnPhase === "moving" ? `前进 ${uiState.movingStep} / ${uiState.movingTotal}` : uiState.turnPhase === "rolling" ? "骰子旋转中" : uiState.turnPhase === "diceResult" ? `前进 ${state.lastRoll || 1} 格` : "掷骰前进";
   el.rollDice.setAttribute("aria-label", el.rollDice.textContent);
   renderBoard();
   renderActions();
@@ -562,6 +566,53 @@ function render() {
   renderBusinessPortfolio();
   renderLogs();
   renderTutorial();
+}
+
+function phaseLabel(phase = uiState.turnPhase) {
+  return {
+    idle: "准备掷骰",
+    rolling: "骰子旋转中",
+    diceResult: "显示骰点",
+    preparingMove: "准备前进",
+    moving: `正在前进 ${uiState.movingStep} / ${uiState.movingTotal}`,
+    arriving: "已到达",
+    openingEvent: "打开事件",
+    resolvingEvent: "处理事件中",
+    showingResult: "结算结果",
+    turnComplete: "结算完成",
+    paused: "已暂停",
+  }[phase] || "准备掷骰";
+}
+
+function setTurnPhase(phase) {
+  if (uiState.turnPhase === phase && uiState.turnPhaseHistory.at(-1) === phase) {
+    uiState.hudStatus = phaseLabel(phase);
+    return;
+  }
+  uiState.turnPhase = phase;
+  uiState.isRolling = phase === "rolling" || phase === "diceResult";
+  uiState.isMoving = phase === "moving" || phase === "preparingMove" || phase === "arriving";
+  uiState.diceRolling = phase === "rolling";
+  uiState.hudStatus = phaseLabel(phase);
+  uiState.turnPhaseHistory = [...uiState.turnPhaseHistory, phase].slice(-16);
+}
+
+function canRoll() {
+  return Boolean(state && !state.gameOver && uiState.turnPhase === "idle" && !uiState.isRolling && !uiState.isMoving);
+}
+
+function setAvatarState(nextState, duration = 0) {
+  uiState.avatarState = nextState;
+  setAvatarMood(nextState === "walk" ? "walking" : nextState, duration);
+}
+
+function finishTurnSoon(delay = 220) {
+  window.setTimeout(() => {
+    if (["turnComplete", "showingResult", "openingEvent"].includes(uiState.turnPhase)) {
+      setTurnPhase("idle");
+      render();
+    }
+  }, animationMs(delay, Math.min(delay, 120)));
 }
 
 function renderBoard() {
@@ -628,6 +679,8 @@ function renderBoard() {
       if (assetType === "property") showPropertyDetail(assetId);
       if (assetType === "stock") showStockDetail(assetId);
       if (assetType === "business") showBusinessDetail(assetId);
+      if (assetType === "bank") showBankCenter();
+      if (assetType === "insurance") showInsuranceCenter();
     });
   });
   requestAnimationFrame(() => {
@@ -691,6 +744,26 @@ function renderMapAssetMarkers() {
       id: item.businessId,
       type: "business",
       status: item.level > 1 ? "upgraded" : "base",
+    })),
+    ...state.insurancePolicies.filter((item) => item.active).slice(0, 2).map((item, index) => ({
+      x: 1195 + index * 42,
+      y: 570 + index * 32,
+      icon: "盾",
+      label: "保险",
+      tone: "blue",
+      id: item.id,
+      type: "insurance",
+      status: "owned",
+    })),
+    ...state.liabilities.filter((item) => item.type !== "mortgage" && moneyValue(item.balance) > 0).slice(0, 2).map((item, index) => ({
+      x: 712 + index * 42,
+      y: 340 + index * 34,
+      icon: "贷",
+      label: "贷款",
+      tone: "slate",
+      id: item.id,
+      type: "bank",
+      status: "mortgage",
     })),
   ];
   return markers
@@ -840,7 +913,7 @@ function showTilePreview(index) {
 
 function renderActions() {
   const debt = state.liabilities.reduce((sum, item) => sum + moneyValue(item.balance), 0);
-  const progressText = uiState.isMoving ? `${uiState.movingStep} / ${uiState.movingTotal}` : state.lastRoll ? `前进 ${state.lastRoll}` : "待掷骰";
+  const progressText = uiState.turnPhase === "moving" ? `前进 ${uiState.movingStep} / ${uiState.movingTotal}` : state.lastRoll ? `前进 ${state.lastRoll} 格` : "待掷骰";
   const debtButton = debt > 0 ? `<button type="button" id="repayDebt"><span>债</span><strong>偿还</strong></button>` : "";
   const newRunButton = state.gameOver ? `<button class="primary" type="button" id="newRun"><span>★</span><strong>再开</strong></button>` : "";
   el.actionStack.innerHTML = `
@@ -901,10 +974,12 @@ function toggleSound() {
 
 function setAvatarMood(mood, duration = 1500) {
   uiState.avatarMood = mood;
+  uiState.avatarState = mood === "walking" ? "walk" : mood === "neutral" || mood === "idle" ? "idle" : mood;
   if (uiState.avatarTimer) clearTimeout(uiState.avatarTimer);
   if (duration > 0 && mood !== "walking") {
     uiState.avatarTimer = setTimeout(() => {
       uiState.avatarMood = "neutral";
+      uiState.avatarState = "idle";
       uiState.avatarTimer = null;
       if (state) renderBoard();
     }, prefersReducedMotion() ? 120 : duration);
@@ -1432,7 +1507,11 @@ function renderLogs() {
   el.logList.innerHTML = state.logs.map((item) => `<div class="log-item">${item}</div>`).join("");
 }
 
-function emitFinanceEffect(amount, label = "现金变化", kind = "neutral") {
+function emitFinanceEffect(amount, label = "现金变化", kind = "neutral", transactionId = "") {
+  if (transactionId) {
+    if (uiState.playedEffectIds.has(transactionId)) return;
+    uiState.playedEffectIds.add(transactionId);
+  }
   const number = moneyValue(amount);
   const layer = document.createElement("div");
   const lane = Math.min(3, document.querySelectorAll(".finance-effect").length);
@@ -1545,14 +1624,12 @@ function ratePulse(label) {
 }
 
 async function rollDice(forcedRoll = null) {
-  if (!state || state.gameOver || uiState.isRolling || uiState.isMoving) return;
+  if (!canRoll()) return;
   try {
+    setTurnPhase("rolling");
     soundManager.play("dice");
     haptic(12, uiState.hapticsEnabled);
-    uiState.isRolling = true;
-    uiState.diceRolling = true;
-    uiState.hudStatus = "骰子旋转";
-    uiState.avatarMood = "neutral";
+    setAvatarState("idle");
     render();
     const roll = typeof forcedRoll === "number" ? Math.max(1, Math.min(6, Math.round(forcedRoll))) : Math.floor(Math.random() * 6) + 1;
     const previous = state.position;
@@ -1564,51 +1641,49 @@ async function rollDice(forcedRoll = null) {
       await wait(animationMs(72, 50));
     }
     state.lastRoll = roll;
-    uiState.diceRolling = false;
+    setTurnPhase("diceResult");
     soundManager.play("land");
     haptic(22, uiState.hapticsEnabled);
     render();
     await wait(animationMs(160, 90));
+    setTurnPhase("preparingMove");
     if (uiState.camera.follow) {
       focusCameraOnPlayer(false, Math.min(1.08, uiState.camera.scale + 0.08));
     }
     await movePlayerStepByStep(previous, roll);
     const next = state.position;
-    uiState.isRolling = false;
     uiState.previewIndices = [];
     uiState.movingStep = 0;
     uiState.movingTotal = 0;
-    uiState.hudStatus = "到达";
-    uiState.avatarMood = "celebrating";
+    setTurnPhase("arriving");
+    setAvatarState("land", 420);
     soundManager.play("happy");
+    haptic(8, uiState.hapticsEnabled);
     addLog(`掷出 ${roll}，逐格移动到「${boardTiles[next].title}」。`);
     state.round += 1;
     persistQuietly();
     render();
     if (uiState.camera.follow) focusCameraOnPlayer(false, uiState.camera.scale);
     await wait(animationMs(380, 230));
-    uiState.hudStatus = "处理事件";
+    setTurnPhase("openingEvent");
     renderActions();
     triggerTile(boardTiles[next]);
   } catch {
-    uiState.isRolling = false;
-    uiState.isMoving = false;
-    uiState.diceRolling = false;
+    setTurnPhase("idle");
     uiState.previewIndices = [];
-    uiState.hudStatus = "准备中";
     render();
   }
 }
 
 async function movePlayerStepByStep(previous, roll) {
-  uiState.isMoving = true;
-  uiState.hudStatus = "移动中";
   uiState.movingTotal = roll;
-  uiState.avatarMood = "walking";
+  setTurnPhase("moving");
+  setAvatarState("walk");
   for (let step = 1; step <= roll; step += 1) {
     const beforeIndex = state.position;
     const nextIndex = indexAfter(previous, step, boardTiles.length);
     uiState.movingStep = step;
+    uiState.hudStatus = phaseLabel("moving");
     uiState.avatarDirection = directionBetween(beforeIndex, nextIndex);
     state.position = nextIndex;
     if (nextIndex === 0 && step < roll) {
@@ -1620,7 +1695,7 @@ async function movePlayerStepByStep(previous, roll) {
     if (uiState.camera.follow) focusCameraOnPlayer(false, uiState.camera.scale);
     await wait(animationMs(240, 150));
   }
-  uiState.isMoving = false;
+  setAvatarState("idle");
 }
 
 function wait(ms) {
@@ -1634,7 +1709,9 @@ function prefersReducedMotion() {
 function triggerTile(tile) {
   if (tile.type === "payday") {
     collectPayday("停在月结日");
+    setTurnPhase("turnComplete");
     render();
+    finishTurnSoon(220);
     return;
   }
 
@@ -3491,6 +3568,7 @@ function checkWin() {
 }
 
 function openSimpleModal({ type, title, text, metrics = [], actions = [], outcome = "neutral" }) {
+  if (uiState.turnPhase === "openingEvent") setTurnPhase("resolvingEvent");
   el.modalType.textContent = type;
   el.modalTitle.textContent = title;
   el.modalText.textContent = text;
@@ -3520,6 +3598,7 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [], outcom
     button.addEventListener("click", () => {
       if (button.disabled) return;
       button.disabled = true;
+      if (uiState.turnPhase === "resolvingEvent") setTurnPhase("showingResult");
       soundManager.play(action.className === "danger" ? "warning" : "tap");
       action.onClick();
     });
@@ -3534,6 +3613,9 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [], outcom
 function closeModal() {
   el.modal.classList.add("hidden");
   document.body.classList.remove("modal-open");
+  if (["openingEvent", "resolvingEvent", "showingResult", "turnComplete"].includes(uiState.turnPhase)) {
+    setTurnPhase("idle");
+  }
   soundManager.setScene(state ? "board" : "home");
   if (state && !state.gameOver && !uiState.isRolling && !uiState.isMoving) {
     setTimeout(() => el.rollDice.focus({ preventScroll: true }), 30);
@@ -3766,6 +3848,12 @@ window.addEventListener("pointerdown", unlockAudio, { once: true });
 window.addEventListener("keydown", unlockAudio, { once: true });
 document.addEventListener("visibilitychange", () => {
   soundManager.handleVisibility(document.hidden);
+  if (document.hidden && uiState.turnPhase === "openingEvent") {
+    setTurnPhase("paused");
+  } else if (!document.hidden && uiState.turnPhase === "paused") {
+    setTurnPhase("idle");
+    render();
+  }
 });
 window.addEventListener("resize", () => {
   if (!state) return;
@@ -3777,6 +3865,7 @@ window.cashflowDebug = {
   getState: () => state,
   setState: (nextState) => {
     state = migrateSavedState(nextState);
+    setTurnPhase("idle");
     render();
   },
   buyFirstProperty: () => {
@@ -3895,6 +3984,9 @@ window.cashflowDebug = {
     position: state?.position,
     lastRoll: state?.lastRoll,
     hudStatus: uiState.hudStatus,
+    turnPhase: uiState.turnPhase,
+    turnPhaseHistory: uiState.turnPhaseHistory,
+    diceRolling: uiState.diceRolling,
     isRolling: uiState.isRolling,
     isMoving: uiState.isMoving,
     movingStep: uiState.movingStep,
@@ -3907,6 +3999,7 @@ window.cashflowDebug = {
     hapticsEnabled: uiState.hapticsEnabled,
     animationSpeed: uiState.animationSpeed,
     visualQuality: uiState.visualQuality,
+    avatarState: uiState.avatarState,
     avatarMood: uiState.avatarMood,
     avatarDirection: uiState.avatarDirection,
     tutorialComplete: uiState.tutorialComplete,
@@ -3915,6 +4008,8 @@ window.cashflowDebug = {
     seenTips: uiState.seenTips,
     sound: soundManager.getSnapshot(),
     boardTiles: boardTiles.length,
+    financeEffects: document.querySelectorAll(".finance-effect").length,
+    playedEffectIds: uiState.playedEffectIds.size,
   }),
   focusPlayer: () => focusCameraOnPlayer(true),
   zoomMap: (delta) => zoomCamera(delta),
@@ -3932,6 +4027,10 @@ window.cashflowDebug = {
   setEmotion: (mood, duration = 0) => setAvatarMood(mood, duration),
   playIncomeEffect: () => emitFinanceEffect(500, "验收收入", "debug-income"),
   playExpenseEffect: () => emitFinanceEffect(-300, "验收支出", "debug-expense"),
+  playDuplicateEffect: () => {
+    emitFinanceEffect(88, "同一笔交易", "debug-duplicate", "debug-transaction-once");
+    emitFinanceEffect(88, "同一笔交易", "debug-duplicate", "debug-transaction-once");
+  },
   dispatchVisibility: () => document.dispatchEvent(new Event("visibilitychange")),
   closeModal,
 };
