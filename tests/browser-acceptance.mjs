@@ -38,12 +38,32 @@ page.on("pageerror", (error) => consoleErrors.push(error.message));
 try {
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle" });
   await page.evaluate(() => localStorage.clear());
-  const roleCount = await page.locator(".career-card").count();
+  await expectText(page, "现金流冒险城");
+  await expectText(page, "建立资产，让被动收入超过每月支出。");
+  const heroCheck = await page.evaluate(() => {
+    const logo = document.querySelector(".game-logo")?.getBoundingClientRect();
+    const hero = document.querySelector("#heroCharacter")?.getBoundingClientRect();
+    const start = document.querySelector("#startAdventure")?.getBoundingClientRect();
+    return {
+      logoVisible: Boolean(logo && logo.top >= 0 && logo.bottom <= window.innerHeight),
+      heroVisible: Boolean(hero && hero.top < window.innerHeight && hero.bottom > 0),
+      startVisible: Boolean(start && start.top >= 0 && start.bottom <= window.innerHeight),
+      width: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    };
+  });
+  assert.equal(heroCheck.logoVisible, true);
+  assert.equal(heroCheck.heroVisible, true);
+  assert.equal(heroCheck.startVisible, true);
+  assert.ok(heroCheck.width <= heroCheck.clientWidth + 1, `home overflow: ${heroCheck.width} > ${heroCheck.clientWidth}`);
+  await page.locator("#startAdventure").click();
+  const roleCount = await page.locator(".career-thumb").count();
   assert.equal(roleCount, 4);
   for (const roleName of ["小学老师", "软件工程师", "自由设计师", "牙科医生"]) {
     await expectText(page, roleName);
   }
-  await page.getByText("牙科医生").click();
+  await page.locator('[data-career="doctor"]').click();
+  await page.locator("#startSelectedCareer").click();
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => {
     const career = { id: "doctor", icon: "医", name: "牙科医生", salary: 52000, expenses: 42000, savings: 36000 };
@@ -300,6 +320,48 @@ try {
     assert.equal(overflow.hasMap, true);
     assert.equal(overflow.hasHud, true);
     assert.ok(overflow.width <= overflow.clientWidth + 1, `${viewport.width}px overflow: ${overflow.width} > ${overflow.clientWidth}`);
+  }
+
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.evaluate(() => localStorage.clear());
+    await page.reload({ waitUntil: "networkidle" });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const homeLayout = await page.evaluate(() => {
+      const logo = document.querySelector(".game-logo")?.getBoundingClientRect();
+      const hero = document.querySelector("#heroCharacter")?.getBoundingClientRect();
+      const start = document.querySelector("#startAdventure")?.getBoundingClientRect();
+      return {
+        logoVisible: Boolean(logo && logo.top >= 0 && logo.bottom <= window.innerHeight),
+        heroVisible: Boolean(hero && hero.top < window.innerHeight && hero.bottom > 0),
+        startVisible: Boolean(start && start.top >= 0 && start.bottom <= window.innerHeight),
+        width: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      };
+    });
+    assert.equal(homeLayout.logoVisible, true);
+    assert.equal(homeLayout.heroVisible, true);
+    assert.equal(homeLayout.startVisible, true);
+    assert.ok(homeLayout.width <= homeLayout.clientWidth + 1, `${viewport.width}px home overflow: ${homeLayout.width} > ${homeLayout.clientWidth}`);
+    await page.locator("#startAdventure").click();
+    const selectionLayout = await page.evaluate(() => {
+      const start = document.querySelector("#startSelectedCareer")?.getBoundingClientRect();
+      return {
+        thumbs: document.querySelectorAll(".career-thumb").length,
+        selected: Boolean(document.querySelector(".career-thumb.selected")),
+        startVisible: Boolean(start && start.top < window.innerHeight && start.bottom <= window.innerHeight),
+        width: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      };
+    });
+    assert.equal(selectionLayout.thumbs, 4);
+    assert.equal(selectionLayout.selected, true);
+    assert.equal(selectionLayout.startVisible, true);
+    assert.ok(selectionLayout.width <= selectionLayout.clientWidth + 1, `${viewport.width}px selection overflow: ${selectionLayout.width} > ${selectionLayout.clientWidth}`);
   }
   console.log("Browser acceptance passed.");
 } finally {

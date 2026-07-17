@@ -29,26 +29,41 @@
 
       <main class="layout">
         <section class="intro-panel" id="setupPanel">
-          <div class="intro-copy">
-            <span class="eyebrow">目标</span>
-            <h1>让被动收入超过总支出，跳出打工循环。</h1>
-            <p>
-              选择一个职业，从“月结日”开始绕棋盘前进。你会遇到机会、市场、额外支出和学习事件。
-              关键不是赚最多工资，而是把现金换成持续流入的资产。
-            </p>
-            <div class="intro-city" aria-hidden="true">
-              <span class="intro-building bank">银行</span>
-              <span class="intro-building home">住宅</span>
-              <span class="intro-building shop">小店</span>
-              <span class="intro-character">¥</span>
-              <span class="intro-coin one">¥</span>
-              <span class="intro-coin two">¥</span>
+          <div class="intro-copy home-hero">
+            <div class="hero-copy-stack">
+              <div class="game-logo" aria-label="现金流冒险城">
+                <span class="logo-coin">¥</span>
+                <div>
+                  <strong>现金流冒险城</strong>
+                  <small>Cashflow City</small>
+                </div>
+              </div>
+              <h1>现金流冒险城</h1>
+              <p>建立资产，让被动收入超过每月支出。</p>
+              <div class="intro-actions">
+                <button class="primary hero-main-button" id="startAdventure" type="button">开始冒险</button>
+                <button id="continueGameHome" type="button">继续游戏</button>
+              </div>
+              <div class="intro-secondary-actions">
+                <button id="rulesHome" type="button">规则</button>
+                <button id="soundHome" type="button">设置</button>
+                <button class="danger subtle-danger" id="clearSaveHome" type="button">清除存档</button>
+              </div>
             </div>
-            <div class="intro-actions">
-              <button class="primary" id="continueGameHome" type="button">继续游戏</button>
-              <button id="rulesHome" type="button">游戏规则</button>
-              <button id="soundHome" type="button">音效设置</button>
-              <button class="danger" id="clearSaveHome" type="button">清除存档</button>
+            <div class="hero-showcase" aria-hidden="true">
+              <div class="hero-skyline">
+                <span class="sky-cloud cloud-one"></span>
+                <span class="sky-cloud cloud-two"></span>
+                <span class="city-road"></span>
+                <span class="city-park"></span>
+                <span class="hero-building bank">银行</span>
+                <span class="hero-building apartment"></span>
+                <span class="hero-building shop">小店</span>
+                <span class="hero-building tower"></span>
+                <span class="hero-coin one">¥</span>
+                <span class="hero-coin two">¥</span>
+              </div>
+              <div class="hero-character-stage" id="heroCharacter"></div>
             </div>
           </div>
 

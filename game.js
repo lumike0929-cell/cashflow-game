@@ -159,6 +159,8 @@ const careers = [
   },
 ];
 
+let selectedCareerId = "teacher";
+
 const boardTiles = [
   { type: "payday", icon: "月", title: "月结日", text: "领取工资与被动收入，支付全部支出。" },
   { type: "opportunity", icon: "机", title: "房地产机会", text: "评估租金、房贷和净现金流。" },
@@ -290,6 +292,8 @@ const el = {
   modalActions: document.querySelector("#modalActions"),
   closeModal: document.querySelector("#closeModal"),
   continueGameHome: document.querySelector("#continueGameHome"),
+  startAdventure: document.querySelector("#startAdventure"),
+  heroCharacter: document.querySelector("#heroCharacter"),
   rulesHome: document.querySelector("#rulesHome"),
   soundHome: document.querySelector("#soundHome"),
   clearSaveHome: document.querySelector("#clearSaveHome"),
@@ -398,55 +402,112 @@ function persistQuietly() {
 }
 
 function renderSetup() {
-  el.careerGrid.innerHTML = careers
-    .map(
-      (career) => `
-        <button class="career-card motion-pop" type="button" data-career="${career.id}">
-          <span class="career-icon">${avatarMarkup(career, "happy")}</span>
-          <h3>${career.name}</h3>
-          <p>${career.note}</p>
-          <small class="career-personality">${careerPersonality(career.id)}</small>
-          <div class="career-stats">
-            <span>工资 ${money(career.salary)}</span>
-            <span>月支出 ${money(career.expenses)}</span>
-            <span>现金 ${money(career.savings)}</span>
-          </div>
-        </button>
-      `,
-    )
-    .join("");
+  const selected = careers.find((item) => item.id === selectedCareerId) || careers[0];
+  const monthlyBalance = selected.salary - selected.expenses;
+  if (el.heroCharacter) {
+    el.heroCharacter.innerHTML = avatarMarkup(selected, "happy", "right");
+  }
+  if (el.startAdventure) {
+    el.startAdventure.textContent = localStorage.getItem(STORAGE_KEY) ? "开始新冒险" : "开始冒险";
+  }
+  el.careerGrid.innerHTML = `
+    <section class="character-select-stage motion-pop">
+      <div class="character-preview-scene">
+        <div class="preview-city" aria-hidden="true">
+          <span class="preview-building bank"></span>
+          <span class="preview-building shop"></span>
+          <span class="preview-tree"></span>
+          <span class="preview-road"></span>
+        </div>
+        <div class="large-character-preview">${avatarMarkup(selected, "celebrating", "right")}</div>
+      </div>
+      <div class="selected-career-panel">
+        <span class="eyebrow">选择角色</span>
+        <h2>${selected.name}</h2>
+        <strong class="career-role">${careerPersonality(selected.id)}</strong>
+        <p>${careerShortNote(selected.id)}</p>
+        <div class="career-stat-pills">
+          <span>工资 <strong>${money(selected.salary)}</strong></span>
+          <span>月支出 <strong>${money(selected.expenses)}</strong></span>
+          <span>现金 <strong>${money(selected.savings)}</strong></span>
+          <span>月结余 <strong>${money(monthlyBalance)}</strong></span>
+        </div>
+      </div>
+      <div class="career-thumb-rail" aria-label="角色缩图">
+        ${careers
+          .map(
+            (career) => `
+              <button class="career-thumb ${career.id === selected.id ? "selected" : ""}" type="button" data-career="${career.id}" aria-pressed="${career.id === selected.id}">
+                <span class="career-icon">${avatarMarkup(career, career.id === selected.id ? "happy" : "neutral", "right")}</span>
+                <strong>${career.name}</strong>
+                <small>${careerPersonality(career.id)}</small>
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
+      <button class="primary select-start-button" id="startSelectedCareer" type="button">选择并开始</button>
+    </section>
+  `;
 
   el.careerGrid.querySelectorAll("[data-career]").forEach((button) => {
     button.addEventListener("click", () => {
-      const career = careers.find((item) => item.id === button.dataset.career);
-      state = createState(career);
-      showGame();
-      render();
-      openSimpleModal({
-        type: "开始",
-        title: "现金流挑战开始",
-        text: `你现在是${career.name}。这版城市会陪你练习收入、支出、投资、保险、银行和人生事件。`,
-        actions: [{ label: "开始掷骰", className: "primary", onClick: () => { closeModal(); maybeStartTutorial(); } }],
-      });
+      selectedCareerId = button.dataset.career || selectedCareerId;
+      soundManager.play("tap");
+      renderSetup();
     });
   });
+  document.querySelector("#startSelectedCareer")?.addEventListener("click", startSelectedCareer);
 }
 
 function careerPersonality(id) {
   return {
-    teacher: "探险型：稳稳观察每个选择",
-    engineer: "发明家型：喜欢拆解系统",
-    designer: "小店长型：擅长看见机会",
-    doctor: "规划型：重视安全垫",
+    teacher: "探险型老师",
+    engineer: "系统发明家",
+    designer: "创意小店长",
+    doctor: "稳健规划师",
   }[id] || "城市冒险家";
 }
 
+function careerShortNote(id) {
+  return {
+    teacher: "稳定起步，适合练习小额机会。",
+    engineer: "现金流较宽，适合比较不同资产。",
+    designer: "灵活经营，适合尝试小生意。",
+    doctor: "收入高，也要管理高支出。",
+  }[id] || "在城市中学习现金流选择。";
+}
+
+function startSelectedCareer() {
+  const career = careers.find((item) => item.id === selectedCareerId) || careers[0];
+  state = createState(career);
+  showGame();
+  render();
+  openSimpleModal({
+    type: "开始",
+    title: "现金流挑战开始",
+    text: `你现在是${career.name}。这座城市会陪你练习收入、支出、投资、保险、银行和人生事件。`,
+    actions: [{ label: "开始掷骰", className: "primary", onClick: () => { closeModal(); maybeStartTutorial(); } }],
+  });
+}
+
+function showCharacterSelection() {
+  document.body.classList.add("selection-active");
+  el.careerGrid?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+  const selectedThumb = el.careerGrid?.querySelector(".career-thumb.selected");
+  if (selectedThumb instanceof HTMLElement) {
+    selectedThumb.focus({ preventScroll: true });
+  }
+}
+
 function showGame() {
+  document.body.classList.remove("selection-active");
   el.setupPanel.classList.add("hidden");
   el.gamePanel.classList.remove("hidden");
 }
 
 function showSetup() {
+  document.body.classList.remove("selection-active");
   el.gamePanel.classList.add("hidden");
   el.setupPanel.classList.remove("hidden");
 }
@@ -3563,6 +3624,7 @@ el.saveGame.addEventListener("click", saveGame);
 el.loadGame.addEventListener("click", loadGame);
 el.resetGame.addEventListener("click", resetGame);
 el.continueGameHome?.addEventListener("click", loadGame);
+el.startAdventure?.addEventListener("click", showCharacterSelection);
 el.rulesHome?.addEventListener("click", showRules);
 el.soundHome?.addEventListener("click", showSoundSettings);
 el.clearSaveHome?.addEventListener("click", confirmClearSavedGame);
