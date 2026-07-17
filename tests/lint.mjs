@@ -8,6 +8,7 @@ const files = [
   "realEstateTransactions.js",
   "realEstateStorageMigration.js",
   "realEstateEventResolver.js",
+  "scripts/build-public.mjs",
   "tests/real-estate.test.mjs",
   "tests/browser-acceptance.mjs",
   "tests/static-check.mjs",

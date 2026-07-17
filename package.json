@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node tests/static-check.mjs",
+    "build": "node tests/static-check.mjs && node scripts/build-public.mjs",
     "lint": "node tests/lint.mjs",
     "test": "node --test tests/real-estate.test.mjs",
     "test:browser": "node tests/browser-acceptance.mjs"
