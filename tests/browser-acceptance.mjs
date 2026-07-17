@@ -67,6 +67,14 @@ try {
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.triggerMarket());
   await page.evaluate(() => window.cashflowDebug.triggerHoldingEvent());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.buyFirstStock());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.triggerStockMarket());
+  await page.evaluate(() => window.cashflowDebug.payday());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.sellFirstStock());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
 
   const beforeSaleCount = await page.evaluate(() => window.cashflowDebug.getState().ownedProperties.length);
   assert.equal(beforeSaleCount, 2);
@@ -84,6 +92,8 @@ try {
     return {
       properties: state.ownedProperties.length,
       transactions: state.propertyTransactions.length,
+      stockHoldings: state.stockHoldings.length,
+      stockTransactions: state.stockTransactions.length,
       hasMortgage: state.liabilities.some((item) => item.type === "mortgage"),
       width: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
@@ -93,6 +103,8 @@ try {
 
   assert.equal(result.properties, 1);
   assert.ok(result.transactions >= 6);
+  assert.equal(result.stockHoldings, 1);
+  assert.ok(result.stockTransactions >= 3);
   assert.equal(result.hasMortgage, true);
   assert.ok(result.width <= result.clientWidth + 1, `horizontal overflow: ${result.width} > ${result.clientWidth}`);
   assert.match(result.text, /房地产/);

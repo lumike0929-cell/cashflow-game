@@ -23,6 +23,23 @@ import {
   resolvePropertyHoldingEvent,
   resolveRealEstateMarketEvent,
 } from "./realEstateEventResolver.js";
+import { stockDefinitions, stockLearningNotes } from "./stockData.js";
+import {
+  buyStock,
+  calculateSellPreview as calculateStockSellPreview,
+  calculateStockPortfolioSummary,
+  ensureStockState,
+  findStock,
+  sellStock,
+  settleStockDividends,
+  stockMoney,
+  stockShares,
+} from "./stockCalculator.js";
+import {
+  pickStockMarketEvent,
+  resolveStockMarketEvent,
+  resolveStockPriceTick,
+} from "./stockEventResolver.js";
 
 const STORAGE_KEY = "cashflow-freedom-game-v1";
 
@@ -69,18 +86,18 @@ const boardTiles = [
   { type: "payday", icon: "月", title: "月结日", text: "领取工资与被动收入，支付全部支出。" },
   { type: "opportunity", icon: "机", title: "房地产机会", text: "评估租金、房贷和净现金流。" },
   { type: "doodad", icon: "花", title: "额外支出", text: "生活消费会考验现金储备。" },
-  { type: "market", icon: "市", title: "房地产市场", text: "房价、租金或维修成本变化。" },
+  { type: "stockMarket", icon: "市", title: "股票市场", text: "虚构股票会随市场波动。" },
   { type: "learn", icon: "学", title: "学习", text: "提升财商，降低之后的犯错成本。" },
-  { type: "opportunity", icon: "房", title: "看房日", text: "比较不同房地产现金流。" },
+  { type: "stockOpportunity", icon: "股", title: "股票机会", text: "买入虚构公司的一小部分。" },
   { type: "bank", icon: "银", title: "银行", text: "可以借钱，也可以提前还债。" },
   { type: "doodad", icon: "账", title: "账单", text: "突发开销直接扣现金。" },
   { type: "opportunity", icon: "租", title: "租赁机会", text: "找到能产生租金的资产。" },
   { type: "market", icon: "价", title: "市场", text: "持有资产会被市场影响。" },
   { type: "learn", icon: "课", title: "课程", text: "用知识换取更好的判断力。" },
   { type: "propertyEvent", icon: "修", title: "房产持有", text: "维修、空置、续约或翻修。" },
-  { type: "opportunity", icon: "店", title: "商业房产", text: "店面、仓库或办公空间。" },
+  { type: "stockOpportunity", icon: "投", title: "基金机会", text: "练习分散和价格波动。" },
   { type: "bank", icon: "贷", title: "银行", text: "借贷能加速，也会增加月支出。" },
-  { type: "market", icon: "涨", title: "市场", text: "上涨和下跌都会发生。" },
+  { type: "stockMarket", icon: "涨", title: "市场消息", text: "产业和公司事件影响价格。" },
   { type: "doodad", icon: "购", title: "消费", text: "想要和需要不总是一回事。" },
   { type: "propertyEvent", icon: "管", title: "持有管理", text: "房产赚钱也需要维护。" },
   { type: "payday", icon: "薪", title: "月结日", text: "再次结算现金流与房贷本金。" },
@@ -123,6 +140,7 @@ const el = {
   assetList: document.querySelector("#assetList"),
   liabilityList: document.querySelector("#liabilityList"),
   realEstatePortfolio: document.querySelector("#realEstatePortfolio"),
+  stockPortfolio: document.querySelector("#stockPortfolio"),
   saveGame: document.querySelector("#saveGame"),
   loadGame: document.querySelector("#loadGame"),
   resetGame: document.querySelector("#resetGame"),
@@ -149,6 +167,12 @@ function createState(career) {
     liabilities: [],
     ownedProperties: [],
     propertyTransactions: [],
+    stockMarket: stockDefinitions,
+    stockHoldings: [],
+    stockTransactions: [],
+    stockMarketRecords: [],
+    settledStockEvents: [],
+    realizedStockGain: 0,
     settledEvents: [],
     emergencyDebt: 0,
     financialIq: 0,
@@ -156,7 +180,7 @@ function createState(career) {
     gameOver: false,
     logs: [
       `你选择了${career.name}，初始现金 ${money(career.savings)}。`,
-      "目标：让被动收入大于或等于总支出。",
+      "目标：让被动收入大于或等于总支出，同时理解房地产和股票风险。",
     ],
   });
 }
@@ -259,11 +283,12 @@ function render() {
     return;
   }
   ensureRealEstateState(state);
+  ensureStockState(state);
   syncMortgageLiabilities(state);
   showGame();
   const freedom = freedomRatio();
   el.careerLabel.textContent = state.career.name;
-  el.gameTitle.textContent = state.gameOver ? "你已经跳出打工循环" : "房地产现金流挑战";
+  el.gameTitle.textContent = state.gameOver ? "你已经跳出打工循环" : "现金流资产挑战";
   el.gameSubtitle.textContent = state.gameOver
     ? "被动收入已经覆盖全部支出，游戏目标达成。"
     : `现金 ${money(state.cash)}，净月现金流 ${money(netMonthlyCashflow())}，净资产 ${money(calculateNetWorth(state))}。`;
@@ -276,6 +301,7 @@ function render() {
   renderActions();
   renderStatements();
   renderRealEstatePortfolio();
+  renderStockPortfolio();
   renderLogs();
 }
 
@@ -301,6 +327,7 @@ function renderActions() {
   const buttons = [
     `<button type="button" id="borrowSmall">借入 ${money(5000)}</button>`,
     `<button type="button" id="openPortfolio">房地产中心</button>`,
+    `<button type="button" id="openStockPortfolio">股票中心</button>`,
   ];
 
   if (debt > 0) {
@@ -318,13 +345,18 @@ function renderActions() {
   document.querySelector("#openPortfolio")?.addEventListener("click", () => {
     document.querySelector("#realEstateSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  document.querySelector("#openStockPortfolio")?.addEventListener("click", () => {
+    document.querySelector("#stockSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 function renderStatements() {
   const summary = calculatePortfolioSummary(state.ownedProperties);
+  const stockSummary = calculateStockPortfolioSummary(state);
   const rows = [
     ["工资收入", "主动收入", state.salary],
     ["租金收入", "房地产每月租金", summary.monthlyRent],
+    ["股票股息", "Payday 发放时进入现金", stockSummary.dividendsReceived],
     ["其他被动收入", "生意或证券流入", passiveIncome() - summary.monthlyRent],
     ["生活支出", "职业基础支出", -state.baseExpenses],
     ["房贷月供", "房地产贷款月付款", -summary.monthlyMortgage],
@@ -349,7 +381,7 @@ function renderStatements() {
     )
     .join("");
 
-  const nonPropertyAssets = state.assets.filter((asset) => asset.type !== "property");
+  const nonPropertyAssets = state.assets.filter((asset) => asset.type !== "property" && asset.type !== "stock");
   el.assetList.innerHTML = nonPropertyAssets.length
     ? nonPropertyAssets
         .map(
@@ -441,6 +473,73 @@ function renderRealEstatePortfolio() {
   });
 }
 
+function renderStockPortfolio() {
+  const summary = calculateStockPortfolioSummary(state);
+  const holdingsHtml = state.stockHoldings.length
+    ? state.stockHoldings
+        .map((holding) => {
+          const stock = findStock(state.stockMarket, holding.stockId);
+          const ratio = summary.totalValue > 0 ? stockMoney((holding.currentValue / summary.totalValue) * 100) : 0;
+          const direction = holding.unrealizedGain >= 0 ? "上涨" : "下跌";
+          return `
+            <button class="stock-row motion-pop" type="button" data-stock="${holding.stockId}">
+              <span class="stock-icon">${stockIcon(stock?.sector)}</span>
+              <span>
+                <strong>${stock?.name || holding.symbol} <em>${holding.symbol}</em></strong>
+                <small>${stock?.sector || "产业"} · ${holding.shares} 股 · 组合占比 ${ratio}%</small>
+              </span>
+              <span class="stock-numbers ${holding.unrealizedGain >= 0 ? "gain" : "loss"}">
+                <b>${direction} ${signedMoney(holding.unrealizedGain)}</b>
+                <small>市值 ${money(holding.currentValue)} · ${signedPercent(holding.unrealizedGainPercent)}</small>
+              </span>
+            </button>
+          `;
+        })
+        .join("")
+    : '<div class="asset-row"><strong>还没有股票</strong><small>落到股票机会格后，可以从价格、风险和分散开始判断。</small></div>';
+
+  const warningHtml = summary.warnings.length
+    ? summary.warnings.map((warning) => `<div class="risk-note">${warning}</div>`).join("")
+    : '<div class="risk-note">目前没有明显集中提醒。分散可以减少一次事件带来的影响，但不能消除所有风险。</div>';
+
+  const historyHtml = state.stockTransactions.length
+    ? state.stockTransactions
+        .slice(0, 8)
+        .map(
+          (tx) => `
+            <div class="history-row">
+              <strong>${tx.type}</strong>
+              <span>第 ${tx.month} 月 · ${tx.description}</span>
+            </div>
+          `,
+        )
+        .join("")
+    : '<div class="history-row"><strong>暂无记录</strong><span>买入、卖出、股息和迁移会记录在这里。</span></div>';
+
+  el.stockPortfolio.innerHTML = `
+    <div class="portfolio-summary stock-summary-grid">
+      ${summaryMetric("股票总市值", money(summary.totalValue))}
+      ${summaryMetric("总投入成本", money(summary.totalCost))}
+      ${summaryMetric("未实现损益", `${summary.unrealizedGain >= 0 ? "上涨" : "下跌"} ${signedMoney(summary.unrealizedGain)}`)}
+      ${summaryMetric("已实现损益", signedMoney(summary.realizedGain))}
+      ${summaryMetric("累计股息", money(summary.dividendsReceived))}
+      ${summaryMetric("持有股票", `${summary.holdingCount} 支`)}
+      ${summaryMetric("组合风险", summary.riskLevel)}
+      ${summaryMetric("最大单一占比", `${summary.maxSingleHoldingRatio}%`)}
+    </div>
+    <div class="risk-panel">${warningHtml}</div>
+    <div class="stock-list">${holdingsHtml}</div>
+    <div class="transaction-history">
+      <h3>股票交易记录</h3>
+      ${historyHtml}
+    </div>
+  `;
+
+  el.stockPortfolio.querySelectorAll("[data-stock]").forEach((button) => {
+    button.addEventListener("click", () => showStockDetail(button.dataset.stock));
+  });
+}
+
 function summaryMetric(label, value) {
   return `<div class="summary-metric"><span>${label}</span><strong>${value}</strong></div>`;
 }
@@ -470,6 +569,31 @@ function propertyIcon(category) {
     小型办公空间: "办",
     多户住宅: "户",
   }[category] || "房";
+}
+
+function stockIcon(sector = "") {
+  return {
+    科技: "科",
+    绿能: "绿",
+    消费: "食",
+    运输: "运",
+    教育: "学",
+    健康: "康",
+    金融: "银",
+    娱乐: "乐",
+    零售: "店",
+    基金: "篮",
+  }[sector] || "股";
+}
+
+function signedMoney(value) {
+  const number = moneyValue(value);
+  return `${number >= 0 ? "+" : "-"}${money(Math.abs(number))}`;
+}
+
+function signedPercent(value) {
+  const number = stockMoney(value);
+  return `${number >= 0 ? "+" : "-"}${Math.abs(number)}%`;
 }
 
 function rollDice() {
@@ -502,6 +626,11 @@ function triggerTile(tile) {
     return;
   }
 
+  if (tile.type === "stockOpportunity") {
+    showStockOpportunity();
+    return;
+  }
+
   if (tile.type === "doodad") {
     showDoodad();
     return;
@@ -509,6 +638,11 @@ function triggerTile(tile) {
 
   if (tile.type === "market") {
     showPropertyMarket();
+    return;
+  }
+
+  if (tile.type === "stockMarket") {
+    showStockMarket();
     return;
   }
 
@@ -536,8 +670,16 @@ function collectPayday(reason) {
   const beforeCashflow = netMonthlyCashflow();
   state.cash += beforeCashflow;
   const mortgageResults = applyMortgagePayday(state);
+  const dividendResult = settleStockDividends(state);
+  const priceTick = resolveStockPriceTick(state, "Payday 后股票价格更新");
   state.month += 1;
   addLog(`${reason}：结算净现金流 ${money(beforeCashflow)}。`);
+  if (dividendResult.totalDividend > 0) {
+    addLog(`收到股票股息 ${money(dividendResult.totalDividend)}。股息不是每家公司都会发放。`);
+  }
+  if (priceTick.affected.length) {
+    addLog(`股票价格更新：${priceTick.affected.slice(0, 2).map((item) => `${item.symbol}${item.direction}${signedPercent(item.percent)}`).join("，")}。`);
+  }
   mortgageResults.forEach((result) => {
     addLog(`${result.propertyName} 本月偿还本金 ${money(result.principal)}，剩余房贷 ${money(result.afterBalance)}。`);
     if (result.paidOff) {
@@ -732,6 +874,158 @@ function completePropertyPurchase(opportunity, eventId) {
   checkWin();
 }
 
+function showStockOpportunity(stock = pick(state.stockMarket)) {
+  const holding = state.stockHoldings.find((item) => item.stockId === stock.id);
+  const change = stockMoney(stock.currentPrice - stock.previousPrice);
+  const changePercent = stock.previousPrice > 0 ? stockMoney((change / stock.previousPrice) * 100) : 0;
+  const eventId = `stock-buy-${state.round}-${state.position}-${stock.id}`;
+  openSimpleModal({
+    type: "股票机会",
+    title: `${stock.name} (${stock.symbol})`,
+    text: `${stock.description} ${stock.childNote}`,
+    metrics: [
+      ["产业", stock.sector],
+      ["当前价格", money(stock.currentPrice)],
+      ["上次价格", money(stock.previousPrice)],
+      ["最近涨跌", `${change >= 0 ? "上涨" : "下跌"} ${signedMoney(change)} (${signedPercent(changePercent)})`],
+      ["风险等级", stock.riskLevel],
+      ["股息资料", stock.dividendPerShare > 0 ? `每股 ${money(stock.dividendPerShare)}，每 ${stock.dividendFrequency} 月` : "暂无股息"],
+      ["趋势说明", `${stock.trend} · 波动 ${Math.round(stock.volatility * 100)}%`],
+      ["目前持有", `${holding?.shares || 0} 股`],
+      ["可用现金", money(state.cash)],
+      ["学习说明", stockLearningNotes.buy],
+    ],
+    actions: [
+      { label: "买入 1 股", className: "primary", onClick: () => completeStockPurchase(stock.id, 1, `${eventId}-1`) },
+      { label: "买入 5 股", onClick: () => completeStockPurchase(stock.id, 5, `${eventId}-5`) },
+      { label: "买入 10 股", onClick: () => completeStockPurchase(stock.id, 10, `${eventId}-10`) },
+      { label: "自定义数量", onClick: () => showStockCustomBuy(stock, eventId) },
+      { label: "为什么？", onClick: () => showStockWhy(stock, () => showStockOpportunity(stock)) },
+      { label: "查看价格记录", onClick: () => showStockPriceHistory(stock, () => showStockOpportunity(stock)) },
+      {
+        label: "放弃",
+        onClick: () => {
+          addLog(`放弃了股票机会「${stock.name}」。`);
+          closeModal();
+          render();
+        },
+      },
+    ],
+  });
+}
+
+function showStockCustomBuy(stock, eventId) {
+  openSimpleModal({
+    type: "自定义买入",
+    title: `${stock.name} 买入数量`,
+    text: "请输入正整数股数。买入前会检查现金、最低数量和持仓上限。",
+    metrics: [
+      ["当前价格", money(stock.currentPrice)],
+      ["最低购买", `${stock.minimumPurchase} 股`],
+      ["最高持仓", `${stock.maximumPurchase} 股`],
+      ["数量", '<input class="quantity-input" id="stockQuantityInput" type="number" min="1" step="1" value="1" />'],
+    ],
+    actions: [
+      {
+        label: "确认买入",
+        className: "primary",
+        onClick: () => {
+          const quantity = stockShares(document.querySelector("#stockQuantityInput")?.value);
+          completeStockPurchase(stock.id, quantity, `${eventId}-custom-${quantity}`);
+        },
+      },
+      { label: "返回", onClick: () => showStockOpportunity(stock) },
+    ],
+  });
+}
+
+function completeStockPurchase(stockId, quantity, eventId) {
+  const result = buyStock(state, stockId, quantity, eventId);
+  if (!result.ok) {
+    openSimpleModal({
+      type: "无法买入",
+      title: "股票交易没有完成",
+      text: result.reason,
+      actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+    });
+    return;
+  }
+  addLog(`买入 ${result.stock.name} ${result.shares} 股，花费 ${money(result.totalAmount)}。`);
+  persistQuietly();
+  render();
+  const summary = calculateStockPortfolioSummary(state);
+  openSimpleModal({
+    type: "买入成功",
+    title: `${result.stock.name} 已加入股票持仓`,
+    text: "不同价格买入后，平均成本能帮助你看出整体买入价格。",
+    metrics: [
+      ["买入股数", `${result.shares} 股`],
+      ["成交价格", money(result.stock.currentPrice)],
+      ["花费现金", money(result.totalAmount)],
+      ["剩余现金", money(state.cash)],
+      ["股票总市值", money(summary.totalValue)],
+      ["净资产", money(calculateNetWorth(state))],
+    ],
+    actions: [{ label: "查看股票中心", className: "primary", onClick: closeModal }],
+  });
+}
+
+function showStockWhy(stock, backAction) {
+  openSimpleModal({
+    type: "为什么",
+    title: `${stock.name} 学习说明`,
+    text: "这些说明是游戏里的财商练习，不是真实投资建议。",
+    metrics: [
+      ["买入", stockLearningNotes.buy],
+      ["平均成本", stockLearningNotes.averageCost],
+      ["未实现损益", stockLearningNotes.unrealized],
+      ["股息", stockLearningNotes.dividend],
+      ["风险", stockLearningNotes.risk],
+      ["分散", stockLearningNotes.diversification],
+    ],
+    actions: [
+      { label: "返回", className: "primary", onClick: backAction },
+      { label: "关闭", onClick: closeModal },
+    ],
+  });
+}
+
+function showStockPriceHistory(stock, backAction) {
+  const latest = findStock(state.stockMarket, stock.id) || stock;
+  const high = Math.max(...latest.priceHistory);
+  const low = Math.min(...latest.priceHistory);
+  openSimpleModal({
+    type: "价格记录",
+    title: `${latest.name} 最近价格`,
+    text: "这是最近价格记录，不包含复杂技术指标，也不是预测。",
+    metrics: [
+      ["迷你趋势图", miniTrend(latest.priceHistory)],
+      ["历史最高", money(high)],
+      ["历史最低", money(low)],
+      ["最近记录", latest.priceHistory.slice(-12).map((price) => money(price)).join(" · ")],
+    ],
+    actions: [
+      { label: "返回", className: "primary", onClick: backAction },
+      { label: "关闭", onClick: closeModal },
+    ],
+  });
+}
+
+function miniTrend(history) {
+  const values = history.slice(-12);
+  const high = Math.max(...values);
+  const low = Math.min(...values);
+  const range = Math.max(1, high - low);
+  const points = values
+    .map((value, index) => {
+      const x = values.length === 1 ? 0 : (index / (values.length - 1)) * 100;
+      const y = 38 - ((value - low) / range) * 32;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return `<svg class="mini-chart" viewBox="0 0 100 44" role="img" aria-label="最近价格折线"><polyline points="${points}" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></svg>`;
+}
+
 function showDoodad() {
   const card = pick(doodadCards);
   const discount = Math.min(0.3, state.financialIq * 0.03);
@@ -779,6 +1073,46 @@ function showPropertyMarket() {
   });
 }
 
+function showStockMarket() {
+  const event = pickStockMarketEvent();
+  openSimpleModal({
+    type: "股票市场",
+    title: event.title,
+    text: `${event.text} 这是虚构市场资讯，不是真实投资建议。`,
+    actions: [
+      {
+        label: "应用市场变化",
+        className: "primary",
+        onClick: () => {
+          const result = resolveStockMarketEvent(state, event);
+          const heldText = result.heldAffected.length
+            ? `影响 ${result.heldAffected.length} 支持仓股票。`
+            : "你没有相关持仓，资产未受直接影响。";
+          addLog(`${event.title}：${heldText}`);
+          persistQuietly();
+          render();
+          showStockMarketResult(event, result.affected, result.heldAffected);
+        },
+      },
+    ],
+  });
+}
+
+function showStockMarketResult(event, affected, heldAffected) {
+  openSimpleModal({
+    type: "股票市场结果",
+    title: event.title,
+    text: heldAffected.length ? "以下是你持仓相关或市场变化前后的数值。" : "没有相关持仓时，也可以把它当作市场资讯学习。",
+    metrics: affected.length
+      ? affected.slice(0, 6).flatMap((item) => [
+          [`${item.name} ${item.symbol}`, `${item.direction} ${money(item.beforePrice)} -> ${money(item.afterPrice)}`],
+          ["变化", `${signedMoney(item.change)} (${signedPercent(item.percent)})`],
+        ])
+      : [["影响", "无"]],
+    actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+  });
+}
+
 function showMarketResult(event, affected) {
   openSimpleModal({
     type: "市场结果",
@@ -791,6 +1125,148 @@ function showMarketResult(event, affected) {
         ])
       : [["影响", "无"]],
     actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+  });
+}
+
+function showStockDetail(stockId) {
+  const stock = findStock(state.stockMarket, stockId);
+  const holding = state.stockHoldings.find((item) => item.stockId === stockId);
+  if (!stock || !holding) return;
+  const high = Math.max(...stock.priceHistory);
+  const low = Math.min(...stock.priceHistory);
+  openSimpleModal({
+    type: "股票详情",
+    title: `${stock.name} (${stock.symbol})`,
+    text: `${stock.childNote} ${stockLearningNotes.unrealized}`,
+    metrics: [
+      ["当前价格", money(stock.currentPrice)],
+      ["平均成本", money(holding.averageCost)],
+      ["持股数量", `${holding.shares} 股`],
+      ["总成本", money(holding.totalCost)],
+      ["当前价值", money(holding.currentValue)],
+      ["未实现损益", `${holding.unrealizedGain >= 0 ? "上涨" : "下跌"} ${signedMoney(holding.unrealizedGain)} (${signedPercent(holding.unrealizedGainPercent)})`],
+      ["历史最高", money(high)],
+      ["历史最低", money(low)],
+      ["价格记录", miniTrend(stock.priceHistory)],
+      ["累计股息", money(holding.dividendsReceived)],
+      ["风险等级", stock.riskLevel],
+      ["产业类别", stock.sector],
+    ],
+    actions: [
+      { label: "卖出股票", className: "danger", onClick: () => showStockSellModal(stock.id, Math.min(1, holding.shares)) },
+      { label: "为什么？", onClick: () => showStockWhy(stock, () => showStockDetail(stock.id)) },
+      { label: "关闭", className: "primary", onClick: closeModal },
+    ],
+  });
+}
+
+function showStockSellModal(stockId, initialQuantity) {
+  const holding = state.stockHoldings.find((item) => item.stockId === stockId);
+  const stock = findStock(state.stockMarket, stockId);
+  if (!holding || !stock) return;
+  const half = Math.max(1, Math.floor(holding.shares / 2));
+  openSimpleModal({
+    type: "卖出股票",
+    title: `卖出 ${stock.name}`,
+    text: "价格上涨不代表已经赚钱，真正卖出后，损益才会变成实际结果。",
+    metrics: [
+      ["当前价格", money(stock.currentPrice)],
+      ["平均成本", money(holding.averageCost)],
+      ["持有数量", `${holding.shares} 股`],
+      ["选择数量", `${initialQuantity} 股`],
+    ],
+    actions: [
+      { label: "卖出 1 股", className: "danger", onClick: () => showStockSellConfirm(stock.id, 1) },
+      { label: "卖出一半", onClick: () => showStockSellConfirm(stock.id, half) },
+      { label: "全部卖出", onClick: () => showStockSellConfirm(stock.id, holding.shares) },
+      { label: "自定义数量", onClick: () => showStockCustomSell(stock.id) },
+      { label: "返回详情", className: "primary", onClick: () => showStockDetail(stock.id) },
+    ],
+  });
+}
+
+function showStockCustomSell(stockId) {
+  const holding = state.stockHoldings.find((item) => item.stockId === stockId);
+  const stock = findStock(state.stockMarket, stockId);
+  if (!holding || !stock) return;
+  openSimpleModal({
+    type: "自定义卖出",
+    title: `${stock.name} 卖出数量`,
+    text: "请输入正整数股数，不能超过你持有的数量。",
+    metrics: [
+      ["持有数量", `${holding.shares} 股`],
+      ["当前价格", money(stock.currentPrice)],
+      ["数量", `<input class="quantity-input" id="stockSellQuantityInput" type="number" min="1" max="${holding.shares}" step="1" value="1" />`],
+    ],
+    actions: [
+      {
+        label: "继续",
+        className: "primary",
+        onClick: () => {
+          const quantity = stockShares(document.querySelector("#stockSellQuantityInput")?.value);
+          showStockSellConfirm(stock.id, quantity);
+        },
+      },
+      { label: "返回", onClick: () => showStockSellModal(stock.id, 1) },
+    ],
+  });
+}
+
+function showStockSellConfirm(stockId, quantity) {
+  const preview = calculateStockSellPreview(state, stockId, quantity);
+  if (!preview.holding || !preview.stock || preview.shares <= 0 || preview.shares > preview.holding.shares) {
+    openSimpleModal({
+      type: "无法卖出",
+      title: "卖出数量不正确",
+      text: "卖出数量必须是正整数，而且不能超过持有数量。",
+      actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+    });
+    return;
+  }
+  const eventId = `stock-sell-${state.round}-${preview.stock.id}-${preview.shares}-${Date.now()}`;
+  openSimpleModal({
+    type: "确认卖出",
+    title: `卖出 ${preview.stock.name}`,
+    text: "卖出金额 ＝ 卖出股数 × 当前价格。实现损益 ＝ 卖出金额 − 对应持仓成本。",
+    metrics: [
+      ["卖出数量", `${preview.shares} 股`],
+      ["当前价格", money(preview.pricePerShare)],
+      ["预计收到现金", money(preview.totalAmount)],
+      ["平均成本", money(preview.averageCost)],
+      ["预计实现损益", signedMoney(preview.realizedGain)],
+    ],
+    actions: [
+      { label: "确认卖出", className: "danger", onClick: () => completeStockSale(preview.stock.id, preview.shares, eventId) },
+      { label: "取消", className: "primary", onClick: () => showStockDetail(preview.stock.id) },
+    ],
+  });
+}
+
+function completeStockSale(stockId, quantity, eventId) {
+  const result = sellStock(state, stockId, quantity, eventId);
+  if (!result.ok) {
+    openSimpleModal({
+      type: "卖出失败",
+      title: "没有完成卖出",
+      text: result.reason,
+      actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+    });
+    return;
+  }
+  addLog(`卖出 ${result.stock.name} ${result.shares} 股，收到 ${money(result.totalAmount)}，实现损益 ${signedMoney(result.realizedGain)}。`);
+  persistQuietly();
+  render();
+  openSimpleModal({
+    type: "卖出结果",
+    title: `${result.stock.name} 已卖出`,
+    text: "卖出后，损益才会变成实际结果；剩余持仓继续随价格变化。",
+    metrics: [
+      ["现金增加", money(result.totalAmount)],
+      ["实现损益", signedMoney(result.realizedGain)],
+      ["剩余现金", money(state.cash)],
+      ["已实现损益累计", signedMoney(state.realizedStockGain)],
+    ],
+    actions: [{ label: "完成", className: "primary", onClick: closeModal }],
   });
 }
 
@@ -1125,6 +1601,23 @@ window.cashflowDebug = {
     if (!state) state = createState(careers[3]);
     state.cash = Math.max(state.cash, 300000);
     completePropertyPurchase(realEstateOpportunities[0], `debug-${Date.now()}`);
+  },
+  buyFirstStock: () => {
+    if (!state) state = createState(careers[3]);
+    state.cash = Math.max(state.cash, 50000);
+    const stock = state.stockMarket.find((item) => item.dividendFrequency === 1) || state.stockMarket[0];
+    completeStockPurchase(stock.id, 5, `debug-stock-${Date.now()}`);
+  },
+  sellFirstStock: () => {
+    if (!state?.stockHoldings?.length) return;
+    completeStockSale(state.stockHoldings[0].stockId, 2, `debug-stock-sell-${Date.now()}`);
+  },
+  triggerStockMarket: () => {
+    if (!state) return;
+    const event = pickStockMarketEvent(() => 0);
+    resolveStockMarketEvent(state, event, () => 0);
+    persistQuietly();
+    render();
   },
   triggerMarket: () => {
     if (!state) return;

@@ -448,10 +448,13 @@ export function calculateMonthlyCashflow(state) {
 
 export function calculateNetWorth(state) {
   const assets = Array.isArray(state.assets) ? state.assets.reduce((sum, asset) => sum + moneyNumber(asset.value), 0) : 0;
+  const stocks = Array.isArray(state.stockHoldings)
+    ? state.stockHoldings.reduce((sum, holding) => sum + moneyNumber(holding.currentValue), 0)
+    : 0;
   const liabilities = Array.isArray(state.liabilities)
     ? state.liabilities.reduce((sum, item) => sum + moneyNumber(item.balance), 0)
     : 0;
-  return moneyNumber((state.cash || 0) + assets + calculatePortfolioSummary(state.ownedProperties).totalValue - liabilities);
+  return moneyNumber((state.cash || 0) + assets + stocks + calculatePortfolioSummary(state.ownedProperties).totalValue - liabilities);
 }
 
 export function ensureRealEstateState(state) {

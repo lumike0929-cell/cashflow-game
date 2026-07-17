@@ -395,6 +395,11 @@ p {
   background: var(--blue-soft);
 }
 
+.tile.stockMarket,
+.tile.stockOpportunity {
+  background: #edf5ff;
+}
+
 .tile.doodad {
   background: var(--red-soft);
 }
@@ -621,12 +626,15 @@ p {
   color: var(--red);
 }
 
-.real-estate-section {
+.real-estate-section,
+.stock-section {
   margin-top: 18px;
 }
 
 .real-estate-portfolio,
+.stock-portfolio,
 .property-list,
+.stock-list,
 .transaction-history {
   display: grid;
   gap: 12px;
@@ -663,7 +671,8 @@ p {
   overflow-wrap: anywhere;
 }
 
-.property-row {
+.property-row,
+.stock-row {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr) minmax(96px, auto);
   gap: 12px;
@@ -675,7 +684,8 @@ p {
   border-radius: 16px;
 }
 
-.property-icon {
+.property-icon,
+.stock-icon {
   display: grid;
   place-items: center;
   width: 44px;
@@ -686,13 +696,22 @@ p {
   font-weight: 950;
 }
 
+.stock-icon {
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+
 .property-row strong,
 .property-row small,
-.property-numbers {
+.property-numbers,
+.stock-row strong,
+.stock-row small,
+.stock-numbers {
   min-width: 0;
 }
 
-.property-row small {
+.property-row small,
+.stock-row small {
   display: block;
   margin-top: 4px;
   color: var(--muted);
@@ -702,15 +721,70 @@ p {
   overflow-wrap: anywhere;
 }
 
-.property-numbers {
+.stock-row em {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 900;
+}
+
+.property-numbers,
+.stock-numbers {
   display: grid;
   justify-items: end;
   gap: 3px;
 }
 
-.property-numbers b {
+.property-numbers b,
+.stock-numbers.gain b {
   color: var(--green);
   font-size: 20px;
+}
+
+.stock-numbers.loss b {
+  color: var(--red);
+  font-size: 20px;
+}
+
+.stock-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.risk-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.risk-note {
+  padding: 11px 12px;
+  border: 1px solid rgba(36, 107, 159, 0.2);
+  border-radius: 14px;
+  background: var(--blue-soft);
+  color: #244b68;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.quantity-input {
+  width: min(180px, 100%);
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 12px;
+  font: inherit;
+  font-weight: 850;
+}
+
+.mini-chart {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  height: 58px;
+  color: var(--blue);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 6px;
 }
 
 .transaction-history {
@@ -816,13 +890,19 @@ p {
     padding-inline: 12px;
   }
 
-  .property-row {
+  .property-row,
+  .stock-row {
     grid-template-columns: 42px minmax(0, 1fr);
   }
 
-  .property-numbers {
+  .property-numbers,
+  .stock-numbers {
     grid-column: 2;
     justify-items: start;
+  }
+
+  .stock-summary-grid {
+    grid-template-columns: 1fr;
   }
 
   .modal {

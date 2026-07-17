@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node tests/static-check.mjs && node scripts/build-public.mjs",
     "lint": "node tests/lint.mjs",
-    "test": "node --test tests/real-estate.test.mjs",
+    "test": "node --test tests/real-estate.test.mjs tests/stock.test.mjs",
     "test:browser": "node tests/browser-acceptance.mjs"
   },
   "devDependencies": {

@@ -5,6 +5,7 @@ import {
   syncMortgageLiabilities,
 } from "./realEstateCalculator.js";
 import { createPropertyTransaction } from "./realEstateTransactions.js";
+import { migrateStockStatePart } from "./stockStorageMigration.js";
 
 export const CURRENT_SAVE_VERSION = 2;
 
@@ -20,7 +21,9 @@ export function migrateSavedState(candidate) {
     salary: clampMoney(candidate.salary),
     baseExpenses: clampMoney(candidate.baseExpenses),
     financialIq: Math.max(0, Math.round(Number(candidate.financialIq) || 0)),
-    assets: Array.isArray(candidate.assets) ? candidate.assets.filter((asset) => asset && asset.type !== "property") : [],
+    assets: Array.isArray(candidate.assets)
+      ? candidate.assets.filter((asset) => asset && asset.type !== "property" && asset.type !== "stock")
+      : [],
     liabilities: Array.isArray(candidate.liabilities) ? candidate.liabilities.filter(Boolean) : [],
     logs: Array.isArray(candidate.logs) ? candidate.logs.slice(0, 9) : ["读取了旧存档。"],
     ownedProperties: Array.isArray(candidate.ownedProperties) ? candidate.ownedProperties : [],
@@ -51,6 +54,7 @@ export function migrateSavedState(candidate) {
 
   ensureRealEstateState(state);
   syncMortgageLiabilities(state);
+  migrateStockStatePart(state, candidate);
   return state;
 }
 

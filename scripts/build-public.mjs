@@ -9,6 +9,11 @@ const deployFiles = [
   "realEstateEventResolver.js",
   "realEstateStorageMigration.js",
   "realEstateTransactions.js",
+  "stockCalculator.js",
+  "stockData.js",
+  "stockEventResolver.js",
+  "stockStorageMigration.js",
+  "stockTransactions.js",
 ];
 
 await rm("public", { recursive: true, force: true });
