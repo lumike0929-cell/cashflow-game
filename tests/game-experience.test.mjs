@@ -58,6 +58,7 @@ test("镜头可缩放、拖曳并回到玩家，偏好可恢复", () => {
       musicVolume: 0.2,
       musicEnabled: false,
       hapticsEnabled: false,
+      animationSpeed: "fast",
       tutorialComplete: true,
       seenTips: { firstStock: true },
       camera: { x: -20, y: -30, scale: 0.8, follow: false },
@@ -70,6 +71,7 @@ test("镜头可缩放、拖曳并回到玩家，偏好可恢复", () => {
   assert.equal(settings.musicVolume, 0.2);
   assert.equal(settings.musicEnabled, false);
   assert.equal(settings.hapticsEnabled, false);
+  assert.equal(settings.animationSpeed, "fast");
   assert.equal(settings.tutorialComplete, true);
   assert.equal(settings.seenTips.firstStock, true);
   assert.equal(settings.camera.scale, 0.8);

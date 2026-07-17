@@ -91,10 +91,17 @@ try {
 
   await page.evaluate(() => window.cashflowDebug.toggleMusic());
   await page.evaluate(() => window.cashflowDebug.toggleHaptics());
+  await page.evaluate(() => window.cashflowDebug.toggleAnimationSpeed());
   await page.evaluate(() => window.cashflowDebug.dispatchVisibility());
   const settingsAfterToggle = await page.evaluate(() => window.cashflowDebug.getExperience());
   assert.equal(typeof settingsAfterToggle.musicEnabled, "boolean");
   assert.equal(typeof settingsAfterToggle.hapticsEnabled, "boolean");
+  assert.equal(settingsAfterToggle.animationSpeed, "fast");
+
+  await page.evaluate(() => window.cashflowDebug.showContextTip("firstDebt", true));
+  await page.locator("#cardModal").click({ position: { x: 4, y: 4 } });
+  assert.equal(await page.locator("#cardModal").evaluate((modal) => modal.classList.contains("hidden")), false);
+  await page.evaluate(() => window.cashflowDebug.closeModal());
 
   const initialExperience = await page.evaluate(() => window.cashflowDebug.getExperience());
   assert.equal(initialExperience.boardTiles, 40);
@@ -136,6 +143,15 @@ try {
   await page.evaluate(() => window.cashflowDebug.zoomMap(0.18));
   const cameraZoomed = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
   assert.ok(cameraZoomed.scale > cameraBefore.scale);
+  assert.equal(cameraZoomed.follow, false);
+  await page.evaluate(() => window.cashflowDebug.rollFixed(1));
+  await page.waitForFunction(() => {
+    const experience = window.cashflowDebug.getExperience();
+    return !experience.isRolling && !experience.isMoving;
+  });
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  const cameraAfterManualMove = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
+  assert.equal(cameraAfterManualMove.follow, false);
   await page.evaluate(() => window.cashflowDebug.focusPlayer());
   const cameraFocused = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
   assert.equal(cameraFocused.follow, true);

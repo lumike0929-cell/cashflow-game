@@ -238,6 +238,7 @@ const uiState = {
   musicVolume: savedExperience.musicVolume,
   musicEnabled: savedExperience.musicEnabled,
   hapticsEnabled: savedExperience.hapticsEnabled,
+  animationSpeed: savedExperience.animationSpeed,
   tutorialComplete: savedExperience.tutorialComplete,
   seenTips: savedExperience.seenTips,
   tutorial: {
@@ -632,7 +633,7 @@ function zoomCamera(delta) {
   applyCamera();
 }
 
-function focusCameraOnPlayer(save = true, scale = uiState.isMoving ? 1.02 : uiState.camera.scale) {
+function focusCameraOnPlayer(save = true, scale = uiState.camera.scale) {
   const viewport = document.querySelector("#cityMapViewport");
   if (!viewport || !state) return;
   uiState.camera = cameraForTile(state.position, viewport.clientWidth, viewport.clientHeight, scale);
@@ -656,6 +657,7 @@ function saveExperience() {
     musicVolume: uiState.musicVolume,
     musicEnabled: uiState.musicEnabled,
     hapticsEnabled: uiState.hapticsEnabled,
+    animationSpeed: uiState.animationSpeed,
     tutorialComplete: uiState.tutorialComplete,
     seenTips: uiState.seenTips,
     camera: uiState.camera,
@@ -747,6 +749,16 @@ function setAvatarMood(mood, duration = 1500) {
     }, prefersReducedMotion() ? 120 : duration);
   }
   if (state) renderBoard();
+}
+
+function animationScale() {
+  if (prefersReducedMotion()) return 0.18;
+  return uiState.animationSpeed === "fast" ? 0.62 : 1;
+}
+
+function animationMs(standard, fast = standard * 0.62) {
+  if (prefersReducedMotion()) return Math.max(20, Math.round(standard * 0.12));
+  return Math.round(uiState.animationSpeed === "fast" ? fast : standard);
 }
 
 function moodFromAmount(amount, fallback = "neutral") {
@@ -1240,7 +1252,9 @@ function renderLogs() {
 function emitFinanceEffect(amount, label = "现金变化", kind = "neutral") {
   const number = moneyValue(amount);
   const layer = document.createElement("div");
+  const lane = Math.min(3, document.querySelectorAll(".finance-effect").length);
   layer.className = `finance-effect ${number >= 0 ? "positive" : "negative"} ${kind}`;
+  layer.style.setProperty("--effect-offset", `${lane * 72}px`);
   layer.setAttribute("role", "status");
   layer.setAttribute("aria-live", "polite");
   const effectLabel = number >= 0 ? "现金增加" : "现金减少";
@@ -1255,7 +1269,7 @@ function emitFinanceEffect(amount, label = "现金变化", kind = "neutral") {
   if (number >= 0) soundManager.play("coin");
   else soundManager.play("warning");
   if (number < 0) haptic([14, 20, 14], uiState.hapticsEnabled);
-  setTimeout(() => layer.remove(), prefersReducedMotion() ? 200 : 1500);
+  setTimeout(() => layer.remove(), prefersReducedMotion() ? 260 : 1800);
 }
 
 function assetLabel(type) {
@@ -1345,42 +1359,54 @@ function ratePulse(label) {
 
 async function rollDice(forcedRoll = null) {
   if (!state || state.gameOver || uiState.isRolling || uiState.isMoving) return;
-  soundManager.play("dice");
-  haptic(12, uiState.hapticsEnabled);
-  uiState.isRolling = true;
-  uiState.diceRolling = true;
-  uiState.hudStatus = "骰子旋转";
-  uiState.avatarMood = "neutral";
-  render();
-  const roll = typeof forcedRoll === "number" ? Math.max(1, Math.min(6, Math.round(forcedRoll))) : Math.floor(Math.random() * 6) + 1;
-  const previous = state.position;
-  uiState.previewIndices = nextIndices(previous, roll, boardTiles.length);
-  const tickCount = prefersReducedMotion() ? 2 : 12;
-  for (let index = 0; index < tickCount; index += 1) {
-    state.lastRoll = (index % 6) + 1;
+  try {
+    soundManager.play("dice");
+    haptic(12, uiState.hapticsEnabled);
+    uiState.isRolling = true;
+    uiState.diceRolling = true;
+    uiState.hudStatus = "骰子旋转";
+    uiState.avatarMood = "neutral";
     render();
-    await wait(prefersReducedMotion() ? 20 : 75);
+    const roll = typeof forcedRoll === "number" ? Math.max(1, Math.min(6, Math.round(forcedRoll))) : Math.floor(Math.random() * 6) + 1;
+    const previous = state.position;
+    uiState.previewIndices = nextIndices(previous, roll, boardTiles.length);
+    const tickCount = prefersReducedMotion() ? 2 : uiState.animationSpeed === "fast" ? 8 : 12;
+    for (let index = 0; index < tickCount; index += 1) {
+      state.lastRoll = (index % 6) + 1;
+      render();
+      await wait(animationMs(72, 50));
+    }
+    state.lastRoll = roll;
+    uiState.diceRolling = false;
+    soundManager.play("land");
+    haptic(22, uiState.hapticsEnabled);
+    render();
+    await wait(animationMs(160, 90));
+    await movePlayerStepByStep(previous, roll);
+    const next = state.position;
+    uiState.isRolling = false;
+    uiState.previewIndices = [];
+    uiState.movingStep = 0;
+    uiState.movingTotal = 0;
+    uiState.hudStatus = "到达";
+    uiState.avatarMood = "celebrating";
+    soundManager.play("happy");
+    addLog(`掷出 ${roll}，逐格移动到「${boardTiles[next].title}」。`);
+    state.round += 1;
+    persistQuietly();
+    render();
+    await wait(animationMs(380, 230));
+    uiState.hudStatus = "处理事件";
+    renderActions();
+    triggerTile(boardTiles[next]);
+  } catch {
+    uiState.isRolling = false;
+    uiState.isMoving = false;
+    uiState.diceRolling = false;
+    uiState.previewIndices = [];
+    uiState.hudStatus = "准备中";
+    render();
   }
-  state.lastRoll = roll;
-  uiState.diceRolling = false;
-  soundManager.play("land");
-  haptic(22, uiState.hapticsEnabled);
-  render();
-  await wait(prefersReducedMotion() ? 30 : 180);
-  await movePlayerStepByStep(previous, roll);
-  const next = state.position;
-  uiState.isRolling = false;
-  uiState.previewIndices = [];
-  uiState.movingStep = 0;
-  uiState.movingTotal = 0;
-  uiState.hudStatus = "到达";
-  uiState.avatarMood = "celebrating";
-  soundManager.play("happy");
-  addLog(`掷出 ${roll}，逐格移动到「${boardTiles[next].title}」。`);
-  state.round += 1;
-  persistQuietly();
-  render();
-  triggerTile(boardTiles[next]);
 }
 
 async function movePlayerStepByStep(previous, roll) {
@@ -1398,8 +1424,8 @@ async function movePlayerStepByStep(previous, roll) {
     soundManager.play("step");
     haptic(8, uiState.hapticsEnabled);
     render();
-    focusCameraOnPlayer(false, 1.04);
-    await wait(prefersReducedMotion() ? 30 : 210);
+    if (uiState.camera.follow) focusCameraOnPlayer(false, uiState.camera.scale);
+    await wait(animationMs(240, 150));
   }
   uiState.isMoving = false;
 }
@@ -3314,6 +3340,9 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [], outcom
 function closeModal() {
   el.modal.classList.add("hidden");
   soundManager.setScene(state ? "board" : "home");
+  if (state && !state.gameOver && !uiState.isRolling && !uiState.isMoving) {
+    setTimeout(() => el.rollDice.focus({ preventScroll: true }), 30);
+  }
   const nextTip = uiState.pendingTips.shift();
   if (nextTip) setTimeout(() => showContextTip(nextTip, true), prefersReducedMotion() ? 20 : 120);
 }
@@ -3414,6 +3443,7 @@ function showSoundSettings() {
       ["音效音量", `${Math.round(uiState.effectVolume * 100)}%`],
       ["背景音乐", `${uiState.musicEnabled ? "开启" : "关闭"} · ${Math.round(uiState.musicVolume * 100)}%`],
       ["震动", uiState.hapticsEnabled && navigator?.vibrate ? "轻量开启" : uiState.hapticsEnabled ? "设备不支持" : "关闭"],
+      ["动画速度", uiState.animationSpeed === "fast" ? "快速" : "标准"],
       ["音乐状态", soundSnapshot.musicPlaying ? "正在播放" : "等待互动或已暂停"],
       ["教学", uiState.tutorialComplete ? "已完成，可重播" : "尚未完成"],
     ],
@@ -3421,6 +3451,7 @@ function showSoundSettings() {
       { label: uiState.muted ? "开启声音" : "关闭声音", className: "primary", onClick: () => { toggleSound(); showSoundSettings(); } },
       { label: uiState.musicEnabled ? "关闭音乐" : "开启音乐", onClick: () => { toggleMusic(); showSoundSettings(); } },
       { label: uiState.hapticsEnabled ? "关闭震动" : "开启震动", onClick: () => { toggleHaptics(); showSoundSettings(); } },
+      { label: uiState.animationSpeed === "fast" ? "标准动画" : "快速动画", onClick: () => { toggleAnimationSpeed(); showSoundSettings(); } },
       { label: "音效小一点", onClick: () => { adjustEffectVolume(-0.15); showSoundSettings(); } },
       { label: "音效大一点", onClick: () => { adjustEffectVolume(0.15); showSoundSettings(); } },
       { label: "重新观看教学", onClick: () => { closeModal(); startTutorial(true); } },
@@ -3450,6 +3481,11 @@ function adjustEffectVolume(delta) {
   saveExperience();
 }
 
+function toggleAnimationSpeed() {
+  uiState.animationSpeed = uiState.animationSpeed === "fast" ? "standard" : "fast";
+  saveExperience();
+}
+
 el.rollDice.addEventListener("click", rollDice);
 el.saveGame.addEventListener("click", saveGame);
 el.loadGame.addEventListener("click", loadGame);
@@ -3460,7 +3496,16 @@ el.soundHome?.addEventListener("click", showSoundSettings);
 el.clearSaveHome?.addEventListener("click", confirmClearSavedGame);
 el.closeModal.addEventListener("click", closeModal);
 el.modal.addEventListener("click", (event) => {
-  if (event.target === el.modal) closeModal();
+  if (event.target === el.modal) {
+    el.modal.querySelector(".modal-card")?.animate(
+      [
+        { transform: "translateY(0)" },
+        { transform: "translateY(4px)" },
+        { transform: "translateY(0)" },
+      ],
+      { duration: 180, easing: "ease-out" },
+    );
+  }
 });
 
 window.addEventListener("keydown", (event) => {
@@ -3474,6 +3519,11 @@ window.addEventListener("pointerdown", unlockAudio, { once: true });
 window.addEventListener("keydown", unlockAudio, { once: true });
 document.addEventListener("visibilitychange", () => {
   soundManager.handleVisibility(document.hidden);
+});
+window.addEventListener("resize", () => {
+  if (!state) return;
+  applyCamera();
+  if (uiState.camera.follow) focusCameraOnPlayer(true, uiState.camera.scale);
 });
 
 window.cashflowDebug = {
@@ -3608,6 +3658,7 @@ window.cashflowDebug = {
     musicVolume: uiState.musicVolume,
     musicEnabled: uiState.musicEnabled,
     hapticsEnabled: uiState.hapticsEnabled,
+    animationSpeed: uiState.animationSpeed,
     avatarMood: uiState.avatarMood,
     tutorialComplete: uiState.tutorialComplete,
     tutorialActive: uiState.tutorial.active,
@@ -3621,6 +3672,7 @@ window.cashflowDebug = {
   toggleSound,
   toggleMusic,
   toggleHaptics,
+  toggleAnimationSpeed,
   startTutorial,
   nextTutorialStep,
   previousTutorialStep,

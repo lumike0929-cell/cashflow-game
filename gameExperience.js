@@ -259,12 +259,13 @@ export function normalizeSettings(settings) {
     musicVolume: Math.max(0, Math.min(1, Number(settings?.musicVolume) || 0.22)),
     musicEnabled: settings?.musicEnabled !== false,
     hapticsEnabled: settings?.hapticsEnabled !== false,
+    animationSpeed: settings?.animationSpeed === "fast" ? "fast" : "standard",
     tutorialComplete: Boolean(settings?.tutorialComplete),
     seenTips: Object.fromEntries(Object.entries(seenTips).map(([key, value]) => [key, Boolean(value)])),
     camera: {
       x: finiteNumber(camera.x, 0),
       y: finiteNumber(camera.y, 0),
-      scale: Math.max(0.58, Math.min(1.45, Number(camera.scale) || 0.86)),
+      scale: Math.max(0.58, Math.min(1.45, Number(camera.scale) || 0.78)),
       follow: camera.follow !== false,
     },
   };
@@ -323,7 +324,8 @@ export function createSoundManager() {
   function play(name) {
     if (muted) return;
     const now = Date.now();
-    if (name === "step" && now - (lastPlayed.step || 0) < 110) return;
+    if (name === "step" && now - (lastPlayed.step || 0) < 140) return;
+    if (name !== "step" && now - (lastPlayed[name] || 0) < 45) return;
     lastPlayed = { ...lastPlayed, [name]: now };
     const audio = ensureContext();
     if (!audio) return;
