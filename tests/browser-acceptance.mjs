@@ -93,6 +93,28 @@ try {
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.sellFirstBusiness());
   await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.buyBasicInsurance());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.buyAccidentInsurance());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.triggerCoveredMedicalEvent());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.triggerUncoveredEvent());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.triggerUnemployment());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.searchJob());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.searchJob());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.searchJob());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.triggerPromotion());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.settleTax());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.triggerFamilyEvent());
+  await page.evaluate(() => window.cashflowDebug.closeModal());
 
   const beforeSaleCount = await page.evaluate(() => window.cashflowDebug.getState().ownedProperties.length);
   assert.equal(beforeSaleCount, 2);
@@ -115,6 +137,11 @@ try {
       businessHoldings: state.businessHoldings.length,
       businessTransactions: state.businessTransactions.length,
       hasBusinessUpgrade: state.businessTransactions.some((item) => item.type === "升級"),
+      insurancePolicies: state.insurancePolicies.filter((item) => item.active).length,
+      insuranceClaims: state.insuranceClaims.length,
+      lifeEvents: state.lifeEventHistory.length,
+      unemployed: state.unemployment.unemployed,
+      taxLiabilities: state.liabilities.filter((item) => item.type === "tax").length,
       hasMortgage: state.liabilities.some((item) => item.type === "mortgage"),
       width: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
@@ -129,10 +156,17 @@ try {
   assert.equal(result.businessHoldings, 1);
   assert.ok(result.businessTransactions >= 7);
   assert.equal(result.hasBusinessUpgrade, true);
+  assert.equal(result.insurancePolicies, 2);
+  assert.ok(result.insuranceClaims >= 1);
+  assert.ok(result.lifeEvents >= 5);
+  assert.equal(result.unemployed, false);
+  assert.ok(result.taxLiabilities >= 0);
   assert.equal(result.hasMortgage, true);
   assert.ok(result.width <= result.clientWidth + 1, `horizontal overflow: ${result.width} > ${result.clientWidth}`);
   assert.match(result.text, /房地产/);
   assert.match(result.text, /小生意/);
+  assert.match(result.text, /人生与保障/);
+  assert.match(result.text, /预备金/);
   assert.deepEqual(consoleErrors, []);
   console.log("Browser acceptance passed.");
 } finally {

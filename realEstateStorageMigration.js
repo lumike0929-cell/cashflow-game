@@ -8,8 +8,9 @@ import { createPropertyTransaction } from "./realEstateTransactions.js";
 import { migrateStockStatePart } from "./stockStorageMigration.js";
 import { migrateBusinessStatePart } from "./businessStorageMigration.js";
 import { migrateBankingStatePart } from "./bankingStorageMigration.js";
+import { migrateLifeEventStatePart } from "./lifeEventStorageMigration.js";
 
-export const CURRENT_SAVE_VERSION = 3;
+export const CURRENT_SAVE_VERSION = 4;
 
 export function migrateSavedState(candidate) {
   if (!candidate || typeof candidate !== "object") return null;
@@ -59,6 +60,7 @@ export function migrateSavedState(candidate) {
   migrateStockStatePart(state, candidate);
   migrateBusinessStatePart(state, candidate);
   migrateBankingStatePart(state, candidate);
+  migrateLifeEventStatePart(state, candidate);
   return state;
 }
 

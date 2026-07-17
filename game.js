@@ -73,6 +73,32 @@ import {
   refinancePropertyMortgage,
   takePersonalLoan,
 } from "./bankingCalculator.js";
+import { insurancePolicies } from "./insuranceData.js";
+import {
+  calculateClaimForPolicy,
+  calculateInsurancePremiums,
+  cancelInsurancePolicy,
+  ensureInsuranceState,
+  purchaseInsurancePolicy,
+} from "./insuranceCalculator.js";
+import { lifeEvents } from "./lifeEventData.js";
+import {
+  applyLifeEvent,
+  calculateEmergencyFundStatus,
+  calculateLifeEffectsSummary,
+  ensureLifeEventState,
+  settleLifeEffectsMonth,
+} from "./lifeEventCalculator.js";
+import { pickLifeEvent } from "./lifeEventResolver.js";
+import { advanceEconomyCycle, getEconomyProfile, ensureEconomyState } from "./economyCycleEngine.js";
+import { calculateTaxSummary, ensureTaxState, settleTax } from "./taxCalculator.js";
+import {
+  ensureUnemploymentState,
+  reemploy,
+  searchForJob,
+  settleUnemploymentMonth,
+  startUnemployment,
+} from "./unemploymentEngine.js";
 
 const STORAGE_KEY = "cashflow-freedom-game-v1";
 
@@ -121,12 +147,14 @@ const boardTiles = [
   { type: "doodad", icon: "花", title: "额外支出", text: "生活消费会考验现金储备。" },
   { type: "stockMarket", icon: "市", title: "股票市场", text: "虚构股票会随市场波动。" },
   { type: "learn", icon: "学", title: "学习", text: "提升财商，降低之后的犯错成本。" },
+  { type: "lifeEvent", icon: "医", title: "人生事件", text: "医疗、家庭、工作和责任会影响现金。" },
   { type: "stockOpportunity", icon: "股", title: "股票机会", text: "买入虚构公司的一小部分。" },
   { type: "bank", icon: "银", title: "银行", text: "可以借钱，也可以提前还债。" },
   { type: "doodad", icon: "账", title: "账单", text: "突发开销直接扣现金。" },
   { type: "opportunity", icon: "租", title: "租赁机会", text: "找到能产生租金的资产。" },
   { type: "market", icon: "价", title: "市场", text: "持有资产会被市场影响。" },
   { type: "businessOpportunity", icon: "店", title: "小生意机会", text: "投资能产生收入的小系统。" },
+  { type: "insurance", icon: "保", title: "保险", text: "用固定保费分担特定风险。" },
   { type: "learn", icon: "课", title: "课程", text: "用知识换取更好的判断力。" },
   { type: "propertyEvent", icon: "修", title: "房产持有", text: "维修、空置、续约或翻修。" },
   { type: "stockOpportunity", icon: "投", title: "基金机会", text: "练习分散和价格波动。" },
@@ -134,7 +162,9 @@ const boardTiles = [
   { type: "stockMarket", icon: "涨", title: "市场消息", text: "产业和公司事件影响价格。" },
   { type: "doodad", icon: "购", title: "消费", text: "想要和需要不总是一回事。" },
   { type: "businessEvent", icon: "营", title: "生意事件", text: "生意可能遇到机会或风险。" },
+  { type: "tax", icon: "税", title: "税务", text: "游戏中的简化税务责任。" },
   { type: "businessMarket", icon: "需", title: "需求变化", text: "不同类型生意需求会改变。" },
+  { type: "jobEvent", icon: "职", title: "工作发展", text: "加薪、升职、失业或再就业。" },
   { type: "propertyEvent", icon: "管", title: "持有管理", text: "房产赚钱也需要维护。" },
   { type: "payday", icon: "薪", title: "月结日", text: "再次结算现金流与房贷本金。" },
 ];
@@ -176,6 +206,7 @@ const el = {
   assetList: document.querySelector("#assetList"),
   liabilityList: document.querySelector("#liabilityList"),
   bankPanel: document.querySelector("#bankPanel"),
+  lifePanel: document.querySelector("#lifePanel"),
   realEstatePortfolio: document.querySelector("#realEstatePortfolio"),
   stockPortfolio: document.querySelector("#stockPortfolio"),
   businessPortfolio: document.querySelector("#businessPortfolio"),
@@ -223,6 +254,16 @@ function createState(career) {
     },
     bankTransactions: [],
     settledBankEvents: [],
+    insurancePolicies: [],
+    insuranceTransactions: [],
+    insuranceClaims: [],
+    lifeEventHistory: [],
+    lifeActiveEffects: [],
+    settledLifeEvents: [],
+    unemployment: {},
+    tax: {},
+    economy: {},
+    job: {},
     settledEvents: [],
     emergencyDebt: 0,
     financialIq: 0,
@@ -336,6 +377,11 @@ function render() {
   ensureStockState(state);
   ensureBusinessState(state);
   ensureBankingState(state);
+  ensureInsuranceState(state);
+  ensureUnemploymentState(state);
+  ensureTaxState(state);
+  ensureEconomyState(state);
+  ensureLifeEventState(state);
   syncMortgageLiabilities(state);
   showGame();
   const freedom = freedomRatio();
@@ -353,6 +399,7 @@ function render() {
   renderActions();
   renderStatements();
   renderBankPanel();
+  renderLifePanel();
   renderRealEstatePortfolio();
   renderStockPortfolio();
   renderBusinessPortfolio();
@@ -380,6 +427,7 @@ function renderActions() {
   const debt = state.liabilities.reduce((sum, item) => sum + moneyValue(item.balance), 0);
   const buttons = [
     `<button type="button" id="openBankCenter">银行中心</button>`,
+    `<button type="button" id="openLifeCenter">人生保障</button>`,
     `<button type="button" id="openPortfolio">房地产中心</button>`,
     `<button type="button" id="openStockPortfolio">股票中心</button>`,
     `<button type="button" id="openBusinessPortfolio">小生意中心</button>`,
@@ -395,6 +443,9 @@ function renderActions() {
 
   el.actionStack.innerHTML = buttons.join("");
   document.querySelector("#openBankCenter")?.addEventListener("click", showBankCenter);
+  document.querySelector("#openLifeCenter")?.addEventListener("click", () => {
+    document.querySelector("#lifeSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
   document.querySelector("#repayDebt")?.addEventListener("click", repayDebt);
   document.querySelector("#newRun")?.addEventListener("click", resetGame);
   document.querySelector("#openPortfolio")?.addEventListener("click", () => {
@@ -413,20 +464,29 @@ function renderStatements() {
   const stockSummary = calculateStockPortfolioSummary(state);
   const businessSummary = calculateBusinessSummary(state);
   const bankSummary = calculateBankSummary(state);
+  const lifeSummary = calculateLifeEffectsSummary(state);
+  const insurancePremiums = calculateInsurancePremiums(state);
+  const taxSummary = calculateTaxSummary(state);
+  const economy = getEconomyProfile(state);
   const rows = [
-    ["工资收入", "主动收入", state.salary],
+    ["工资收入", state.unemployment.unemployed ? "失业期间工资暂停" : "主动收入", state.unemployment.unemployed ? 0 : state.salary],
+    ["人生事件收入", "持续事件造成的收入变化", lifeSummary.monthlyIncomeImpact],
     ["小生意主動收入", "需要你投入時間的淨利", businessSummary.activeIncome],
     ["小生意被動收入", "系統建立後較少時間維持", businessSummary.passiveIncome],
     ["租金收入", "房地产每月租金", summary.monthlyRent],
     ["股票股息", "Payday 发放时进入现金", stockSummary.dividendsReceived],
     ["其他被动收入", "生意或证券流入", passiveIncome() - summary.monthlyRent],
     ["生活支出", "职业基础支出", -state.baseExpenses],
+    ["保险保费", "已购保单每月固定支出", -insurancePremiums],
+    ["人生持续支出", "医疗、家庭或工作压力持续影响", -lifeSummary.monthlyExpenseImpact],
     ["房贷月供", "房地产贷款月付款", -summary.monthlyMortgage],
     ["房产支出", "管理费与维修准备金", -summary.monthlyExpenses],
     ["其他贷款月供", "非房贷负债月付款", -(liabilityPayments() - summary.monthlyMortgage)],
     ["贷款总额", "银行、个人贷款与房贷余额", -bankSummary.totalDebt],
     ["信用分", `${bankSummary.creditTier} · 影响额度和利率`, bankSummary.creditScore],
     ["当前利率", `${bankSummary.interestLevel} · 个人月利率 ${percentText(bankSummary.personalLoanMonthlyRate)}`, 0],
+    ["税务预估", `游戏简化税务 · 税率 ${percentText(taxSummary.taxRate)}`, -taxSummary.taxBalance],
+    ["景气状态", economy.description, 0],
     ["净月现金流", "月结日实际增加的现金", netMonthlyCashflow()],
     ["手上现金", "可以投资或应急", state.cash],
     ["净资产", "现金 + 资产 - 负债", calculateNetWorth(state)],
@@ -440,7 +500,7 @@ function renderStatements() {
             <strong>${label}</strong>
             <small>${help}</small>
           </div>
-              <b>${label === "信用分" ? `${value}` : label === "当前利率" ? bankSummary.interestLevel : money(value)}</b>
+              <b>${label === "信用分" ? `${value}` : label === "当前利率" ? bankSummary.interestLevel : label === "景气状态" ? economy.label : money(value)}</b>
         </div>
       `,
     )
@@ -522,6 +582,65 @@ function renderBankPanel() {
   document.querySelector("#bankPanelOpen")?.addEventListener("click", () => showBankCenter());
   document.querySelector("#bankPanelLoan")?.addEventListener("click", showPersonalLoanOptions);
   document.querySelector("#bankPanelRefinance")?.addEventListener("click", showRefinanceOptions);
+}
+
+function renderLifePanel() {
+  const premiums = calculateInsurancePremiums(state);
+  const taxSummary = calculateTaxSummary(state);
+  const emergency = calculateEmergencyFundStatus(state, totalExpenses());
+  const economy = getEconomyProfile(state);
+  const activePolicies = state.insurancePolicies.filter((policy) => policy.active);
+  const historyHtml = state.lifeEventHistory.length
+    ? state.lifeEventHistory
+        .slice(0, 8)
+        .map(
+          (record) => `
+            <div class="history-row">
+              <strong>${record.category}</strong>
+              <span>第 ${record.month} 月 · ${record.title} · ${record.choice} · 现金 ${signedMoney(record.cashChange)}</span>
+            </div>
+          `,
+        )
+        .join("")
+    : '<div class="history-row"><strong>暂无记录</strong><span>医疗、工作、家庭、税务、保险和法律事件会记录在这里。</span></div>';
+  const unemploymentText = state.unemployment.unemployed
+    ? `失业中 · 剩余 ${state.unemployment.unemploymentMonthsRemaining} 月 · 找工作 ${state.unemployment.jobSearchProgress}%`
+    : "目前有工作";
+
+  el.lifePanel.innerHTML = `
+    <div class="portfolio-summary life-summary-grid">
+      ${summaryMetric("每月保费", money(premiums))}
+      ${summaryMetric("已购保单", `${activePolicies.length} 张`)}
+      ${summaryMetric("失业状态", unemploymentText)}
+      ${summaryMetric("税务预估", money(taxSummary.estimatedTax))}
+      ${summaryMetric("税务余额", money(taxSummary.taxBalance))}
+      ${summaryMetric("预备金月数", `${emergency.months} 月 · ${emergency.status}`)}
+      ${summaryMetric("建议预备金", money(emergency.suggestedReserve))}
+      ${summaryMetric("景气循环", `${economy.label} · ${state.economy.monthsRemaining} 月`)}
+    </div>
+    <div class="risk-panel">
+      <div class="risk-note">${emergency.note}</div>
+      <div class="risk-note">游戏中的税务、保险、医疗和法律规则都是简化学习规则，不是真实建议。</div>
+    </div>
+    <div class="bank-actions">
+      <button class="primary" type="button" id="lifeEventButton">抽人生事件</button>
+      <button type="button" id="insuranceButton">保险中心</button>
+      <button type="button" id="jobSearchButton">寻找工作</button>
+      <button type="button" id="taxButton">税务摘要</button>
+    </div>
+    <div class="transaction-history">
+      <h3>人生事件记录</h3>
+      <div class="filter-row">
+        ${["全部", "医疗", "工作", "家庭", "税务", "保险", "法律", "奖励"].map((filter) => `<span>${filter}</span>`).join("")}
+      </div>
+      ${historyHtml}
+    </div>
+  `;
+
+  document.querySelector("#lifeEventButton")?.addEventListener("click", () => showLifeEvent());
+  document.querySelector("#insuranceButton")?.addEventListener("click", showInsuranceCenter);
+  document.querySelector("#jobSearchButton")?.addEventListener("click", showJobSearch);
+  document.querySelector("#taxButton")?.addEventListener("click", () => showTaxSummary(false));
 }
 
 function renderRealEstatePortfolio() {
@@ -874,6 +993,26 @@ function triggerTile(tile) {
     return;
   }
 
+  if (tile.type === "lifeEvent") {
+    showLifeEvent();
+    return;
+  }
+
+  if (tile.type === "insurance") {
+    showInsuranceCenter();
+    return;
+  }
+
+  if (tile.type === "tax") {
+    showTaxSummary(true);
+    return;
+  }
+
+  if (tile.type === "jobEvent") {
+    showLifeEvent(pickLifeEvent(state, "失业与工作"));
+    return;
+  }
+
   if (tile.type === "propertyEvent") {
     showPropertyHoldingEvent();
     return;
@@ -896,6 +1035,9 @@ function collectPayday(reason) {
   const dividendResult = settleStockDividends(state);
   const priceTick = resolveStockPriceTick(state, "Payday 后股票价格更新");
   const businessResult = settleBusinessPayday(state);
+  const unemploymentResult = settleUnemploymentMonth(state);
+  const expiredLifeEffects = settleLifeEffectsMonth(state);
+  const economyResult = advanceEconomyCycle(state);
   state.month += 1;
   addLog(`${reason}：结算净现金流 ${money(beforeCashflow)}。`);
   if (dividendResult.totalDividend > 0) {
@@ -906,6 +1048,15 @@ function collectPayday(reason) {
   }
   if (!businessResult.skipped && businessResult.details.length) {
     addLog(`小生意月結：營收 ${money(businessResult.totalRevenue)}，成本 ${money(businessResult.totalExpenses)}，淨利 ${money(businessResult.totalProfit)}。`);
+  }
+  if (!unemploymentResult.skipped && unemploymentResult.benefit > 0) {
+    addLog(`失业保险补助 ${money(unemploymentResult.benefit)} 入账。`);
+  }
+  if (expiredLifeEffects.length) {
+    addLog(`${expiredLifeEffects.length} 个持续人生事件影响结束。`);
+  }
+  if (economyResult.changed) {
+    addLog(`景气进入「${economyResult.profile.label}」：${economyResult.profile.description}`);
   }
   mortgageResults.forEach((result) => {
     addLog(`${result.propertyName} 本月偿还本金 ${money(result.principal)}，剩余房贷 ${money(result.afterBalance)}。`);
@@ -1516,6 +1667,242 @@ function showBankruptcyProtection(protection) {
               { label: "回银行中心", onClick: () => showBankCenter() },
             ]
           : [{ label: "知道了", className: "primary", onClick: closeModal }],
+  });
+}
+
+function showLifeEvent(event = pickLifeEvent(state)) {
+  const firstOption = event.options?.[0] || { id: "default", label: "结算" };
+  const previewCost = Math.max(0, moneyValue(event.cashImpact * (firstOption.cashMultiplier ?? 1)));
+  const claim = event.insuranceEligible ? previewBestClaim(event, previewCost) : null;
+  openSimpleModal({
+    type: "人生事件",
+    title: event.title,
+    text: `${event.subtitle}。${event.description}`,
+    metrics: [
+      ["类型", event.category],
+      ["严重度", event.severity],
+      ["原始费用", event.cashImpact < 0 ? `收入 ${money(Math.abs(event.cashImpact))}` : money(previewCost)],
+      ["保险可理赔", claim ? money(claim.claimAmount) : event.insuranceEligible ? "可投保项目" : "不适用"],
+      ["玩家实际负担", claim ? money(claim.playerCost) : money(previewCost)],
+      ["持续月份", event.durationMonths > 0 ? `${event.durationMonths} 个月` : "一次性"],
+      ["学习提示", event.learningTip],
+    ],
+    actions: [
+      ...(event.options || [firstOption]).slice(0, 3).map((option) => ({
+        label: option.label,
+        className: option.id === firstOption.id ? "primary" : "",
+        onClick: () => completeLifeEvent(event, option.id),
+      })),
+      { label: "放弃本次", onClick: closeModal },
+    ],
+  });
+}
+
+function previewBestClaim(event, cost) {
+  const claims = state.insurancePolicies
+    .map((policy) => calculateClaimForPolicy(policy, event, cost, state.month || 1))
+    .filter((claim) => claim.eligible);
+  return claims.sort((a, b) => b.claimAmount - a.claimAmount)[0] || { claimAmount: 0, playerCost: cost };
+}
+
+function completeLifeEvent(event, optionId) {
+  const result = applyLifeEvent(state, event, optionId, `life-${state.round}-${event.id}-${Date.now()}`);
+  if (!result.ok) {
+    openSimpleModal({
+      type: "人生事件",
+      title: "结算失败",
+      text: result.reason,
+      actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+    });
+    return;
+  }
+  addLog(`${event.title}：${result.option.label}，现金变化 ${signedMoney(result.cashChange)}。`);
+  persistQuietly();
+  render();
+  openSimpleModal({
+    type: "事件结果",
+    title: event.title,
+    text: result.claim?.claimAmount > 0 ? "保险已按最合适保单理赔，理赔不会超过实际费用。" : event.learningTip,
+    metrics: [
+      ["选择", result.option.label],
+      ["原始费用", event.cashImpact < 0 ? `收入 ${money(Math.abs(event.cashImpact))}` : money(Math.max(0, event.cashImpact))],
+      ["自付额", money(result.claim?.deductible || 0)],
+      ["保险支付", money(result.claim?.claimAmount || 0)],
+      ["玩家负担", money(result.playerCost || 0)],
+      ["新增负债", money(result.liabilityAdded || 0)],
+      ["现金", money(state.cash)],
+    ],
+    actions: [{ label: "完成", className: "primary", onClick: closeModal }],
+  });
+}
+
+function showInsuranceCenter() {
+  const premiums = calculateInsurancePremiums(state);
+  const active = state.insurancePolicies.filter((policy) => policy.active);
+  openSimpleModal({
+    type: "Insurance Center",
+    title: "保险中心",
+    text: "保费是平常固定的小支出，用来减少某些大意外一次带来的压力。",
+    metrics: [
+      ["每月总保费", money(premiums)],
+      ["已购买保单", active.map((policy) => policy.name).join(" · ") || "暂无"],
+      ["现金流影响", money(-premiums)],
+      ["最近理赔", state.insuranceClaims[0] ? `${state.insuranceClaims[0].eventTitle} ${money(state.insuranceClaims[0].claimAmount)}` : "暂无"],
+    ],
+    actions: [
+      ...insurancePolicies.map((policy) => ({
+        label: state.insurancePolicies.some((item) => item.id === policy.id && item.active) ? `${policy.name} 已购买` : `${policy.name} ${money(policy.monthlyPremium)}/月`,
+        className: state.insurancePolicies.some((item) => item.id === policy.id && item.active) ? "" : "primary",
+        disabled: state.insurancePolicies.some((item) => item.id === policy.id && item.active),
+        onClick: () => showInsurancePolicy(policy.id),
+      })),
+      { label: "关闭", onClick: closeModal },
+    ],
+  });
+}
+
+function showInsurancePolicy(policyId) {
+  const policy = insurancePolicies.find((item) => item.id === policyId);
+  if (!policy) return;
+  const beforeCashflow = netMonthlyCashflow();
+  openSimpleModal({
+    type: "Insurance Policy",
+    title: policy.name,
+    text: policy.childNote,
+    metrics: [
+      ["保障类型", policy.coveredEvents.join("、")],
+      ["每月保费", money(policy.monthlyPremium)],
+      ["自付额", money(policy.deductible)],
+      ["理赔比例", `${Math.round(policy.coverageRate * 100)}%`],
+      ["理赔上限", money(policy.coverageLimit)],
+      ["等待期", `${policy.waitingPeriod} 月`],
+      ["现金流变化", `${money(beforeCashflow)} -> ${money(beforeCashflow - policy.monthlyPremium)}`],
+    ],
+    actions: [
+      { label: "购买保单", className: "primary", onClick: () => completeInsurancePurchase(policy.id) },
+      { label: "返回", onClick: showInsuranceCenter },
+    ],
+  });
+}
+
+function completeInsurancePurchase(policyId) {
+  const result = purchaseInsurancePolicy(state, policyId, `insurance-${state.round}-${policyId}-${Date.now()}`);
+  if (!result.ok) {
+    openSimpleModal({
+      type: "购买失败",
+      title: "没有买成保险",
+      text: result.reason,
+      actions: [{ label: "知道了", className: "primary", onClick: showInsuranceCenter }],
+    });
+    return;
+  }
+  addLog(`购买 ${result.policy.name}，每月保费 ${money(result.policy.monthlyPremium)}。`);
+  persistQuietly();
+  render();
+  openSimpleModal({
+    type: "购买成功",
+    title: result.policy.name,
+    text: "保费会进入每月支出，未来符合条件的事件可申请理赔。",
+    metrics: [
+      ["首月保费", money(result.policy.monthlyPremium)],
+      ["每月总保费", `${money(result.beforePremiums)} -> ${money(result.afterPremiums)}`],
+      ["现金", money(state.cash)],
+      ["净月现金流", money(netMonthlyCashflow())],
+    ],
+    actions: [{ label: "回保险中心", className: "primary", onClick: showInsuranceCenter }],
+  });
+}
+
+function showJobSearch() {
+  if (!state.unemployment.unemployed) {
+    openSimpleModal({
+      type: "失业与再就业",
+      title: "目前有工作",
+      text: "收入中断时，紧急预备金和较低的固定支出会让你有更多时间做选择。",
+      actions: [
+        { label: "模拟失业事件", className: "primary", onClick: () => completeLifeEvent(lifeEvents.find((event) => event.id === "layoff"), "job-search") },
+        { label: "关闭", onClick: closeModal },
+      ],
+    });
+    return;
+  }
+  openSimpleModal({
+    type: "失业与再就业",
+    title: "寻找工作",
+    text: "每回合可以寻找工作，也可以支付进修费提高机会。不是保证成功，但会增加进度。",
+    metrics: [
+      ["剩余月份", `${state.unemployment.unemploymentMonthsRemaining} 月`],
+      ["失业补助", money(state.unemployment.unemploymentBenefit)],
+      ["找工作进度", `${state.unemployment.jobSearchProgress}%`],
+      ["再就业机会", `${Math.round(state.unemployment.reemploymentChance * 100)}%`],
+    ],
+    actions: [
+      { label: "寻找工作", className: "primary", onClick: () => completeJobSearch(false) },
+      { label: "支付进修费", onClick: () => completeJobSearch(true) },
+      { label: "关闭", onClick: closeModal },
+    ],
+  });
+}
+
+function completeJobSearch(training) {
+  const before = state.salary;
+  const result = searchForJob(state, training);
+  addLog(result.ok ? `寻找工作进度 ${state.unemployment.jobSearchProgress}%。` : result.reason);
+  persistQuietly();
+  render();
+  openSimpleModal({
+    type: state.unemployment.unemployed ? "寻找工作" : "重新就业",
+    title: state.unemployment.unemployed ? "继续努力" : "重新就业成功",
+    text: state.unemployment.unemployed ? "持续行动会提高机会。" : "重新就业后工资恢复，可能高于、等于或低于原薪资。",
+    metrics: [
+      ["进修费用", money(result.cost || 0)],
+      ["原工资", money(before)],
+      ["当前工资", money(state.salary)],
+      ["找工作进度", `${state.unemployment.jobSearchProgress}%`],
+    ],
+    actions: [{ label: "完成", className: "primary", onClick: closeModal }],
+  });
+}
+
+function showTaxSummary(fromTile = false) {
+  const summary = calculateTaxSummary(state);
+  openSimpleModal({
+    type: fromTile ? "税务格" : "Tax Summary",
+    title: "游戏中的简化税务规则",
+    text: "这不是任何真实国家的报税建议，只是练习收入增加时也要预留税务责任。",
+    metrics: [
+      ["工资收入", money(summary.sources.salaryIncome)],
+      ["小生意利润", money(summary.sources.businessProfit)],
+      ["租金收入", money(summary.sources.rentalIncome)],
+      ["股息与收益", money(summary.sources.dividends + summary.sources.realizedGain)],
+      ["简化应税收入", money(summary.taxableIncome)],
+      ["游戏税率", percentText(summary.taxRate)],
+      ["预估税款", money(summary.estimatedTax)],
+      ["税务余额", money(summary.taxBalance)],
+    ],
+    actions: [
+      { label: "完成税务结算", className: "primary", onClick: completeTaxSettlement },
+      { label: "关闭", onClick: closeModal },
+    ],
+  });
+}
+
+function completeTaxSettlement() {
+  const result = settleTax(state, `tax-${state.round}-${Date.now()}`);
+  addLog(result.ok ? `税务结算：支付 ${money(result.paidNow)}，新增税务负债 ${money(result.liabilityAdded)}。` : result.reason);
+  persistQuietly();
+  render();
+  openSimpleModal({
+    type: "税务结算",
+    title: "结算完成",
+    text: "收入增加时，也要记得可能有税务责任。提前预留，可以避免到期时现金不足。",
+    metrics: [
+      ["预估税款", money(result.summary?.estimatedTax || 0)],
+      ["本次支付", money(result.paidNow || 0)],
+      ["税务负债", money(result.liabilityAdded || 0)],
+      ["现金", money(state.cash)],
+    ],
+    actions: [{ label: "完成", className: "primary", onClick: closeModal }],
   });
 }
 
@@ -2477,6 +2864,44 @@ window.cashflowDebug = {
   triggerBusinessMarket: () => {
     if (!state) return;
     completeBusinessMarketEvent(pickBusinessMarketEvent(() => 0));
+  },
+  buyBasicInsurance: () => {
+    if (!state) state = createState(careers[3]);
+    state.cash = Math.max(state.cash, 50000);
+    completeInsurancePurchase("basic-medical");
+  },
+  buyAccidentInsurance: () => {
+    if (!state) state = createState(careers[3]);
+    state.cash = Math.max(state.cash, 50000);
+    completeInsurancePurchase("accident-bundle");
+  },
+  triggerCoveredMedicalEvent: () => {
+    if (!state) return;
+    completeLifeEvent(lifeEvents.find((event) => event.id === "clinic-visit"), "full-care");
+  },
+  triggerUncoveredEvent: () => {
+    if (!state) return;
+    completeLifeEvent(lifeEvents.find((event) => event.id === "phone-accident"), "repair");
+  },
+  triggerUnemployment: () => {
+    if (!state) return;
+    completeLifeEvent(lifeEvents.find((event) => event.id === "layoff"), "job-search");
+  },
+  searchJob: () => {
+    if (!state) return;
+    completeJobSearch(true);
+  },
+  triggerPromotion: () => {
+    if (!state) return;
+    completeLifeEvent(lifeEvents.find((event) => event.id === "performance-raise"), "accept");
+  },
+  settleTax: () => {
+    if (!state) return;
+    completeTaxSettlement();
+  },
+  triggerFamilyEvent: () => {
+    if (!state) return;
+    completeLifeEvent(lifeEvents.find((event) => event.id === "family-trip"), "basic");
   },
   sellFirstBusiness: () => {
     if (!state?.businessHoldings?.length) return;

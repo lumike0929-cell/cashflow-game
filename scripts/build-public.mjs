@@ -23,6 +23,17 @@ const deployFiles = [
   "bankingData.js",
   "bankingStorageMigration.js",
   "bankingTransactions.js",
+  "insuranceData.js",
+  "insuranceCalculator.js",
+  "insuranceTransactions.js",
+  "lifeEventData.js",
+  "lifeEventCalculator.js",
+  "lifeEventResolver.js",
+  "lifeEventTransactions.js",
+  "lifeEventStorageMigration.js",
+  "unemploymentEngine.js",
+  "taxCalculator.js",
+  "economyCycleEngine.js",
 ];
 
 await rm("public", { recursive: true, force: true });

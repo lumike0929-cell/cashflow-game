@@ -463,12 +463,38 @@ export function calculatePropertyOperatingExpenses(state) {
   return calculatePortfolioSummary(state.ownedProperties).monthlyExpenses;
 }
 
+export function calculateInsurancePremiumsFromState(state) {
+  if (!Array.isArray(state.insurancePolicies)) return 0;
+  return moneyNumber(state.insurancePolicies.reduce((sum, policy) => sum + (policy?.active !== false ? moneyNumber(policy.monthlyPremium) : 0), 0));
+}
+
+export function calculateLifeEffectExpenses(state) {
+  if (!Array.isArray(state.lifeActiveEffects)) return 0;
+  return moneyNumber(state.lifeActiveEffects.reduce((sum, effect) => sum + moneyNumber(effect.monthlyExpenseImpact), 0));
+}
+
+export function calculateLifeEffectIncome(state) {
+  if (!Array.isArray(state.lifeActiveEffects)) return 0;
+  return moneyNumber(state.lifeActiveEffects.reduce((sum, effect) => sum + moneyNumber(effect.monthlyIncomeImpact), 0));
+}
+
+export function calculateSalaryIncome(state) {
+  if (state?.unemployment?.unemployed || state?.unemployment?.salarySuspended) return 0;
+  return moneyNumber(state.salary || 0);
+}
+
 export function calculateTotalExpenses(state) {
-  return moneyNumber((state.baseExpenses || 0) + calculateLiabilityPayments(state) + calculatePropertyOperatingExpenses(state));
+  return moneyNumber(
+    (state.baseExpenses || 0) +
+      calculateLiabilityPayments(state) +
+      calculatePropertyOperatingExpenses(state) +
+      calculateInsurancePremiumsFromState(state) +
+      calculateLifeEffectExpenses(state),
+  );
 }
 
 export function calculateMonthlyCashflow(state) {
-  return moneyNumber((state.salary || 0) + calculatePassiveIncome(state) - calculateTotalExpenses(state));
+  return moneyNumber(calculateSalaryIncome(state) + calculateLifeEffectIncome(state) + calculatePassiveIncome(state) - calculateTotalExpenses(state));
 }
 
 export function calculateNetWorth(state) {

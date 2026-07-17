@@ -399,7 +399,11 @@ p {
 .tile.stockOpportunity,
 .tile.businessOpportunity,
 .tile.businessEvent,
-.tile.businessMarket {
+.tile.businessMarket,
+.tile.lifeEvent,
+.tile.insurance,
+.tile.tax,
+.tile.jobEvent {
   background: #edf5ff;
 }
 
@@ -780,7 +784,12 @@ p {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.bank-panel {
+.life-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.bank-panel,
+.life-panel {
   display: grid;
   gap: 14px;
 }
@@ -1019,6 +1028,7 @@ p {
   .stock-summary-grid,
   .business-summary-grid,
   .bank-summary-grid,
+  .life-summary-grid,
   .bank-actions {
     grid-template-columns: 1fr;
   }
