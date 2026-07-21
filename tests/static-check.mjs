@@ -36,6 +36,7 @@ const requiredFiles = [
   "unemploymentEngine.js",
   "taxCalculator.js",
   "economyCycleEngine.js",
+  "progressSystem.js",
 ];
 
 for (const file of requiredFiles) {

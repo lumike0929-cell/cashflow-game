@@ -34,6 +34,7 @@ const files = [
   "unemploymentEngine.js",
   "taxCalculator.js",
   "economyCycleEngine.js",
+  "progressSystem.js",
   "scripts/build-public.mjs",
   "tests/real-estate.test.mjs",
   "tests/stock.test.mjs",
@@ -47,6 +48,7 @@ const files = [
   "tests/unemployment.test.mjs",
   "tests/tax.test.mjs",
   "tests/game-experience.test.mjs",
+  "tests/progress.test.mjs",
   "tests/browser-acceptance.mjs",
   "tests/static-check.mjs",
 ];

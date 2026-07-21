@@ -35,6 +35,7 @@ const deployFiles = [
   "unemploymentEngine.js",
   "taxCalculator.js",
   "economyCycleEngine.js",
+  "progressSystem.js",
 ];
 
 await rm("public", { recursive: true, force: true });

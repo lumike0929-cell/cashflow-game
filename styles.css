@@ -1635,6 +1635,42 @@ p {
   font-size: 18px;
 }
 
+.difficulty-picker {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(36, 107, 159, 0.14);
+  border-radius: 20px;
+  padding: 10px;
+  background: rgba(233, 243, 255, 0.74);
+}
+
+.difficulty-picker > span,
+.difficulty-picker small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.difficulty-picker > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.difficulty-picker button {
+  min-height: 38px;
+  border-radius: 14px;
+  padding: 7px 8px;
+  background: #ffffff;
+  font-size: 13px;
+}
+
+.difficulty-picker button.selected {
+  background: linear-gradient(180deg, #ffe991, #d8a21f);
+  color: #51390e;
+  box-shadow: 0 5px 0 #ac7912;
+}
+
 .career-thumb-rail {
   grid-column: 1 / -1;
   display: grid;
@@ -2748,6 +2784,52 @@ body[data-quality="battery"] .finance-effect {
   box-shadow: 0 0 0 3px rgba(244, 170, 161, 0.18);
 }
 
+.unlock-toast {
+  position: fixed;
+  right: clamp(16px, 4vw, 34px);
+  bottom: calc(104px + env(safe-area-inset-bottom));
+  z-index: 95;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 4px 10px;
+  align-items: center;
+  max-width: min(360px, calc(100vw - 32px));
+  border: 2px solid rgba(255, 216, 107, 0.72);
+  border-radius: 22px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow);
+  text-align: left;
+  animation: unlock-pop 2200ms ease both;
+}
+
+.unlock-toast span {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffe991, #d8a21f);
+  color: #51390e;
+  font-weight: 950;
+}
+
+.unlock-toast strong,
+.unlock-toast small {
+  overflow-wrap: anywhere;
+}
+
+.unlock-toast strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.unlock-toast small {
+  color: var(--muted);
+  font-weight: 850;
+}
+
 .modal-card {
   border-width: 2px;
   background:
@@ -3249,6 +3331,24 @@ body[data-quality="battery"] .finance-effect {
   100% {
     opacity: 0;
     transform: translateY(-28px) scale(1.2);
+  }
+}
+
+@keyframes unlock-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.92);
+  }
+
+  12%,
+  82% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
   }
 }
 

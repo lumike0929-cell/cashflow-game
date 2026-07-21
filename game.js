@@ -117,8 +117,27 @@ import {
   contextTipMessages,
   avatarMarkup,
 } from "./gameExperience.js";
+import {
+  achievementDefinitions,
+  addReport,
+  badgeDefinitions,
+  calculateFinancialFreedomProgress,
+  challengeDefinitions,
+  claimCompletedMissions,
+  continueFreedomMode,
+  createDifficultyAdjustedCareer,
+  createGameReport,
+  difficultyModes,
+  evaluateFinancialPressure,
+  evaluateProgress,
+  migrateProgressState,
+  milestoneDefinitions,
+  recordProgressEvent,
+  startChallengeState,
+} from "./progressSystem.js";
 
 const STORAGE_KEY = "cashflow-freedom-game-v1";
+const CHALLENGE_STORAGE_KEY = "cashflow-freedom-challenge-v1";
 
 const careers = [
   {
@@ -160,6 +179,7 @@ const careers = [
 ];
 
 let selectedCareerId = "teacher";
+let selectedDifficultyId = "standard";
 
 const boardTiles = [
   { type: "payday", icon: "月", title: "月结日", text: "领取工资与被动收入，支付全部支出。" },
@@ -301,6 +321,7 @@ const el = {
   startAdventure: document.querySelector("#startAdventure"),
   heroCharacter: document.querySelector("#heroCharacter"),
   rulesHome: document.querySelector("#rulesHome"),
+  progressHome: document.querySelector("#progressHome"),
   soundHome: document.querySelector("#soundHome"),
   clearSaveHome: document.querySelector("#clearSaveHome"),
 };
@@ -359,6 +380,14 @@ function createState(career) {
   });
 }
 
+function createNewGameState(career, difficultyId = "standard") {
+  const adjustedCareer = createDifficultyAdjustedCareer(career, difficultyId);
+  const nextState = createState(adjustedCareer);
+  nextState.gameDifficulty = difficultyId;
+  migrateProgressState(nextState);
+  return nextState;
+}
+
 function passiveIncome() {
   return state ? calculatePassiveIncome(state) : 0;
 }
@@ -377,7 +406,7 @@ function netMonthlyCashflow() {
 
 function freedomRatio() {
   if (!state) return 0;
-  return Math.min(100, Math.round((passiveIncome() / Math.max(1, totalExpenses())) * 100));
+  return Math.min(150, calculateFinancialFreedomProgress(state).percent);
 }
 
 function money(value) {
@@ -404,12 +433,15 @@ function addLog(message) {
 
 function persistQuietly() {
   if (!state) return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  migrateProgressState(state);
+  localStorage.setItem(state.activeChallenge ? CHALLENGE_STORAGE_KEY : STORAGE_KEY, JSON.stringify(state));
 }
 
 function renderSetup() {
   const selected = careers.find((item) => item.id === selectedCareerId) || careers[0];
-  const monthlyBalance = selected.salary - selected.expenses;
+  const adjusted = createDifficultyAdjustedCareer(selected, selectedDifficultyId);
+  const difficulty = difficultyModes.find((item) => item.id === selectedDifficultyId) || difficultyModes[1];
+  const monthlyBalance = adjusted.salary - adjusted.expenses;
   if (el.heroCharacter) {
     el.heroCharacter.innerHTML = avatarMarkup(selected, "happy", "right");
   }
@@ -433,10 +465,25 @@ function renderSetup() {
         <strong class="career-role">${careerPersonality(selected.id)}</strong>
         <p>${careerShortNote(selected.id)}</p>
         <div class="career-stat-pills">
-          <span>工资 <strong>${money(selected.salary)}</strong></span>
-          <span>月支出 <strong>${money(selected.expenses)}</strong></span>
-          <span>现金 <strong>${money(selected.savings)}</strong></span>
+          <span>工资 <strong>${money(adjusted.salary)}</strong></span>
+          <span>月支出 <strong>${money(adjusted.expenses)}</strong></span>
+          <span>现金 <strong>${money(adjusted.savings)}</strong></span>
           <span>月结余 <strong>${money(monthlyBalance)}</strong></span>
+        </div>
+        <div class="difficulty-picker" aria-label="选择难度">
+          <span>难度：${difficulty.title}</span>
+          <div>
+            ${difficultyModes
+              .map(
+                (mode) => `
+                  <button type="button" class="${mode.id === selectedDifficultyId ? "selected" : ""}" data-difficulty="${mode.id}" aria-pressed="${mode.id === selectedDifficultyId}">
+                    ${mode.title}
+                  </button>
+                `,
+              )
+              .join("")}
+          </div>
+          <small>${difficulty.description}</small>
         </div>
       </div>
       <div class="career-thumb-rail" aria-label="角色缩图">
@@ -459,6 +506,13 @@ function renderSetup() {
   el.careerGrid.querySelectorAll("[data-career]").forEach((button) => {
     button.addEventListener("click", () => {
       selectedCareerId = button.dataset.career || selectedCareerId;
+      soundManager.play("tap");
+      renderSetup();
+    });
+  });
+  el.careerGrid.querySelectorAll("[data-difficulty]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedDifficultyId = button.dataset.difficulty || selectedDifficultyId;
       soundManager.play("tap");
       renderSetup();
     });
@@ -486,13 +540,13 @@ function careerShortNote(id) {
 
 function startSelectedCareer() {
   const career = careers.find((item) => item.id === selectedCareerId) || careers[0];
-  state = createState(career);
+  state = createNewGameState(career, selectedDifficultyId);
   showGame();
   render();
   openSimpleModal({
     type: "开始",
     title: "现金流挑战开始",
-    text: `你现在是${career.name}。这座城市会陪你练习收入、支出、投资、保险、银行和人生事件。`,
+    text: `你现在是${career.name}，难度为${difficultyModes.find((item) => item.id === selectedDifficultyId)?.title || "标准"}。这座城市会陪你练习收入、支出、投资、保险、银行和人生事件。`,
     actions: [{ label: "开始掷骰", className: "primary", onClick: () => { closeModal(); maybeStartTutorial(); } }],
   });
 }
@@ -541,16 +595,18 @@ function render() {
   ensureTaxState(state);
   ensureEconomyState(state);
   ensureLifeEventState(state);
+  migrateProgressState(state);
+  state.financialFreedomProgress = calculateFinancialFreedomProgress(state);
   syncMortgageLiabilities(state);
   showGame();
-  const freedom = freedomRatio();
+  const freedom = Math.min(150, state.financialFreedomProgress.percent);
   el.careerLabel.textContent = state.career.name;
-  el.gameTitle.textContent = state.gameOver ? "你已经跳出打工循环" : "现金流资产挑战";
-  el.gameSubtitle.textContent = state.gameOver
-    ? "被动收入已经覆盖全部支出，游戏目标达成。"
+  el.gameTitle.textContent = state.victoryState?.triggered ? "财务自由模式" : "现金流资产挑战";
+  el.gameSubtitle.textContent = state.victoryState?.triggered
+    ? `被动收入 ${money(state.financialFreedomProgress.passiveIncome)} 已覆盖必要支出 ${money(state.financialFreedomProgress.necessaryExpenses)}。`
     : `现金 ${money(state.cash)}，净月现金流 ${money(netMonthlyCashflow())}，净资产 ${money(calculateNetWorth(state))}。`;
   el.freedomPercent.textContent = `${freedom}%`;
-  el.freedomBar.style.width = `${freedom}%`;
+  el.freedomBar.style.width = `${Math.min(100, freedom)}%`;
   el.roundLabel.textContent = `第 ${state.month} 月`;
   el.diceValue.innerHTML = diceMarkup(state.lastRoll || 1, uiState.diceRolling);
   el.rollDice.disabled = !canRoll();
@@ -930,6 +986,7 @@ function renderActions() {
       <button type="button" id="focusPlayerHud"><span>◎</span><strong>玩家</strong></button>
       <button type="button" id="openFinancePanel"><span>¥</span><strong>财务</strong></button>
       <button type="button" id="openBankCenter"><span>银</span><strong>银行</strong></button>
+      <button type="button" id="openProgressCenter"><span>奖</span><strong>进度</strong></button>
       <button type="button" id="openPortfolio"><span>房</span><strong>房产</strong></button>
       <button type="button" id="openStockPortfolio"><span>股</span><strong>股票</strong></button>
       <button type="button" id="openBusinessPortfolio"><span>店</span><strong>生意</strong></button>
@@ -942,9 +999,12 @@ function renderActions() {
   document.querySelector("#focusPlayerHud")?.addEventListener("click", () => focusCameraOnPlayer(true));
   document.querySelector("#toggleSound")?.addEventListener("click", toggleSound);
   document.querySelector("#openFinancePanel")?.addEventListener("click", () => {
+    recordProgressEvent(state, "financeView");
+    processProgress(false);
     document.querySelector(".finance-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
   document.querySelector("#openBankCenter")?.addEventListener("click", showBankCenter);
+  document.querySelector("#openProgressCenter")?.addEventListener("click", () => showProgressCenter("freedom"));
   document.querySelector("#repayDebt")?.addEventListener("click", repayDebt);
   document.querySelector("#newRun")?.addEventListener("click", resetGame);
   document.querySelector("#openPortfolio")?.addEventListener("click", () => {
@@ -959,6 +1019,234 @@ function renderActions() {
   document.querySelector("#openLifeCenter")?.addEventListener("click", () => {
     document.querySelector("#lifeSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+}
+
+function processProgress(allowVictory = true) {
+  if (!state) return null;
+  const result = evaluateProgress(state, {
+    turnPhase: uiState.turnPhase,
+    hasOpenEvent: !el.modal.classList.contains("hidden"),
+  });
+  if (result.unlocked.length) {
+    showUnlockToast(result.unlocked[0]);
+  }
+  if (allowVictory && result.victory.triggered) {
+    showVictoryReport(result.victory.report);
+  } else if (allowVictory && result.challenge.active && (result.challenge.completed || result.challenge.timedOut) && !state.activeChallenge.reportShown) {
+    state.activeChallenge.reportShown = true;
+    const report = addReport(state, createGameReport(state, result.challenge.completed ? "challenge-complete" : "challenge-timeout"));
+    showGameReport(report, result.challenge.completed ? "挑战完成" : "挑战回合用完");
+  } else if (allowVictory && result.pressure.severe && !state.progressStats.pressureWarningShown && el.modal.classList.contains("hidden")) {
+    state.progressStats.pressureWarningShown = true;
+    showFinancialPressure(result.pressure);
+  }
+  persistQuietly();
+  return result;
+}
+
+function showUnlockToast(item) {
+  const toast = document.createElement("button");
+  toast.type = "button";
+  toast.className = "unlock-toast";
+  toast.innerHTML = `
+    <span>${item.iconKey || "奖"}</span>
+    <strong>${item.type || "解锁"}：${item.title}</strong>
+    <small>${item.description || item.learningTip || "新的进度已记录。"}</small>
+  `;
+  toast.addEventListener("click", () => {
+    toast.remove();
+    showProgressCenter("achievements");
+  });
+  document.body.append(toast);
+  soundManager.play("happy");
+  window.setTimeout(() => toast.remove(), prefersReducedMotion() ? 500 : 2400);
+}
+
+function showProgressCenter(tab = "freedom") {
+  if (!state) return;
+  migrateProgressState(state);
+  evaluateProgress(state, { turnPhase: uiState.turnPhase, hasOpenEvent: true });
+  const tabs = [
+    ["freedom", "财务自由"],
+    ["missions", "任务"],
+    ["achievements", "成就"],
+    ["badges", "徽章"],
+    ["challenges", "挑战"],
+    ["reports", "报告"],
+  ];
+  const content = progressCenterMetrics(tab);
+  openSimpleModal({
+    type: "Progress Center",
+    title: "进度中心",
+    text: "这里记录短期任务、中期里程碑和最终财务自由目标。内容都是游戏中的简化学习模型。",
+    metrics: content,
+    actions: [
+      ...tabs.map(([id, label]) => ({
+        label,
+        className: id === tab ? "primary" : "",
+        onClick: () => showProgressCenter(id),
+      })),
+      ...(tab === "missions" ? [{ label: "领取完成任务", className: "primary", onClick: claimMissionsAndRefresh }] : []),
+      ...(tab === "reports" ? [{ label: "生成当前报告", className: "primary", onClick: createManualReport }] : []),
+      ...(tab === "challenges" ? challengeDefinitions.slice(0, 3).map((item) => ({ label: `开始：${item.title}`, onClick: () => confirmStartChallenge(item.id) })) : []),
+      { label: "关闭", onClick: closeModal },
+    ],
+  });
+}
+
+function progressCenterMetrics(tab) {
+  const progress = calculateFinancialFreedomProgress(state);
+  if (tab === "freedom") {
+    return [
+      ["目前阶段", progress.stage],
+      ["被动收入", money(progress.passiveIncome)],
+      ["每月必要支出", money(progress.necessaryExpenses)],
+      ["还差", money(progress.remaining)],
+      ["完成百分比", `${progress.percent}%`],
+      ["说明", progress.educationTip],
+    ];
+  }
+  if (tab === "missions") {
+    return state.activeMissions.map((missionItem) => [
+      missionItem.completed ? `完成：${missionItem.title}` : missionItem.title,
+      `${moneyValue(missionItem.progress)} / ${moneyValue(missionItem.target)} · ${missionItem.description}`,
+    ]);
+  }
+  if (tab === "achievements") {
+    return [
+      ["已解锁", `${state.achievements.filter((item) => item.unlocked).length} / ${achievementDefinitions.length}`],
+      ...state.achievements.slice(0, 10).map((item) => [item.unlocked ? item.title : "神秘成就", item.unlocked ? `${item.category} · 第 ${item.unlockedAtRound || "-"} 回合` : item.description]),
+    ];
+  }
+  if (tab === "badges") {
+    return [
+      ["已收藏", `${state.badges.filter((item) => item.unlocked).length} / ${badgeDefinitions.length}`],
+      ...state.badges.map((item) => [item.unlocked ? `${item.iconKey} ${item.title}` : `锁定 ${item.iconKey}`, item.unlocked ? item.description : "继续游戏可解锁。"]),
+    ];
+  }
+  if (tab === "challenges") {
+    return challengeDefinitions.map((item) => {
+      const best = state.challengeBestResults[item.id];
+      return [item.title, `${item.difficulty} · ${item.roundLimit} 回合 · ${best?.completed ? `最佳 ${best.bestRound} 回合` : item.description}`];
+    });
+  }
+  return state.gameReports.length
+    ? state.gameReports.slice(0, 6).map((report) => [`${report.reason} · 第 ${report.round} 回合`, `净资产 ${money(report.netWorth)} · 自由进度 ${report.freedomPercent}% · ${report.goodSummary}`])
+    : [["暂无报告", "胜利、挑战结束或手动生成后会显示。"]];
+}
+
+function claimMissionsAndRefresh() {
+  const claimed = claimCompletedMissions(state);
+  if (claimed.length) addLog(`领取 ${claimed.length} 个任务奖励。`);
+  persistQuietly();
+  render();
+  showProgressCenter("missions");
+}
+
+function createManualReport() {
+  const report = addReport(state, createGameReport(state, "manual"));
+  persistQuietly();
+  showGameReport(report, "当前结算报告");
+}
+
+function showVictoryReport(report) {
+  setAvatarMood("celebrating", 2200);
+  emitFinanceEffect(calculateFinancialFreedomProgress(state).passiveIncome, "财务自由达成", "payday", state.victoryState.reportId || "victory");
+  showGameReport(report || createGameReport(state, "victory"), "财务自由达成");
+}
+
+function showGameReport(report, title = "游戏结算报告") {
+  openSimpleModal({
+    type: "结算报告",
+    title,
+    text: "这份报告使用游戏规则整理，不是真实投资建议。你可以继续自由模式，或开始新挑战。",
+    metrics: [
+      ["总回合数", `${report.round}`],
+      ["总月份", `${report.month}`],
+      ["最终现金", money(report.cash)],
+      ["月收入", money(report.totalIncome)],
+      ["月支出", money(report.monthlyExpenses)],
+      ["月现金流", money(report.monthlyCashflow)],
+      ["被动收入", money(report.passiveIncome)],
+      ["财务自由进度", `${report.freedomPercent}%`],
+      ["净资产", money(report.netWorth)],
+      ["总资产", money(report.totalAssets)],
+      ["总负债", money(report.totalLiabilities)],
+      ["房产数量", `${report.propertyCount}`],
+      ["股票持仓", `${report.stockHoldingCount}`],
+      ["小生意数量", `${report.businessCount}`],
+      ["保单数量", `${report.activeInsuranceCount}`],
+      ["解锁成就", `${report.unlockedAchievements}`],
+      ["完成任务", `${report.completedMissions}`],
+      ["最大单笔收入", money(report.largestIncome)],
+      ["最大单笔支出", money(report.largestExpense)],
+      ["重要决策", report.keyDecisions.join(" · ")],
+      ["做得好的地方", report.goodSummary],
+      ["可以改善", report.improveSummary],
+      ["下一局可尝试", report.nextStrategy],
+    ],
+    actions: [
+      { label: "继续自由模式", className: "primary", onClick: continueAfterVictory },
+      { label: "开始新挑战", onClick: () => showProgressCenter("challenges") },
+      { label: "返回首页", onClick: resetGame },
+    ],
+    outcome: "success",
+  });
+}
+
+function continueAfterVictory() {
+  continueFreedomMode(state);
+  persistQuietly();
+  closeModal();
+  render();
+}
+
+function showFinancialPressure(pressure = evaluateFinancialPressure(state)) {
+  openSimpleModal({
+    type: "财务压力",
+    title: "需要重新规划",
+    text: "这不是失败，只是现金流正在提醒你先处理压力。",
+    metrics: [
+      ["目前现金", money(pressure.cash)],
+      ["每月缺口", money(pressure.monthlyGap)],
+      ["负债状况", money(pressure.debt)],
+      ["可行动作", pressure.actions.join(" · ")],
+    ],
+    actions: [
+      { label: "前往银行", className: "primary", onClick: showBankCenter },
+      { label: "查看资产", onClick: () => showProgressCenter("freedom") },
+      { label: "继续挑战", onClick: closeModal },
+    ],
+    outcome: "warning",
+  });
+}
+
+function confirmStartChallenge(challengeId) {
+  const challengeItem = challengeDefinitions.find((item) => item.id === challengeId) || challengeDefinitions[0];
+  openSimpleModal({
+    type: "挑战模式",
+    title: challengeItem.title,
+    text: "挑战会使用独立挑战存档，不覆盖正常游戏存档。",
+    metrics: [
+      ["难度", challengeItem.difficulty],
+      ["回合限制", `${challengeItem.roundLimit}`],
+      ["目标", challengeItem.objectives.join("、")],
+      ["奖励徽章", challengeItem.rewardBadge],
+    ],
+    actions: [
+      { label: "开始挑战", className: "primary", onClick: () => startChallenge(challengeItem.id) },
+      { label: "返回", onClick: () => showProgressCenter("challenges") },
+    ],
+  });
+}
+
+function startChallenge(challengeId) {
+  const career = state?.career || createDifficultyAdjustedCareer(careers.find((item) => item.id === selectedCareerId) || careers[0], selectedDifficultyId);
+  const baseState = state || createNewGameState(career, selectedDifficultyId);
+  state = startChallengeState(baseState, challengeId, career);
+  persistQuietly();
+  closeModal();
+  render();
 }
 
 function toggleSound() {
@@ -1039,6 +1327,7 @@ function skipTutorial() {
   if (!uiState.tutorial.active) return;
   uiState.tutorial.active = false;
   uiState.tutorialComplete = true;
+  if (state) recordProgressEvent(state, "tutorialComplete");
   saveExperience();
   renderTutorial();
 }
@@ -1046,6 +1335,7 @@ function skipTutorial() {
 function completeTutorial() {
   uiState.tutorial.active = false;
   uiState.tutorialComplete = true;
+  if (state) recordProgressEvent(state, "tutorialComplete");
   saveExperience();
   soundManager.play("win");
   setAvatarMood("celebrating", 1800);
@@ -1814,6 +2104,7 @@ function collectPayday(reason) {
   state.month += 1;
   addLog(`${reason}：结算净现金流 ${money(beforeCashflow)}。`);
   if (dividendResult.totalDividend > 0) {
+    recordProgressEvent(state, "dividend");
     addLog(`收到股票股息 ${money(dividendResult.totalDividend)}。股息不是每家公司都会发放。`);
     queueContextTip("firstDividend");
     setAvatarMood("happy", 1400);
@@ -1862,6 +2153,8 @@ function collectPayday(reason) {
 }
 
 function showOpportunity() {
+  recordProgressEvent(state, "propertyCard");
+  processProgress(false);
   const card = pick(realEstateOpportunities);
   const iqDiscount = Math.min(0.08, state.financialIq * 0.01);
   const opportunity = {
@@ -1938,6 +2231,8 @@ function propertyOpportunityMetrics(opportunity, calculation) {
 }
 
 function showOpportunityWhy(opportunity, calculation, eventId) {
+  recordProgressEvent(state, "why");
+  processProgress(false);
   openSimpleModal({
     type: "为什么",
     title: `${opportunity.name} 值得看什么？`,
@@ -2641,6 +2936,9 @@ function completeJobSearch(training) {
   const before = state.salary;
   const result = searchForJob(state, training);
   addLog(result.ok ? `寻找工作进度 ${state.unemployment.jobSearchProgress}%。` : result.reason);
+  if (!state.unemployment.unemployed && before !== state.salary) {
+    recordProgressEvent(state, "unemploymentRecovered");
+  }
   setAvatarMood(state.unemployment.unemployed ? "thinking" : "celebrating", 1800);
   persistQuietly();
   render();
@@ -3396,6 +3694,7 @@ function showLearning() {
         onClick: () => {
           payCost(card.cost, card.name);
           state.financialIq += card.iq;
+          recordProgressEvent(state, "learningEvent");
           addLog(`完成学习，财商等级提升到 ${state.financialIq}。`);
           closeModal();
           persistQuietly();
@@ -3529,12 +3828,14 @@ function repayDebt() {
   const payment = Math.min(5000, loan.balance, state.cash);
   loan.balance -= payment;
   state.cash -= payment;
+  recordProgressEvent(state, "debtRepaid", payment);
   if (loan.type === "personalLoan") {
     state.bank.creditScore = Math.min(850, state.bank.creditScore + 2);
   }
   addLog(`偿还债务 ${money(payment)}。`);
   if (loan.balance <= 0) {
     addLog(`清偿「${loan.name}」，月供减少 ${money(loan.payment)}。`);
+    recordProgressEvent(state, "debtPaidOff");
     state.liabilities = state.liabilities.filter((item) => item.id !== loan.id);
   } else {
     loan.payment = Math.ceil(loan.balance * 0.03);
@@ -3544,27 +3845,8 @@ function repayDebt() {
 }
 
 function checkWin() {
-  if (state.gameOver || passiveIncome() < totalExpenses()) return false;
-  state.gameOver = true;
-  addLog("被动收入已经覆盖总支出，财务自由达成。");
-  persistQuietly();
-  render();
-  openSimpleModal({
-    type: "胜利",
-    title: "你跳出了打工循环",
-    text: `你的被动收入为 ${money(passiveIncome())}，总支出为 ${money(totalExpenses())}。现在即使不依赖工资，也能覆盖每月支出。`,
-    metrics: [
-      ["用时", `${state.month} 个月`],
-      ["房地产数量", `${state.ownedProperties.length} 项`],
-      ["手上现金", money(state.cash)],
-      ["净资产", money(calculateNetWorth(state))],
-    ],
-    actions: [
-      { label: "再开一局", className: "primary", onClick: resetGame },
-      { label: "留在棋盘", onClick: closeModal },
-    ],
-  });
-  return true;
+  const result = processProgress(true);
+  return Boolean(result?.victory.triggered);
 }
 
 function openSimpleModal({ type, title, text, metrics = [], actions = [], outcome = "neutral" }) {
@@ -3622,6 +3904,9 @@ function closeModal() {
   }
   const nextTip = uiState.pendingTips.shift();
   if (nextTip) setTimeout(() => showContextTip(nextTip, true), prefersReducedMotion() ? 20 : 120);
+  if (state && !state.gameOver && !nextTip && uiState.turnPhase === "idle") {
+    window.setTimeout(() => checkWin(), prefersReducedMotion() ? 20 : 120);
+  }
 }
 
 function saveGame() {
@@ -3655,6 +3940,7 @@ function loadGame() {
 }
 
 function resetGame() {
+  if (state?.activeChallenge) localStorage.removeItem(CHALLENGE_STORAGE_KEY);
   state = null;
   localStorage.removeItem(STORAGE_KEY);
   closeModal();
@@ -3702,6 +3988,7 @@ function showGameMenu() {
       { label: "保存进度", className: "primary", disabled: !state, onClick: saveGame },
       { label: "读取存档", onClick: loadGame },
       { label: "声音与画面", onClick: showSoundSettings },
+      { label: "进度中心", disabled: !state, onClick: () => showProgressCenter("freedom") },
       { label: "游戏规则", onClick: showRules },
       { label: "重新开始", className: "danger", onClick: confirmResetGame },
       { label: "关闭", onClick: closeModal },
@@ -3821,6 +4108,13 @@ el.gameMenu?.addEventListener("click", showGameMenu);
 el.continueGameHome?.addEventListener("click", loadGame);
 el.startAdventure?.addEventListener("click", showCharacterSelection);
 el.rulesHome?.addEventListener("click", showRules);
+el.progressHome?.addEventListener("click", () => {
+  if (!state) {
+    const previewState = createNewGameState(careers.find((item) => item.id === selectedCareerId) || careers[0], selectedDifficultyId);
+    state = previewState;
+  }
+  showProgressCenter("freedom");
+});
 el.soundHome?.addEventListener("click", showSoundSettings);
 el.clearSaveHome?.addEventListener("click", confirmClearSavedGame);
 el.closeModal.addEventListener("click", closeModal);
@@ -4010,6 +4304,19 @@ window.cashflowDebug = {
     boardTiles: boardTiles.length,
     financeEffects: document.querySelectorAll(".finance-effect").length,
     playedEffectIds: uiState.playedEffectIds.size,
+    progress: state
+      ? {
+          freedom: calculateFinancialFreedomProgress(state),
+          milestones: state.milestones?.filter((item) => item.unlocked).length || 0,
+          achievements: state.achievements?.filter((item) => item.unlocked).length || 0,
+          badges: state.badges?.filter((item) => item.unlocked).length || 0,
+          activeMissions: state.activeMissions?.length || 0,
+          completedMissions: state.completedMissions?.length || 0,
+          reports: state.gameReports?.length || 0,
+          victory: state.victoryState,
+          challenge: state.activeChallenge,
+        }
+      : null,
   }),
   focusPlayer: () => focusCameraOnPlayer(true),
   zoomMap: (delta) => zoomCamera(delta),
@@ -4031,6 +4338,51 @@ window.cashflowDebug = {
     emitFinanceEffect(88, "同一笔交易", "debug-duplicate", "debug-transaction-once");
     emitFinanceEffect(88, "同一笔交易", "debug-duplicate", "debug-transaction-once");
   },
+  showProgressCenter,
+  completeProgressMissions: () => {
+    if (!state) return;
+    recordProgressEvent(state, "financeView");
+    recordProgressEvent(state, "propertyCard");
+    state.stockTransactions.push({ type: "买入", cashChange: -1000, totalAmount: 1000 });
+    evaluateProgress(state, { turnPhase: "idle", hasOpenEvent: false });
+    claimCompletedMissions(state);
+    persistQuietly();
+    render();
+  },
+  unlockProgressSamples: () => {
+    if (!state) return;
+    state.cash = Math.max(state.cash, 60000);
+    state.round = Math.max(state.round, 12);
+    state.stockTransactions.push({ type: "买入", cashChange: -1000, totalAmount: 1000 });
+    if (!state.insurancePolicies.length) state.insurancePolicies.push({ id: "debug-policy", name: "验收保险", active: true, monthlyPremium: 100 });
+    evaluateProgress(state, { turnPhase: "idle", hasOpenEvent: false });
+    persistQuietly();
+    render();
+  },
+  simulateVictory: () => {
+    if (!state) return;
+    state.ownedProperties.push({
+      id: `debug-freedom-${Date.now()}`,
+      name: "自由现金流房产",
+      monthlyRent: calculateTotalExpenses(state) + 5000,
+      monthlyExpenses: 0,
+      mortgagePayment: 0,
+      currentValue: 300000,
+      mortgageBalance: 0,
+      equity: 300000,
+    });
+    checkWin();
+  },
+  continueFreedom: () => continueAfterVictory(),
+  simulatePressure: () => {
+    if (!state) return;
+    state.cash = -8000;
+    state.salary = 0;
+    state.liabilities.push({ id: `debug-pressure-${Date.now()}`, type: "emergency", name: "验收紧急负债", balance: 90000, payment: 2500 });
+    state.progressStats.pressureWarningShown = false;
+    showFinancialPressure(evaluateFinancialPressure(state));
+  },
+  startChallengeDebug: () => startChallenge("starter-cashflow"),
   dispatchVisibility: () => document.dispatchEvent(new Event("visibilitychange")),
   closeModal,
 };

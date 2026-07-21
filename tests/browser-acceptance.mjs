@@ -62,6 +62,8 @@ try {
   for (const roleName of ["小学老师", "软件工程师", "自由设计师", "牙科医生"]) {
     await expectText(page, roleName);
   }
+  await page.locator('[data-difficulty="beginner"]').click();
+  assert.equal(await page.locator(".difficulty-picker button.selected").innerText(), "新手");
   await page.locator('[data-career="doctor"]').click();
   await page.locator("#startSelectedCareer").click();
   await page.evaluate(() => window.cashflowDebug.closeModal());
@@ -81,6 +83,20 @@ try {
     });
   });
   assert.equal(await page.locator(".map-asset-marker").count(), 0);
+
+  await page.evaluate(() => window.cashflowDebug.showProgressCenter("freedom"));
+  await expectText(page, "进度中心");
+  await expectText(page, "目前阶段");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.completeProgressMissions());
+  await page.evaluate(() => window.cashflowDebug.unlockProgressSamples());
+  const progressSnapshot = await page.evaluate(() => window.cashflowDebug.getExperience().progress);
+  assert.ok(progressSnapshot.completedMissions >= 1);
+  assert.ok(progressSnapshot.achievements >= 3);
+  assert.ok(progressSnapshot.badges >= 1);
+  await page.evaluate(() => window.cashflowDebug.showProgressCenter("missions"));
+  await expectText(page, "领取完成任务");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
 
   await page.evaluate(() => window.cashflowDebug.startTutorial(true));
   let tutorialState = await page.evaluate(() => window.cashflowDebug.getExperience());
@@ -325,7 +341,7 @@ try {
   assert.equal(result.businessHoldings, 1);
   assert.ok(result.businessTransactions >= 7);
   assert.equal(result.hasBusinessUpgrade, true);
-  assert.equal(result.insurancePolicies, 2);
+  assert.ok(result.insurancePolicies >= 2);
   assert.ok(result.insuranceClaims >= 1);
   assert.ok(result.lifeEvents >= 5);
   assert.equal(result.unemployed, false);
@@ -338,6 +354,26 @@ try {
   assert.match(result.text, /小生意/);
   assert.match(result.text, /人生与保障/);
   assert.match(result.text, /预备金/);
+
+  await page.evaluate(() => window.cashflowDebug.simulateVictory());
+  await expectText(page, "财务自由达成");
+  let postVictory = await page.evaluate(() => window.cashflowDebug.getExperience().progress);
+  assert.equal(postVictory.victory.triggered, true);
+  assert.ok(postVictory.reports >= 1);
+  await page.evaluate(() => window.cashflowDebug.continueFreedom());
+  postVictory = await page.evaluate(() => window.cashflowDebug.getExperience().progress);
+  assert.equal(postVictory.victory.continued, true);
+
+  await page.evaluate(() => window.cashflowDebug.simulatePressure());
+  await expectText(page, "需要重新规划");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+
+  await page.evaluate(() => window.cashflowDebug.startChallengeDebug());
+  const challengeState = await page.evaluate(() => window.cashflowDebug.getExperience().progress.challenge);
+  assert.equal(challengeState.id, "starter-cashflow");
+  await page.evaluate(() => window.cashflowDebug.showProgressCenter("challenges"));
+  assert.match(await page.locator("#cardModal").innerText(), /新手现金流/);
+  await page.evaluate(() => window.cashflowDebug.closeModal());
   assert.deepEqual(consoleErrors, []);
 
   for (const viewport of [

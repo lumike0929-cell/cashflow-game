@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node tests/static-check.mjs && node scripts/build-public.mjs",
     "lint": "node tests/lint.mjs",
-    "test": "node --test tests/real-estate.test.mjs tests/stock.test.mjs tests/business.test.mjs tests/bank.test.mjs tests/loan.test.mjs tests/mortgage.test.mjs tests/credit.test.mjs tests/life-event.test.mjs tests/insurance.test.mjs tests/unemployment.test.mjs tests/tax.test.mjs tests/game-experience.test.mjs",
+    "test": "node --test tests/real-estate.test.mjs tests/stock.test.mjs tests/business.test.mjs tests/bank.test.mjs tests/loan.test.mjs tests/mortgage.test.mjs tests/credit.test.mjs tests/life-event.test.mjs tests/insurance.test.mjs tests/unemployment.test.mjs tests/tax.test.mjs tests/game-experience.test.mjs tests/progress.test.mjs",
     "test:browser": "node tests/browser-acceptance.mjs"
   },
   "devDependencies": {
