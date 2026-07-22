@@ -102,7 +102,9 @@ import {
 import {
   atmosphereForRound,
   boardPath,
+  beginnerMissionTemplates,
   cameraForTile,
+  careerGuidance,
   clampCamera,
   createCitySceneSvg,
   createEnvironmentOverlay,
@@ -110,6 +112,8 @@ import {
   diceMarkup,
   effectIconForKind,
   eventIllustrationMarkup,
+  firstTenRoundTips,
+  glossaryTerms,
   haptic,
   indexAfter,
   loadExperienceSettings,
@@ -119,7 +123,9 @@ import {
   saveExperienceSettings,
   tileVisual,
   tutorialSteps,
+  tutorialControllerSteps,
   contextTipMessages,
+  onboardingPages,
   avatarMarkup,
 } from "./gameExperience.js";
 import {
@@ -298,12 +304,21 @@ const uiState = {
   visualQuality: savedExperience.visualQuality,
   atmosphere: savedExperience.atmosphere,
   minimapCollapsed: savedExperience.minimapCollapsed,
+  onboardingCompleted: savedExperience.onboardingCompleted,
+  onboardingIndex: savedExperience.onboardingIndex,
+  tutorialSettings: savedExperience.tutorialSettings,
+  onboardingAutoShown: false,
   tutorialComplete: savedExperience.tutorialComplete,
   seenTips: savedExperience.seenTips,
   tutorial: {
     active: false,
     index: 0,
     replay: false,
+  },
+  tutorialController: {
+    active: false,
+    stepId: "welcome",
+    chapter: "welcome",
   },
   pendingTips: [],
   draggingCamera: false,
@@ -421,7 +436,50 @@ function createNewGameState(career, difficultyId = "standard") {
   configureAiMode(nextState, { mode: selectedGameMode, aiCount: selectedAiCount, difficulty: selectedAiDifficulty });
   migrateProgressState(nextState);
   migrateAiCompetitionState(nextState);
+  ensureTutorialState(nextState);
   return nextState;
+}
+
+function ensureTutorialState(nextState) {
+  if (!nextState || typeof nextState !== "object") return nextState;
+  const currentStep = tutorialControllerSteps.some((step) => step.id === nextState.tutorialCurrentStep) ? nextState.tutorialCurrentStep : "welcome";
+  const chapterProgress = nextState.tutorialChapterProgress && typeof nextState.tutorialChapterProgress === "object" ? nextState.tutorialChapterProgress : {};
+  const viewedTerms = Array.isArray(nextState.glossaryViewedTerms) ? nextState.glossaryViewedTerms.slice(0, 60) : [];
+  nextState.tutorialVersion = 2;
+  nextState.tutorialCompleted = Boolean(nextState.tutorialCompleted || nextState.progressStats?.tutorialComplete);
+  nextState.tutorialCurrentStep = nextState.tutorialCompleted ? "complete" : currentStep;
+  nextState.tutorialChapterProgress = Object.fromEntries(
+    [
+      ...tutorialControllerSteps.map((step) => step.id),
+      ...firstTenRoundTips.map((tip) => tip.id),
+    ].map((id) => [id, Boolean(chapterProgress[id] || (id === "complete" && nextState.tutorialCompleted))]),
+  );
+  nextState.glossaryViewedTerms = [...new Set(viewedTerms.filter((term) => glossaryTerms.some((item) => item.id === term)))];
+  nextState.beginnerMissionProgress = normalizeBeginnerMissionProgress(nextState.beginnerMissionProgress);
+  nextState.decisionHintLevel = Math.max(0, Math.min(2, moneyValue(nextState.decisionHintLevel)));
+  nextState.tutorialSettings = {
+    tutorialHints: uiState.tutorialSettings.tutorialHints,
+    childExplanations: uiState.tutorialSettings.childExplanations,
+    decisionHints: uiState.tutorialSettings.decisionHints,
+    glossaryTips: uiState.tutorialSettings.glossaryTips,
+    compactAiTutorial: uiState.tutorialSettings.compactAiTutorial,
+    ...(nextState.tutorialSettings && typeof nextState.tutorialSettings === "object" ? nextState.tutorialSettings : {}),
+  };
+  nextState.parentGuideViewed = Boolean(nextState.parentGuideViewed);
+  nextState.onboardingCompleted = Boolean(nextState.onboardingCompleted || uiState.onboardingCompleted);
+  return nextState;
+}
+
+function normalizeBeginnerMissionProgress(progress) {
+  const source = progress && typeof progress === "object" ? progress : {};
+  return Object.fromEntries(beginnerMissionTemplates.map((mission) => {
+    const saved = source[mission.id] && typeof source[mission.id] === "object" ? source[mission.id] : {};
+    return [mission.id, {
+      completed: Boolean(saved.completed),
+      claimed: Boolean(saved.claimed),
+      completedAtRound: saved.completedAtRound ? moneyValue(saved.completedAtRound) : null,
+    }];
+  }));
 }
 
 function passiveIncome() {
@@ -514,6 +572,7 @@ function renderSetup() {
         <h2>${selected.name}</h2>
         <strong class="career-role">${careerPersonality(selected.id)}</strong>
         <p>${careerShortNote(selected.id)}</p>
+        <p class="career-guidance">${careerGuidance[selected.id] || "适合想自由探索现金流的人。"}</p>
         <div class="career-stat-pills">
           <span>工资 <strong>${money(adjusted.salary)}</strong></span>
           <span>月支出 <strong>${money(adjusted.expenses)}</strong></span>
@@ -630,6 +689,10 @@ function renderSetup() {
     state = savedState;
     showProgressCenter("freedom");
   });
+  if (!savedState && !uiState.onboardingCompleted && !uiState.onboardingAutoShown && el.modal.classList.contains("hidden")) {
+    uiState.onboardingAutoShown = true;
+    window.setTimeout(() => showOnboarding(), 80);
+  }
 }
 
 function careerPersonality(id) {
@@ -653,24 +716,66 @@ function careerShortNote(id) {
 function startSelectedCareer() {
   const career = careers.find((item) => item.id === selectedCareerId) || careers[0];
   state = createNewGameState(career, selectedDifficultyId);
+  completeBeginnerMission("choose-character");
   const mode = gameModes.find((item) => item.id === state.gameMode) || gameModes[0];
   showGame();
   render();
   openSimpleModal({
     type: "开始",
     title: "现金流挑战开始",
-    text: `你现在是${career.name}，难度为${difficultyModes.find((item) => item.id === selectedDifficultyId)?.title || "标准"}，模式为${mode.title}。这座城市会陪你练习收入、支出、投资、保险、银行和人生事件。`,
+    text: `你现在是${career.name}，难度为${difficultyModes.find((item) => item.id === selectedDifficultyId)?.title || "标准"}，模式为${mode.title}。你的目标是把现金逐步转成能带来收入的资产，同时保留足够安全垫。`,
     actions: [{ label: "开始掷骰", className: "primary", onClick: () => { closeModal(); maybeStartTutorial(); } }],
   });
 }
 
 function showCharacterSelection() {
+  uiState.onboardingCompleted = true;
+  saveExperience();
   document.body.classList.add("selection-active");
   el.careerGrid?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
   const selectedThumb = el.careerGrid?.querySelector(".career-thumb.selected");
   if (selectedThumb instanceof HTMLElement) {
     selectedThumb.focus({ preventScroll: true });
   }
+}
+
+function showOnboarding(index = uiState.onboardingIndex || 0) {
+  const safeIndex = Math.max(0, Math.min(onboardingPages.length - 1, moneyValue(index)));
+  uiState.onboardingIndex = safeIndex;
+  const page = onboardingPages[safeIndex] || onboardingPages[0];
+  saveExperience();
+  openSimpleModal({
+    type: "欢迎教学",
+    title: page.title,
+    text: page.text,
+    metrics: [
+      ["第几步", `${safeIndex + 1} / ${onboardingPages.length}`],
+      ["小提醒", safeIndex === 0 ? "财务自由是游戏里的简化目标，不是人生唯一答案。" : "每一步都可以跳过，之后也能重播。"],
+      ["图示", page.icon],
+    ],
+    actions: [
+      { label: "上一步", disabled: safeIndex === 0, onClick: () => showOnboarding(safeIndex - 1) },
+      { label: safeIndex >= onboardingPages.length - 1 ? "开始教學" : "下一步", className: "primary", onClick: () => {
+        if (safeIndex >= onboardingPages.length - 1) {
+          uiState.onboardingCompleted = true;
+          uiState.onboardingIndex = 0;
+          saveExperience();
+          closeModal();
+          showCharacterSelection();
+        } else {
+          showOnboarding(safeIndex + 1);
+        }
+      } },
+      { label: "直接开始", onClick: () => {
+        uiState.onboardingCompleted = true;
+        saveExperience();
+        closeModal();
+        showCharacterSelection();
+      } },
+      { label: "家长／老师说明", onClick: showParentGuide },
+    ],
+    outcome: "success",
+  });
 }
 
 function showGame() {
@@ -710,6 +815,7 @@ function render() {
   ensureLifeEventState(state);
   migrateProgressState(state);
   migrateAiCompetitionState(state);
+  ensureTutorialState(state);
   state.financialFreedomProgress = calculateFinancialFreedomProgress(state);
   syncMortgageLiabilities(state);
   showGame();
@@ -1138,6 +1244,9 @@ function saveExperience() {
     visualQuality: uiState.visualQuality,
     atmosphere: uiState.atmosphere,
     minimapCollapsed: uiState.minimapCollapsed,
+    onboardingCompleted: uiState.onboardingCompleted,
+    onboardingIndex: uiState.onboardingIndex,
+    tutorialSettings: uiState.tutorialSettings,
     tutorialComplete: uiState.tutorialComplete,
     seenTips: uiState.seenTips,
     camera: uiState.camera,
@@ -1195,6 +1304,16 @@ function renderActions() {
       </button>
     `
     : "";
+  const beginnerMission = uiState.tutorialSettings.tutorialHints ? nextBeginnerMission() : null;
+  const beginnerTracker = beginnerMission
+    ? `
+      <button class="hud-beginner-tracker" type="button" id="hudBeginnerTracker" aria-label="打开新手任务">
+        <span>${beginnerMission.iconKey}</span>
+        <strong>${beginnerMission.title}</strong>
+        <em>新手 ${beginnerMissionCards().filter((mission) => mission.completed).length} / ${beginnerMissionTemplates.length}</em>
+      </button>
+    `
+    : "";
   el.actionStack.innerHTML = `
     <div class="hud-status game-hud-status">
       <span>目前状态</span>
@@ -1206,6 +1325,7 @@ function renderActions() {
       <div class="hud-chip flow"><span>月现金流</span><strong>${money(netMonthlyCashflow())}</strong></div>
     </div>
     ${missionTracker}
+    ${beginnerTracker}
     ${aiTracker}
     <div class="hud-shortcuts" aria-label="游戏快捷入口">
       <button type="button" id="focusPlayerHud"><span>◎</span><strong>玩家</strong></button>
@@ -1225,15 +1345,21 @@ function renderActions() {
   `;
   document.querySelector("#focusPlayerHud")?.addEventListener("click", () => focusCameraOnPlayer(true));
   document.querySelector("#hudMissionTracker")?.addEventListener("click", () => showProgressCenter("missions"));
+  document.querySelector("#hudBeginnerTracker")?.addEventListener("click", showBeginnerMissions);
   document.querySelector("#openLeaderboard")?.addEventListener("click", showLeaderboardPanel);
   document.querySelector("#toggleSound")?.addEventListener("click", toggleSound);
   document.querySelector("#openFinancePanel")?.addEventListener("click", () => {
     recordProgressEvent(state, "financeView");
+    completeBeginnerMission("open-finance");
+    completeBeginnerMission("view-cashflow");
     processProgress(false);
     document.querySelector(".finance-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
   document.querySelector("#openBankCenter")?.addEventListener("click", showBankCenter);
-  document.querySelector("#openProgressCenter")?.addEventListener("click", () => showProgressCenter("freedom"));
+  document.querySelector("#openProgressCenter")?.addEventListener("click", () => {
+    completeBeginnerMission("open-progress");
+    showProgressCenter("freedom");
+  });
   document.querySelector("#openMarketNews")?.addEventListener("click", showMarketPanel);
   document.querySelector("#toggleAiSpeed")?.addEventListener("click", toggleAiSpeed);
   document.querySelector("#repayDebt")?.addEventListener("click", repayDebt);
@@ -1298,6 +1424,8 @@ function showUnlockToast(item) {
 function showProgressCenter(tab = "freedom") {
   if (!state) return;
   migrateProgressState(state);
+  ensureTutorialState(state);
+  if (tab === "freedom") completeBeginnerMission("open-progress");
   evaluateProgress(state, { turnPhase: uiState.turnPhase, hasOpenEvent: true });
   const tabs = [
     ["freedom", "财务自由"],
@@ -2066,6 +2194,11 @@ function completeTutorial() {
   uiState.tutorial.active = false;
   uiState.tutorialComplete = true;
   if (state) recordProgressEvent(state, "tutorialComplete");
+  if (state) {
+    state.tutorialCompleted = true;
+    state.tutorialCurrentStep = "complete";
+    completeBeginnerMission("complete-tutorial");
+  }
   saveExperience();
   soundManager.play("win");
   setAvatarMood("celebrating", 1800);
@@ -2073,7 +2206,106 @@ function completeTutorial() {
 }
 
 function maybeStartTutorial() {
-  if (!uiState.tutorialComplete) startTutorial(false);
+  if (!uiState.tutorialComplete && uiState.tutorialSettings.tutorialHints) startTutorial(false);
+}
+
+function completeBeginnerMission(id) {
+  if (!state) return false;
+  ensureTutorialState(state);
+  const mission = state.beginnerMissionProgress[id];
+  if (!mission || mission.completed) return false;
+  state.beginnerMissionProgress[id] = {
+    ...mission,
+    completed: true,
+    claimed: true,
+    completedAtRound: state.round,
+  };
+  addLog(`新手任务完成：${beginnerMissionTemplates.find((item) => item.id === id)?.title || id}。`);
+  persistQuietly();
+  return true;
+}
+
+function beginnerMissionCards() {
+  if (!state) return [];
+  ensureTutorialState(state);
+  return beginnerMissionTemplates.map((mission) => {
+    const progress = state.beginnerMissionProgress[mission.id] || { completed: false, claimed: false };
+    return {
+      ...mission,
+      completed: Boolean(progress.completed),
+      claimed: Boolean(progress.claimed),
+      completedAtRound: progress.completedAtRound,
+    };
+  });
+}
+
+function nextBeginnerMission() {
+  return beginnerMissionCards().find((mission) => !mission.completed) || null;
+}
+
+function showBeginnerMissions() {
+  const cards = beginnerMissionCards();
+  openSimpleModal({
+    type: "新手任务",
+    title: "一步一步学会现金流",
+    text: "这些任务只在第一次游玩时帮助你熟悉操作。拒绝投资也没关系，只要看懂风险，也能完成学习目标。",
+    metrics: cards.map((mission) => [mission.completed ? `✓ ${mission.title}` : mission.title, mission.completed ? `已完成 · 第 ${mission.completedAtRound || state.round} 回合` : mission.description]),
+    actions: [
+      { label: "打开词典", onClick: () => showGlossary() },
+      { label: "知道了", className: "primary", onClick: closeModal },
+    ],
+  });
+}
+
+function showRoundTeachingTip() {
+  if (!state || !uiState.tutorialSettings.tutorialHints || state.gameMode !== "solo") return false;
+  ensureTutorialState(state);
+  const tip = firstTenRoundTips.find((item) => item.round === Math.min(10, state.round));
+  if (!tip || state.tutorialChapterProgress[tip.id]) return false;
+  state.tutorialChapterProgress[tip.id] = true;
+  persistQuietly();
+  openSimpleModal({
+    type: "回合教学",
+    title: tip.title,
+    text: tip.text,
+    metrics: [["节奏", "前 10 回合每回合最多一个重点"], ["提醒", "不会强行生成假交易"]],
+    actions: [{ label: "继续", className: "primary", onClick: closeModal }],
+  });
+  return true;
+}
+
+function glossaryMatches(text = "") {
+  const lower = String(text).toLowerCase();
+  return glossaryTerms.filter((term) => lower.includes(term.term.toLowerCase()) || lower.includes(term.shortDefinition.slice(0, 2)) || String(text).includes(term.term)).slice(0, 4);
+}
+
+function showGlossary(termId = null) {
+  const terms = termId ? glossaryTerms.filter((term) => term.id === termId) : glossaryTerms;
+  const selectedTerm = terms[0];
+  if (termId && selectedTerm && state) {
+    ensureTutorialState(state);
+    if (!state.glossaryViewedTerms.includes(selectedTerm.id)) state.glossaryViewedTerms.push(selectedTerm.id);
+    completeBeginnerMission("view-cashflow");
+  }
+  openSimpleModal({
+    type: "财务词典",
+    title: selectedTerm ? selectedTerm.term : "儿童财务词典",
+    text: selectedTerm
+      ? `${selectedTerm.shortDefinition} 例子：${selectedTerm.childExample}`
+      : "用简单、准确、不承诺收益的话解释游戏中的财务名词。",
+    metrics: selectedTerm
+      ? [
+          ["为什么重要", selectedTerm.whyItMatters],
+          ["相关词", selectedTerm.relatedTerms.join("、") || "无"],
+          ["提醒", "这是游戏中的简化学习说明，不是真实投资建议"],
+        ]
+      : glossaryTerms.map((term) => [`${term.iconKey} ${term.term}`, term.shortDefinition]).slice(0, 24),
+    actions: [
+      ...(termId ? [{ label: "查看全部词典", onClick: () => showGlossary() }] : []),
+      { label: "家长／老师说明", onClick: showParentGuide },
+      { label: "关闭", className: "primary", onClick: closeModal },
+    ],
+  });
 }
 
 function renderTutorial() {
@@ -2100,9 +2332,53 @@ function renderTutorial() {
     </div>
   `;
   document.body.append(overlay);
+  positionTutorialSpotlight(step);
   document.querySelector("#tutorialBack")?.addEventListener("click", previousTutorialStep);
   document.querySelector("#tutorialSkip")?.addEventListener("click", skipTutorial);
   document.querySelector("#tutorialNext")?.addEventListener("click", nextTutorialStep);
+  document.querySelector("#tutorialNext")?.focus({ preventScroll: true });
+}
+
+function positionTutorialSpotlight(step) {
+  const overlay = document.querySelector("#tutorialOverlay");
+  const spotlight = overlay?.querySelector(".tutorial-spotlight");
+  const card = overlay?.querySelector(".tutorial-card");
+  if (!overlay || !spotlight || !card) return;
+  const target = tutorialTargetElement(step.target || step.targetKey);
+  if (!target) return;
+  const rect = target.getBoundingClientRect();
+  const padding = 12;
+  const left = Math.max(8, rect.left - padding);
+  const top = Math.max(8, rect.top - padding);
+  const width = Math.min(window.innerWidth - left - 8, rect.width + padding * 2);
+  const height = Math.min(window.innerHeight - top - 8, rect.height + padding * 2);
+  spotlight.style.left = `${Math.round(left)}px`;
+  spotlight.style.top = `${Math.round(top)}px`;
+  spotlight.style.width = `${Math.round(width)}px`;
+  spotlight.style.height = `${Math.round(height)}px`;
+  const cardTop = top + height + 12;
+  if (cardTop + 210 < window.innerHeight) {
+    card.style.alignSelf = "start";
+    card.style.marginTop = `${Math.round(cardTop)}px`;
+  } else {
+    card.style.alignSelf = "end";
+    card.style.marginTop = "0";
+  }
+}
+
+function tutorialTargetElement(target = "") {
+  return {
+    hero: document.querySelector(".home-hero"),
+    career: document.querySelector(".character-select-stage"),
+    board: document.querySelector("#board"),
+    dice: document.querySelector("#rollDice"),
+    finance: document.querySelector(".freedom-meter") || document.querySelector(".finance-grid"),
+    topbar: document.querySelector(".topbar"),
+    modal: document.querySelector(".modal-card"),
+    assets: document.querySelector("#realEstateSection") || document.querySelector("#assetList"),
+    bank: document.querySelector("#bankSection") || document.querySelector("#openBankCenter"),
+    progress: document.querySelector("#openProgressCenter") || document.querySelector("#progressHome"),
+  }[target] || null;
 }
 
 function showContextTip(tipId, force = false) {
@@ -2542,6 +2818,11 @@ function emitFinanceEffect(amount, label = "现金变化", kind = "neutral", tra
   const effect = effectIconForKind(kind, number);
   const effectLabel = number >= 0 ? "现金增加" : "现金减少";
   uiState.liveMessage = `${effect.label}：${effectLabel} ${money(Math.abs(number))}`;
+  if (state && transactionId !== "debug-transaction-once") {
+    completeBeginnerMission("first-event");
+    if (/property|stock|business|upgrade/.test(String(kind))) completeBeginnerMission("first-asset-or-risk");
+    addTeachingFeedback(number, label, effect.label, kind);
+  }
   layer.innerHTML = `
     <span class="effect-icon">${effect.icon}</span>
     <strong>${number >= 0 ? "+" : "-"}${money(Math.abs(number))}</strong>
@@ -2557,6 +2838,24 @@ function emitFinanceEffect(amount, label = "现金变化", kind = "neutral", tra
   else haptic([14, 20, 14], uiState.hapticsEnabled);
   setAvatarMood(moodFromAmount(number), 1400);
   setTimeout(() => layer.remove(), prefersReducedMotion() ? 260 : 1800);
+}
+
+function addTeachingFeedback(amount, label, effectLabel, kind = "") {
+  if (!state || !uiState.tutorialSettings.childExplanations) return;
+  const number = moneyValue(amount);
+  const direction = number >= 0 ? "增加" : "减少";
+  const risk = String(kind).includes("loan") || String(kind).includes("debt")
+    ? "同时要留意之后的月付款。"
+    : number < 0
+      ? "支出后要确认现金安全垫还够不够。"
+      : "收入增加很好，但仍要观察是否稳定。";
+  state.lastTeachingFeedback = {
+    round: state.round,
+    label,
+    cashChange: number,
+    text: `你完成了「${label}」。现金${direction} ${money(Math.abs(number))}，这是${effectLabel}。${risk}`,
+  };
+  state.logs = [state.lastTeachingFeedback.text, ...state.logs].slice(0, 12);
 }
 
 function assetLabel(type) {
@@ -2645,7 +2944,10 @@ function ratePulse(label) {
 }
 
 async function rollDice(forcedRoll = null) {
-  if (!canRoll()) return;
+  if (!canRoll()) {
+    showRecoverableTip("现在还不能掷骰", uiState.isMoving ? "角色正在前进，请等到到达格子并处理完事件。" : "当前事件还没处理完，完成或关闭事件卡后就能继续。", "看状态");
+    return;
+  }
   try {
     setTurnPhase("rolling");
     soundManager.play("dice");
@@ -2653,6 +2955,7 @@ async function rollDice(forcedRoll = null) {
     setAvatarState("idle");
     render();
     const roll = typeof forcedRoll === "number" ? Math.max(1, Math.min(6, Math.round(forcedRoll))) : Math.floor(Math.random() * 6) + 1;
+    completeBeginnerMission("first-roll");
     const previous = state.position;
     uiState.previewIndices = nextIndices(previous, roll, boardTiles.length);
     const tickCount = prefersReducedMotion() ? 2 : uiState.animationSpeed === "fast" ? 8 : 12;
@@ -2688,12 +2991,27 @@ async function rollDice(forcedRoll = null) {
     await wait(animationMs(380, 230));
     setTurnPhase("openingEvent");
     renderActions();
+    completeBeginnerMission("reserve-check");
     triggerTile(boardTiles[next]);
   } catch {
     setTurnPhase("idle");
     uiState.previewIndices = [];
     render();
   }
+}
+
+function showRecoverableTip(title, text, actionLabel = "知道了") {
+  uiState.liveMessage = `${title}：${text}`;
+  if (!el.modal.classList.contains("hidden")) return false;
+  openSimpleModal({
+    type: "操作提示",
+    title,
+    text,
+    metrics: [["下一步", "跟着提示完成当前操作，游戏资料仍然保留"]],
+    actions: [{ label: actionLabel, className: "primary", onClick: closeModal }],
+    outcome: "warning",
+  });
+  return true;
 }
 
 async function movePlayerStepByStep(previous, roll) {
@@ -2963,6 +3281,8 @@ function propertyOpportunityMetrics(opportunity, calculation) {
 
 function showOpportunityWhy(opportunity, calculation, eventId) {
   recordProgressEvent(state, "why");
+  completeBeginnerMission("view-why");
+  completeBeginnerMission("first-asset-or-risk");
   processProgress(false);
   openSimpleModal({
     type: "为什么",
@@ -3190,6 +3510,10 @@ function completeStockPurchase(stockId, quantity, eventId) {
 }
 
 function showStockWhy(stock, backAction) {
+  recordProgressEvent(state, "why");
+  completeBeginnerMission("view-why");
+  completeBeginnerMission("first-asset-or-risk");
+  processProgress(false);
   openSimpleModal({
     type: "为什么",
     title: `${stock.name} 学习说明`,
@@ -4061,6 +4385,10 @@ function showBusinessCalculation(business, backAction) {
 }
 
 function showBusinessWhy(backAction) {
+  recordProgressEvent(state, "why");
+  completeBeginnerMission("view-why");
+  completeBeginnerMission("first-asset-or-risk");
+  processProgress(false);
   openSimpleModal({
     type: "為什麼",
     title: "小生意學習說明",
@@ -4602,6 +4930,10 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [], outcom
       `,
     )
     .join("");
+  const coach = decisionCoachHtml(type, title, text, metrics);
+  const glossary = glossaryChipsHtml(`${type} ${title} ${text} ${metrics.map(([label, value]) => `${label} ${value}`).join(" ")}`);
+  if (coach) el.dealMetrics.insertAdjacentHTML("beforeend", coach);
+  if (glossary) el.dealMetrics.insertAdjacentHTML("beforeend", glossary);
   el.modalActions.innerHTML = "";
 
   actions.forEach((action) => {
@@ -4622,7 +4954,64 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [], outcom
 
   el.modal.classList.remove("hidden");
   document.body.classList.add("modal-open");
+  el.dealMetrics.querySelectorAll("[data-glossary-term]").forEach((button) => {
+    button.addEventListener("click", () => showGlossary(button.dataset.glossaryTerm));
+  });
+  el.dealMetrics.querySelectorAll("[data-hint-level]").forEach((button) => {
+    button.addEventListener("click", () => revealDecisionHint(button));
+  });
   soundManager.setScene("event");
+}
+
+function decisionCoachHtml(type, title, text, metrics) {
+  if (!state || !uiState.tutorialSettings.decisionHints || !actionsLikelyDecision(type, title, text)) return "";
+  const labels = metrics.map(([label]) => String(label)).join(" ");
+  const questions = [
+    labels.includes("现金") || text.includes("现金") ? "做完以后，现金还够处理意外吗？" : "这个选择会让现金变多还是变少？",
+    labels.includes("现金流") || labels.includes("月供") || labels.includes("租金") ? "每月现金流会增加还是减少？" : "之后每个月会不会多一笔固定支出？",
+    labels.includes("风险") || text.includes("风险") ? "如果市场变差，这个选择可能有什么风险？" : "它是资产、负债，还是一次性消费？",
+  ].slice(0, 3);
+  const level = Math.max(0, Math.min(2, moneyValue(state.decisionHintLevel)));
+  return `
+    <section class="decision-coach" aria-label="先想一想">
+      <strong>先想一想</strong>
+      <ul>${questions.map((question) => `<li>${escapeHtml(question)}</li>`).join("")}</ul>
+      <div class="hint-actions">
+        <button type="button" data-hint-level="0">轻提示</button>
+        <button type="button" data-hint-level="1">计算提示</button>
+        <button type="button" data-hint-level="2">完整解释</button>
+      </div>
+      <p class="hint-layer ${level >= 0 ? "" : "hidden"}" data-hint-layer="0">先比较现金、月现金流和风险，不需要急着做决定。</p>
+      <p class="hint-layer ${level >= 1 ? "" : "hidden"}" data-hint-layer="1">看卡片里的真实数字：收入 − 支出 − 月付款，才是留下的钱。</p>
+      <p class="hint-layer ${level >= 2 ? "" : "hidden"}" data-hint-layer="2">如果现金太少或负债太高，可以放弃机会、等待、查看银行或卖出资产。游戏不会保证任何投资赚钱。</p>
+    </section>
+  `;
+}
+
+function actionsLikelyDecision(type = "", title = "", text = "") {
+  const combined = `${type} ${title} ${text}`;
+  return /(机会|购买|买入|出售|贷款|借款|投资|升级|保险|税|支出|事件|房产|股票|小生意|银行)/.test(combined);
+}
+
+function glossaryChipsHtml(content = "") {
+  if (!uiState.tutorialSettings.glossaryTips) return "";
+  const matches = glossaryMatches(content);
+  if (!matches.length) return "";
+  return `
+    <section class="glossary-chip-row" aria-label="财务名词提示">
+      <strong>词典</strong>
+      ${matches.map((term) => `<button type="button" data-glossary-term="${term.id}">${term.iconKey} ${term.term}</button>`).join("")}
+    </section>
+  `;
+}
+
+function revealDecisionHint(button) {
+  if (!state) return;
+  state.decisionHintLevel = Math.max(state.decisionHintLevel || 0, moneyValue(button.dataset.hintLevel));
+  button.closest(".decision-coach")?.querySelectorAll(".hint-layer").forEach((layer) => {
+    layer.classList.toggle("hidden", moneyValue(layer.dataset.hintLayer) > state.decisionHintLevel);
+  });
+  persistQuietly();
 }
 
 function closeModal() {
@@ -4637,6 +5026,9 @@ function closeModal() {
   }
   const nextTip = uiState.pendingTips.shift();
   if (nextTip) setTimeout(() => showContextTip(nextTip, true), prefersReducedMotion() ? 20 : 120);
+  if (!nextTip && state && !state.gameOver && uiState.turnPhase === "idle" && uiState.tutorialSettings.tutorialHints && state.round <= 10) {
+    window.setTimeout(() => showRoundTeachingTip(), prefersReducedMotion() ? 20 : 120);
+  }
   if (state && !state.gameOver && !nextTip && uiState.turnPhase === "idle") {
     window.setTimeout(() => {
       checkWin();
@@ -4724,8 +5116,10 @@ function showGameMenu() {
       { label: "保存进度", className: "primary", disabled: !state, onClick: saveGame },
       { label: "读取存档", onClick: loadGame },
       { label: "声音与画面", onClick: showSoundSettings },
+      { label: "教学设置", onClick: showTutorialSettings },
       { label: "进度中心", disabled: !state, onClick: () => showProgressCenter("freedom") },
       { label: "游戏规则", onClick: showRules },
+      { label: "家长／老师说明", onClick: showParentGuide },
       { label: "重新开始", className: "danger", onClick: confirmResetGame },
       { label: "关闭", onClick: closeModal },
     ],
@@ -4761,7 +5155,116 @@ function showRules() {
       ["情境提示", tips],
       ["提醒", "所有税务、保险、投资内容都是游戏学习规则"],
     ],
-    actions: [{ label: "开始吧", className: "primary", onClick: closeModal }],
+    actions: [
+      { label: "打开词典", onClick: () => showGlossary() },
+      { label: "家长／老师说明", onClick: showParentGuide },
+      { label: "开始吧", className: "primary", onClick: closeModal },
+    ],
+  });
+}
+
+function showParentGuide() {
+  if (state) {
+    ensureTutorialState(state);
+    state.parentGuideViewed = true;
+    persistQuietly();
+  }
+  openSimpleModal({
+    type: "家长／老师说明",
+    title: "这款游戏在练习什么？",
+    text: "现金流冒险城用简化规则帮助孩子讨论收入、支出、资产、负债、保险、税务和风险。它不是现实投资、保险、法律或税务建议，也不会收集儿童个人资料。",
+    metrics: [
+      ["适合讨论", "为什么高收入不一定代表高现金流？"],
+      ["预备金", "为什么遇到意外前要留现金？"],
+      ["借款", "什么时候可能有帮助？风险是什么？"],
+      ["分散", "为什么不要把所有钱放在同一个选择？"],
+      ["收入类型", "主动收入和被动收入有什么不同？"],
+      ["模式", "新手提示更多，标准平衡，进阶波动略高"],
+      ["教学", "可以在设置中重播或重置教学，不会清除游戏存档"],
+    ],
+    actions: [
+      { label: "打开词典", onClick: () => showGlossary() },
+      { label: "重播教学", onClick: () => { closeModal(); startTutorial(true); } },
+      { label: "知道了", className: "primary", onClick: closeModal },
+    ],
+  });
+}
+
+function showTutorialSettings() {
+  const settings = uiState.tutorialSettings;
+  openSimpleModal({
+    type: "教学设置",
+    title: "新手引导与儿童解说",
+    text: "这些设置只影响提示和说明，不会改变任何财务结果或游戏规则。",
+    metrics: [
+      ["教学提示", settings.tutorialHints ? "开启" : "关闭"],
+      ["儿童解说", settings.childExplanations ? "开启" : "关闭"],
+      ["决策提示", settings.decisionHints ? "开启" : "关闭"],
+      ["名词提示", settings.glossaryTips ? "开启" : "关闭"],
+      ["AI 精简提示", settings.compactAiTutorial ? "开启" : "关闭"],
+      ["教学状态", uiState.tutorialComplete ? "已完成" : "进行中或未开始"],
+    ],
+    actions: [
+      { label: settings.tutorialHints ? "关闭教学提示" : "开启教学提示", onClick: () => toggleTutorialSetting("tutorialHints") },
+      { label: settings.childExplanations ? "关闭儿童解说" : "开启儿童解说", onClick: () => toggleTutorialSetting("childExplanations") },
+      { label: settings.decisionHints ? "关闭决策提示" : "开启决策提示", onClick: () => toggleTutorialSetting("decisionHints") },
+      { label: settings.glossaryTips ? "关闭名词提示" : "开启名词提示", onClick: () => toggleTutorialSetting("glossaryTips") },
+      { label: "重播完整教学", className: "primary", onClick: () => { closeModal(); startTutorial(true); } },
+      { label: "重播当前章节", onClick: () => { closeModal(); startTutorial(true); } },
+      { label: "重置教学进度", className: "danger", onClick: confirmResetTutorialProgress },
+      { label: "关闭", onClick: closeModal },
+    ],
+  });
+}
+
+function toggleTutorialSetting(key) {
+  uiState.tutorialSettings = {
+    ...uiState.tutorialSettings,
+    [key]: !uiState.tutorialSettings[key],
+  };
+  if (state) {
+    ensureTutorialState(state);
+    state.tutorialSettings = { ...state.tutorialSettings, ...uiState.tutorialSettings };
+    persistQuietly();
+  }
+  saveExperience();
+  showTutorialSettings();
+}
+
+function confirmResetTutorialProgress() {
+  openSimpleModal({
+    type: "重置教学",
+    title: "只重置教学进度？",
+    text: "这不会清除现金、资产、AI 竞赛、市场或任何游戏存档，只会让欢迎流程、教学步骤和新手任务重新出现。",
+    actions: [
+      { label: "确认重置教学", className: "danger", onClick: resetTutorialProgress },
+      { label: "先保留", className: "primary", onClick: showTutorialSettings },
+    ],
+    outcome: "warning",
+  });
+}
+
+function resetTutorialProgress() {
+  uiState.onboardingCompleted = false;
+  uiState.onboardingIndex = 0;
+  uiState.tutorialComplete = false;
+  uiState.tutorial = { active: false, index: 0, replay: false };
+  if (state) {
+    state.tutorialCompleted = false;
+    state.tutorialCurrentStep = "welcome";
+    state.tutorialChapterProgress = {};
+    state.glossaryViewedTerms = [];
+    state.beginnerMissionProgress = normalizeBeginnerMissionProgress({});
+    state.progressStats.tutorialComplete = false;
+    ensureTutorialState(state);
+    persistQuietly();
+  }
+  saveExperience();
+  openSimpleModal({
+    type: "重置教学",
+    title: "教学进度已重置",
+    text: "游戏资料仍然保留。你可以从欢迎流程或设置中重新开始教学。",
+    actions: [{ label: "开始欢迎流程", className: "primary", onClick: () => showOnboarding(0) }],
   });
 }
 
@@ -4794,6 +5297,8 @@ function showSoundSettings() {
       { label: "音效小一点", onClick: () => { adjustEffectVolume(-0.15); showSoundSettings(); } },
       { label: "音效大一点", onClick: () => { adjustEffectVolume(0.15); showSoundSettings(); } },
       { label: "重新观看教学", onClick: () => { closeModal(); startTutorial(true); } },
+      { label: "教学设置", onClick: showTutorialSettings },
+      { label: "家长／老师说明", onClick: showParentGuide },
       { label: "查看提示", onClick: showRules },
       { label: "关闭", onClick: closeModal },
     ],
@@ -4867,7 +5372,10 @@ el.loadGame?.addEventListener("click", loadGame);
 el.resetGame?.addEventListener("click", confirmResetGame);
 el.gameMenu?.addEventListener("click", showGameMenu);
 el.continueGameHome?.addEventListener("click", loadGame);
-el.startAdventure?.addEventListener("click", showCharacterSelection);
+el.startAdventure?.addEventListener("click", () => {
+  if (!uiState.onboardingCompleted) showOnboarding();
+  else showCharacterSelection();
+});
 el.rulesHome?.addEventListener("click", showRules);
 el.progressHome?.addEventListener("click", () => {
   if (!state) {
@@ -4902,6 +5410,23 @@ el.modal.addEventListener("click", (event) => {
 });
 
 window.addEventListener("keydown", (event) => {
+  if (uiState.tutorial.active) {
+    if (event.key === "ArrowRight" || event.key === "Enter") {
+      event.preventDefault();
+      nextTutorialStep();
+      return;
+    }
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      previousTutorialStep();
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      skipTutorial();
+      return;
+    }
+  }
   if (event.key === "Escape") closeModal();
   if (event.key === " " && state && !state.gameOver && el.modal.classList.contains("hidden")) {
     event.preventDefault();
@@ -4924,6 +5449,10 @@ window.addEventListener("resize", () => {
   if (!state) return;
   applyCamera();
   if (uiState.camera.follow) focusCameraOnPlayer(true, uiState.camera.scale);
+  if (uiState.tutorial.active) {
+    const step = tutorialSteps[uiState.tutorial.index] || tutorialSteps[0];
+    positionTutorialSpotlight(step);
+  }
 });
 
 window.cashflowDebug = {
@@ -5071,8 +5600,17 @@ window.cashflowDebug = {
     avatarMood: uiState.avatarMood,
     avatarDirection: uiState.avatarDirection,
     tutorialComplete: uiState.tutorialComplete,
+    onboardingCompleted: uiState.onboardingCompleted,
+    onboardingIndex: uiState.onboardingIndex,
+    tutorialSettings: uiState.tutorialSettings,
     tutorialActive: uiState.tutorial.active,
     tutorialIndex: uiState.tutorial.index,
+    tutorialStepId: tutorialSteps[uiState.tutorial.index]?.id || "none",
+    tutorialControllerStep: state?.tutorialCurrentStep || uiState.tutorialController.stepId,
+    beginnerMissions: state ? beginnerMissionCards() : [],
+    nextBeginnerMission: state ? nextBeginnerMission()?.id || null : null,
+    glossaryViewedTerms: state?.glossaryViewedTerms?.length || 0,
+    lastTeachingFeedback: state?.lastTeachingFeedback || null,
     seenTips: uiState.seenTips,
     sound: soundManager.getSnapshot(),
     boardTiles: boardTiles.length,
@@ -5128,6 +5666,15 @@ window.cashflowDebug = {
   skipTutorial,
   completeTutorial,
   showContextTip,
+  showOnboarding,
+  showCharacterSelection,
+  showGlossary,
+  showParentGuide,
+  showTutorialSettings,
+  resetTutorialProgress,
+  showBeginnerMissions,
+  completeBeginnerMission,
+  showRecoverableTip,
   setEmotion: (mood, duration = 0) => setAvatarMood(mood, duration),
   playIncomeEffect: () => emitFinanceEffect(500, "验收收入", "debug-income"),
   playExpenseEffect: () => emitFinanceEffect(-300, "验收支出", "debug-expense"),
@@ -5145,6 +5692,7 @@ window.cashflowDebug = {
   },
   runAiCycle: () => {
     if (!state) return null;
+    if (state.turnManager?.lastAiCycleRound === state.round) state.round += 1;
     const result = runAiTurnCycle(state, boardTiles, () => 0.12);
     persistQuietly();
     render();

@@ -4,7 +4,9 @@ import {
   boardPath,
   avatarMarkup,
   atmosphereForRound,
+  beginnerMissionTemplates,
   cameraForTile,
+  careerGuidance,
   clampCamera,
   contextTipMessages,
   createCitySceneSvg,
@@ -12,12 +14,16 @@ import {
   diceMarkup,
   effectIconForKind,
   eventIllustrationMarkup,
+  firstTenRoundTips,
+  glossaryTerms,
   indexAfter,
   loadExperienceSettings,
   mapSize,
   miniMapPoint,
   nextIndices,
+  onboardingPages,
   tileVisual,
+  tutorialControllerSteps,
   tutorialSteps,
 } from "../gameExperience.js";
 
@@ -69,6 +75,14 @@ test("镜头可缩放、拖曳并回到玩家，偏好可恢复", () => {
       animationSpeed: "fast",
       atmosphere: "night",
       minimapCollapsed: true,
+      onboardingCompleted: true,
+      onboardingIndex: 2,
+      tutorialSettings: {
+        tutorialHints: false,
+        childExplanations: true,
+        decisionHints: false,
+        glossaryTips: true,
+      },
       tutorialComplete: true,
       seenTips: { firstStock: true },
       camera: { x: -20, y: -30, scale: 0.8, follow: false },
@@ -84,6 +98,11 @@ test("镜头可缩放、拖曳并回到玩家，偏好可恢复", () => {
   assert.equal(settings.animationSpeed, "fast");
   assert.equal(settings.atmosphere, "night");
   assert.equal(settings.minimapCollapsed, true);
+  assert.equal(settings.onboardingCompleted, true);
+  assert.equal(settings.onboardingIndex, 2);
+  assert.equal(settings.tutorialSettings.tutorialHints, false);
+  assert.equal(settings.tutorialSettings.decisionHints, false);
+  assert.equal(settings.tutorialSettings.glossaryTips, true);
   assert.equal(settings.visualQuality, "standard");
   assert.equal(settings.tutorialComplete, true);
   assert.equal(settings.seenTips.firstStock, true);
@@ -118,6 +137,33 @@ test("城市地图包含商业手机游戏级核心地标", () => {
   for (const detail of ["background-layer", "midground-layer", "building-layer", "foreground-layer", "flower-bed", "foreground-detail", "map-building", "road-directions", "现金流路"]) {
     assert.match(city, new RegExp(detail));
   }
+});
+
+test("Sprint 21 新手引导资料完整且适合儿童理解", () => {
+  assert.equal(onboardingPages.length, 4);
+  assert.match(onboardingPages[0].title, /现金流冒险城/);
+  assert.ok(onboardingPages.every((page) => page.text.length <= 42));
+  assert.ok(tutorialControllerSteps.length >= 14);
+  assert.equal(tutorialControllerSteps[0].id, "welcome");
+  assert.equal(tutorialControllerSteps.at(-1).id, "complete");
+  assert.ok(tutorialControllerSteps.every((step) => step.id && step.targetKey && step.completionCondition));
+  assert.equal(firstTenRoundTips.length, 10);
+  assert.deepEqual(firstTenRoundTips.map((tip) => tip.round), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.ok(beginnerMissionTemplates.length >= 10);
+  assert.equal(new Set(beginnerMissionTemplates.map((mission) => mission.id)).size, beginnerMissionTemplates.length);
+  for (const id of ["teacher", "engineer", "designer", "doctor"]) {
+    assert.ok(careerGuidance[id].length > 0);
+    assert.doesNotMatch(careerGuidance[id], /最强|必然/);
+  }
+});
+
+test("儿童财务字典覆盖核心名词且不承诺收益", () => {
+  const terms = new Set(glossaryTerms.map((term) => term.term));
+  for (const term of ["现金", "收入", "支出", "月现金流", "主动收入", "被动收入", "资产", "负债", "净资产", "股息", "租金", "房贷", "利率", "信用分", "保险", "保费", "理赔", "税金", "紧急预备金", "分散风险", "财务自由"]) {
+    assert.equal(terms.has(term), true, `missing glossary term ${term}`);
+  }
+  assert.ok(glossaryTerms.every((term) => term.shortDefinition.length <= 36));
+  assert.equal(glossaryTerms.some((term) => /保证赚钱|必然获利|一定会赚钱|完全没有风险/.test(`${term.shortDefinition}${term.childExample}${term.whyItMatters}`)), false);
 });
 
 test("城市生命感系统可安全降级并保持可测试状态", () => {

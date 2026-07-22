@@ -56,7 +56,15 @@ try {
   assert.equal(heroCheck.heroVisible, true);
   assert.equal(heroCheck.startVisible, true);
   assert.ok(heroCheck.width <= heroCheck.clientWidth + 1, `home overflow: ${heroCheck.width} > ${heroCheck.clientWidth}`);
-  await page.locator("#startAdventure").click();
+  await expectText(page, "欢迎来到现金流冒险城");
+  await page.getByText("家长／老师说明").click();
+  await expectText(page, "这款游戏在练习什么？");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.showOnboarding(0));
+  for (let index = 0; index < 3; index += 1) {
+    await page.getByText("下一步").click();
+  }
+  await page.getByText("开始教學").click();
   const roleCount = await page.locator(".career-thumb").count();
   assert.equal(roleCount, 4);
   for (const roleName of ["小学老师", "软件工程师", "自由设计师", "牙科医生"]) {
@@ -67,6 +75,10 @@ try {
   await page.locator('[data-career="doctor"]').click();
   await page.locator("#startSelectedCareer").click();
   await page.evaluate(() => window.cashflowDebug.closeModal());
+  let beginnerSnapshot = await page.evaluate(() => window.cashflowDebug.getExperience());
+  assert.equal(beginnerSnapshot.onboardingCompleted, true);
+  assert.equal(beginnerSnapshot.beginnerMissions.some((mission) => mission.id === "choose-character" && mission.completed), true);
+  assert.equal(beginnerSnapshot.nextBeginnerMission, "first-roll");
   await page.evaluate(() => {
     const career = { id: "doctor", icon: "医", name: "牙科医生", salary: 52000, expenses: 42000, savings: 36000 };
     window.cashflowDebug.setState({
@@ -83,6 +95,16 @@ try {
     });
   });
   assert.equal(await page.locator(".map-asset-marker").count(), 0);
+  await page.evaluate(() => window.cashflowDebug.showGlossary("passiveIncome"));
+  await expectText(page, "即使你没有一直工作");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().glossaryViewedTerms >= 1), true);
+  await page.evaluate(() => window.cashflowDebug.showTutorialSettings());
+  await expectText(page, "新手引导与儿童解说");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.showRecoverableTip("现在还不能掷骰", "当前事件还没处理完，完成或关闭事件卡后就能继续。"));
+  await expectText(page, "当前事件还没处理完");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
   const cityLife = await page.evaluate(() => window.cashflowDebug.getExperience());
   assert.equal(cityLife.effectiveAtmosphere, "day");
   assert.equal(cityLife.minimapVisible, true);
@@ -185,6 +207,14 @@ try {
   await page.evaluate(() => window.cashflowDebug.startTutorial(true));
   await page.evaluate(() => window.cashflowDebug.closeModal());
   assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().tutorialActive), true);
+  await page.evaluate(() => window.cashflowDebug.completeTutorial());
+  const cashBeforeTutorialReset = await page.evaluate(() => window.cashflowDebug.getState().cash);
+  await page.evaluate(() => window.cashflowDebug.resetTutorialProgress());
+  await expectText(page, "教学进度已重置");
+  assert.equal(await page.evaluate(() => window.cashflowDebug.getState().cash), cashBeforeTutorialReset);
+  assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().tutorialComplete), false);
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.startTutorial(true));
   await page.evaluate(() => window.cashflowDebug.completeTutorial());
 
   const moods = ["happy", "excited", "worried", "sad", "thinking"];
@@ -310,6 +340,8 @@ try {
   assert.equal(typeof soundBeforeInteraction, "boolean");
 
   await page.evaluate(() => window.cashflowDebug.buyFirstProperty());
+  assert.equal(await page.locator(".decision-coach").count() >= 1, true);
+  assert.equal(await page.locator(".glossary-chip-row").count() >= 1, true);
   await page.evaluate(() => window.cashflowDebug.closeModal());
   assert.equal(await page.locator(".map-asset-marker").count() >= 1, true);
   await page.evaluate(() => window.cashflowDebug.buyFirstProperty());
@@ -527,7 +559,10 @@ try {
     assert.equal(homeLayout.heroVisible, true);
     assert.equal(homeLayout.startVisible, true);
     assert.ok(homeLayout.width <= homeLayout.clientWidth + 1, `${viewport.width}px home overflow: ${homeLayout.width} > ${homeLayout.clientWidth}`);
-    await page.locator("#startAdventure").click();
+    await page.evaluate(() => {
+      window.cashflowDebug.closeModal();
+      window.cashflowDebug.showCharacterSelection?.();
+    });
     const selectionLayout = await page.evaluate(() => {
       const start = document.querySelector("#startSelectedCareer")?.getBoundingClientRect();
       const stage = document.querySelector(".character-select-stage")?.getBoundingClientRect();

@@ -1611,6 +1611,16 @@ p {
   font-weight: 950;
 }
 
+.career-guidance {
+  margin: 0;
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: rgba(255, 248, 220, 0.82);
+  color: #5a4824;
+  font-size: 13px;
+  font-weight: 850;
+}
+
 .career-stat-pills {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3281,6 +3291,45 @@ body[data-quality="battery"] .finance-effect {
   font-weight: 950;
 }
 
+.hud-beginner-tracker {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 46px;
+  border: 1px solid rgba(36, 107, 159, 0.16);
+  border-radius: 16px;
+  padding: 8px 10px;
+  background: rgba(233, 243, 255, 0.94);
+  color: var(--blue);
+  text-align: left;
+}
+
+.hud-beginner-tracker span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 11px;
+  background: #ffffff;
+  font-weight: 950;
+}
+
+.hud-beginner-tracker strong,
+.hud-beginner-tracker em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-beginner-tracker em {
+  color: #5f726a;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 950;
+}
+
 .hud-ai-tracker {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr);
@@ -3987,6 +4036,70 @@ body[data-quality="battery"] .finance-effect {
 
 .metric strong {
   overflow-wrap: anywhere;
+}
+
+.decision-coach,
+.glossary-chip-row {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(36, 107, 159, 0.14);
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(233, 243, 255, 0.74);
+}
+
+.decision-coach strong,
+.glossary-chip-row strong {
+  color: var(--blue);
+  font-weight: 950;
+}
+
+.decision-coach ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink);
+}
+
+.hint-actions,
+.glossary-chip-row {
+  grid-template-columns: repeat(auto-fit, minmax(98px, 1fr));
+}
+
+.hint-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.hint-actions button,
+.glossary-chip-row button {
+  min-height: 38px;
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: #ffffff;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.hint-layer {
+  margin: 0;
+  border-radius: 14px;
+  padding: 9px 10px;
+  background: #ffffff;
+  color: #41534c;
+  font-weight: 850;
+}
+
+.glossary-chip-row {
+  align-items: center;
+  background: rgba(255, 248, 220, 0.82);
+}
+
+.glossary-chip-row strong {
+  color: #725315;
 }
 
 .tutorial-overlay {

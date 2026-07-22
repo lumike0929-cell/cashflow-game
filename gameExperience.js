@@ -7,6 +7,107 @@ export const mapSize = {
 
 export const atmosphereModes = ["auto", "day", "evening", "night"];
 
+export const onboardingPages = [
+  {
+    id: "welcome",
+    icon: "城",
+    title: "欢迎来到现金流冒险城",
+    text: "你的目标是让被动收入慢慢高过每月必要支出。",
+  },
+  {
+    id: "cashflow",
+    icon: "流",
+    title: "收入、支出与现金流",
+    text: "收入减掉支出，剩下的就是每月现金流。现金流越健康，选择越多。",
+  },
+  {
+    id: "assets-debts",
+    icon: "资",
+    title: "资产与负债",
+    text: "资产可能带来收入；负债通常需要持续付款。两者都要看现金流。",
+  },
+  {
+    id: "play",
+    icon: "骰",
+    title: "掷骰、遇到事件、做选择",
+    text: "你会逐格前进，阅读事件卡，再决定买入、放弃、借款或学习。",
+  },
+];
+
+export const tutorialControllerSteps = [
+  { id: "welcome", targetKey: "hero", title: "欢迎", description: "先认识目标：让被动收入覆盖必要支出。", preferredPlacement: "bottom", allowInteraction: false, requiredAction: "next", completionCondition: "viewed", skipAllowed: true },
+  { id: "chooseCharacter", targetKey: "career", title: "选择角色", description: "不同角色的工资、支出和初始现金不同，没有绝对最强。", preferredPlacement: "right", allowInteraction: true, requiredAction: "selectCareer", completionCondition: "careerSelected", skipAllowed: true },
+  { id: "understandGoal", targetKey: "finance", title: "看懂目标", description: "财务自由进度来自真实被动收入和必要支出。", preferredPlacement: "top", allowInteraction: false, requiredAction: "next", completionCondition: "viewed", skipAllowed: true },
+  { id: "firstRoll", targetKey: "dice", title: "第一次掷骰", description: "按主按钮前进，移动中按钮会锁定。", preferredPlacement: "top", allowInteraction: true, requiredAction: "roll", completionCondition: "rolledOnce", skipAllowed: true },
+  { id: "observeMovement", targetKey: "board", title: "观察移动", description: "角色会逐格走，只有最后停下的格子触发事件。", preferredPlacement: "bottom", allowInteraction: false, requiredAction: "watch", completionCondition: "movementComplete", skipAllowed: true },
+  { id: "firstEvent", targetKey: "modal", title: "阅读事件", description: "先看现金、现金流、资产和负债会怎么变化。", preferredPlacement: "center", allowInteraction: true, requiredAction: "readEvent", completionCondition: "eventOpened", skipAllowed: true },
+  { id: "readFinance", targetKey: "finance", title: "查看财务", description: "现金、收入、支出和月现金流会一起影响你的选择。", preferredPlacement: "left", allowInteraction: true, requiredAction: "openFinance", completionCondition: "financeViewed", skipAllowed: true },
+  { id: "firstDecision", targetKey: "modal", title: "先想一想", description: "好选择不是只看价格，还要看剩余现金和风险。", preferredPlacement: "center", allowInteraction: true, requiredAction: "decision", completionCondition: "decisionMade", skipAllowed: true },
+  { id: "firstSettlement", targetKey: "modal", title: "看结算", description: "结算后会显示现金、现金流、资产或负债的真实变化。", preferredPlacement: "center", allowInteraction: false, requiredAction: "readResult", completionCondition: "settlementShown", skipAllowed: true },
+  { id: "understandAsset", targetKey: "assets", title: "资产", description: "资产可能带来收入或价值变化，但也可能有风险。", preferredPlacement: "top", allowInteraction: true, requiredAction: "openAssets", completionCondition: "assetExplained", skipAllowed: true },
+  { id: "understandDebt", targetKey: "bank", title: "负债", description: "负债可以帮你处理现金压力，但通常会增加未来月付款。", preferredPlacement: "top", allowInteraction: true, requiredAction: "openBank", completionCondition: "debtExplained", skipAllowed: true },
+  { id: "understandPassiveIncome", targetKey: "progress", title: "被动收入", description: "当被动收入接近支出，你就越来越接近游戏中的财务自由。", preferredPlacement: "top", allowInteraction: true, requiredAction: "openProgress", completionCondition: "progressViewed", skipAllowed: true },
+  { id: "openProgress", targetKey: "progress", title: "进度中心", description: "任务、成就、徽章和报告会记录你的学习路线。", preferredPlacement: "top", allowInteraction: true, requiredAction: "openProgress", completionCondition: "progressViewed", skipAllowed: true },
+  { id: "complete", targetKey: "dice", title: "准备好继续冒险", description: "你已经知道核心目标，可以继续自由探索。", preferredPlacement: "top", allowInteraction: true, requiredAction: "finish", completionCondition: "complete", skipAllowed: false },
+];
+
+export const firstTenRoundTips = [
+  { round: 1, id: "round-1", title: "第 1 回合：看落点", text: "这回合先观察骰子、移动和最后停下的格子。" },
+  { round: 2, id: "round-2", title: "第 2 回合：现金流", text: "试着找出收入减支出后，每月还剩多少。" },
+  { round: 3, id: "round-3", title: "第 3 回合：预备金", text: "现金像安全垫，能帮你处理维修、医疗或失业。" },
+  { round: 4, id: "round-4", title: "第 4 回合：资产", text: "资产可能带来收入，但买入前也要看风险和成本。" },
+  { round: 5, id: "round-5", title: "第 5 回合：负债", text: "借款不是坏事，但月付款会影响之后的现金流。" },
+  { round: 6, id: "round-6", title: "第 6 回合：投资基础", text: "房产和股票都可能涨跌，不要只看开心的一面。" },
+  { round: 7, id: "round-7", title: "第 7 回合：小生意", text: "营收不是净利，扣掉成本后才是留下的钱。" },
+  { round: 8, id: "round-8", title: "第 8 回合：市场变化", text: "市场会影响价格、租金和需求，变化不是保证。" },
+  { round: 9, id: "round-9", title: "第 9 回合：分散风险", text: "不要把所有钱都放在同一种选择里，但分散也不能消除所有风险。" },
+  { round: 10, id: "round-10", title: "第 10 回合：下一步", text: "打开进度中心，看看你离财务自由还差多少。" },
+];
+
+export const glossaryTerms = [
+  glossary("cash", "现金", "现在手上可以使用的钱。", "你有 ¥5,000，可以支付账单或留下当安全垫。", "现金决定你遇到机会或意外时有没有选择。", "¥", ["收入", "支出", "紧急预备金"]),
+  glossary("income", "收入", "你收到的钱。", "工资、租金、股息和小生意净利都可能是收入。", "收入越稳定，越容易规划支出和投资。", "收", ["支出", "月现金流"]),
+  glossary("expense", "支出", "你付出去的钱。", "房租、保费、税金或维修都可能是支出。", "支出太高时，即使收入高也可能现金紧张。", "支", ["收入", "月现金流"]),
+  glossary("monthlyCashflow", "月现金流", "每月收入减掉每月支出后留下的钱。", "收入 ¥20,000、支出 ¥15,000，月现金流是 ¥5,000。", "它告诉你每月是变轻松还是变紧张。", "流", ["收入", "支出"]),
+  glossary("activeIncome", "主动收入", "通常需要你持续工作才有的收入。", "上课、接案或工作工资都比较像主动收入。", "主动收入重要，但时间有限。", "工", ["被动收入"]),
+  glossary("passiveIncome", "被动收入", "即使你没有一直工作，仍可能持续收到的收入。", "出租房租金、股息或自动化生意收入可能接近被动收入。", "它是游戏中接近财务自由的关键。", "被", ["资产", "财务自由"]),
+  glossary("asset", "资产", "可能帮你带来收入或增加价值的东西。", "能产生正现金流的房产或小生意可能是资产。", "判断资产时，也要看成本、现金流和风险。", "资", ["负债", "被动收入"]),
+  glossary("liability", "负债", "需要你持续付款或偿还的金额。", "个人贷款、房贷或税务负债都是负债。", "负债会影响未来现金流。", "债", ["信用分", "利率"]),
+  glossary("netWorth", "净资产", "资产总值减掉负债后的结果。", "资产 ¥100,000，负债 ¥40,000，净资产是 ¥60,000。", "它帮助你看整体财务位置。", "净", ["资产", "负债"]),
+  glossary("dividend", "股息", "部分公司把一部分成果分给股东。", "持有 10 股，每股股息 ¥2，就收到 ¥20。", "不是每家公司都会发，也不保证增加。", "息", ["股票", "被动收入"]),
+  glossary("rent", "租金", "别人使用你的房产时支付的钱。", "租客每月付房租，可能成为你的收入。", "租金也可能受空置和市场影响。", "租", ["房地产", "被动收入"]),
+  glossary("mortgage", "房贷", "买房时向银行借的钱，之后每月偿还。", "房价高时可能先付首付，再每月还房贷。", "房贷能帮你买房，也会增加月付款。", "房", ["利率", "负债"]),
+  glossary("interest", "利率", "借钱要付出的成本比例。", "利率高，贷款月供通常更高。", "利率会影响借款是否划算。", "%", ["房贷", "信用分"]),
+  glossary("creditScore", "信用分", "游戏里用来估计借款能力的分数。", "按时还款可能改善信用，过高负债可能降低信用。", "信用会影响额度和利率。", "信", ["贷款", "利率"]),
+  glossary("insurance", "保险", "用固定保费分担某些大风险。", "医疗事件发生时，保险可能帮你付一部分费用。", "保险不能让意外消失，但能降低一次付很多钱的压力。", "盾", ["保费", "理赔"]),
+  glossary("premium", "保费", "为了保有保险，每月或每期支付的钱。", "每月付 ¥300 保费，让保单保持有效。", "保费会增加支出，所以要看现金流。", "费", ["保险", "支出"]),
+  glossary("claim", "理赔", "符合保单规则时，保险帮你支付一部分损失。", "医疗费 ¥5,000，保险可能支付其中一部分。", "理赔有自付额和上限，不会无限支付。", "赔", ["保险", "保费"]),
+  glossary("tax", "税金", "游戏里用简化规则练习收入责任。", "收入提高时，可能需要预留税款。", "这不是现实报税建议，只是学习现金规划。", "税", ["收入", "负债"]),
+  glossary("emergencyFund", "紧急预备金", "为了意外支出留下的现金安全垫。", "维修、医疗或失业时，预备金能帮你撑一阵子。", "它不赚钱，但能减少被迫借款的压力。", "急", ["现金", "风险"]),
+  glossary("diversification", "分散风险", "不要把所有资源集中在同一种选择里。", "同时了解房产、股票和生意，比只押一个选择更稳。", "分散不能消除风险，但能减少单一事件的影响。", "散", ["风险", "资产"]),
+  glossary("financialFreedom", "财务自由", "游戏中指被动收入达到或超过每月必要支出。", "每月必要支出 ¥20,000，被动收入 ¥20,000，就达成 100%。", "这是游戏目标，不代表人生唯一成功标准。", "自", ["被动收入", "支出"]),
+];
+
+export const beginnerMissionTemplates = [
+  beginnerMission("choose-character", "选择角色", "选择一位角色开始冒险。", "角色"),
+  beginnerMission("first-roll", "完成第一次掷骰", "按下掷骰按钮并看角色逐格移动。", "骰"),
+  beginnerMission("open-finance", "打开财务面板", "查看现金、收入、支出和月现金流。", "¥"),
+  beginnerMission("view-cashflow", "查看月现金流", "找到每月收入减支出的结果。", "流"),
+  beginnerMission("first-event", "完成第一次事件", "读完事件卡并完成一次选择。", "事"),
+  beginnerMission("view-why", "查看一次为什么", "打开学习说明，理解选择背后的原因。", "问"),
+  beginnerMission("reserve-check", "检查紧急预备金", "确认现金还能支撑几个月支出。", "急"),
+  beginnerMission("first-asset-or-risk", "学习第一项资产", "买入资产，或正确查看风险后放弃。", "资"),
+  beginnerMission("open-progress", "查看财务自由进度", "打开进度中心查看离目标还差多少。", "奖"),
+  beginnerMission("complete-tutorial", "完成新手教学", "完成或跳过完整教学流程。", "✓"),
+];
+
+export const careerGuidance = {
+  teacher: "适合第一次玩：收入和支出都比较稳定，适合从小机会开始练习。",
+  engineer: "适合喜欢比较数字的人：收入较高，但支出也高，高薪不代表一定更轻松。",
+  designer: "适合喜欢尝试的人：收入较灵活，适合观察小生意和现金流。",
+  doctor: "适合挑战规划的人：收入高、生活成本也高，需要认真管理负债。",
+};
+
 export const boardPath = [
   { x: 170, y: 140 },
   { x: 300, y: 110 },
@@ -358,6 +459,9 @@ export function normalizeSettings(settings) {
     visualQuality: ["high", "standard", "battery"].includes(settings?.visualQuality) ? settings.visualQuality : "standard",
     atmosphere: atmosphereModes.includes(settings?.atmosphere) ? settings.atmosphere : "auto",
     minimapCollapsed: Boolean(settings?.minimapCollapsed),
+    onboardingCompleted: Boolean(settings?.onboardingCompleted),
+    onboardingIndex: Math.max(0, Math.round(Number(settings?.onboardingIndex) || 0)),
+    tutorialSettings: normalizeTutorialSettings(settings?.tutorialSettings),
     tutorialComplete: Boolean(settings?.tutorialComplete),
     seenTips: Object.fromEntries(Object.entries(seenTips).map(([key, value]) => [key, Boolean(value)])),
     camera: {
@@ -366,6 +470,16 @@ export function normalizeSettings(settings) {
       scale: Math.max(0.58, Math.min(1.45, Number(camera.scale) || 0.78)),
       follow: camera.follow !== false,
     },
+  };
+}
+
+export function normalizeTutorialSettings(settings = {}) {
+  return {
+    tutorialHints: settings?.tutorialHints !== false,
+    childExplanations: settings?.childExplanations !== false,
+    decisionHints: settings?.decisionHints !== false,
+    glossaryTips: settings?.glossaryTips !== false,
+    compactAiTutorial: settings?.compactAiTutorial !== false,
   };
 }
 
@@ -546,6 +660,14 @@ function district(x, y, width, height, fill, title, subtitle) {
       <text x="${x + 24}" y="${y + 74}" class="district-subtitle">${subtitle}</text>
     </g>
   `;
+}
+
+function glossary(id, term, shortDefinition, childExample, whyItMatters, iconKey, relatedTerms = []) {
+  return { id, term, shortDefinition, childExample, whyItMatters, iconKey, relatedTerms };
+}
+
+function beginnerMission(id, title, description, iconKey) {
+  return { id, title, description, iconKey };
 }
 
 function building(x, y, label, fill, stroke, sign = "") {
