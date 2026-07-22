@@ -10,6 +10,7 @@ import { migrateBusinessStatePart } from "./businessStorageMigration.js";
 import { migrateBankingStatePart } from "./bankingStorageMigration.js";
 import { migrateLifeEventStatePart } from "./lifeEventStorageMigration.js";
 import { migrateProgressState } from "./progressSystem.js";
+import { migrateAiCompetitionState } from "./aiCompetitionSystem.js";
 
 export const CURRENT_SAVE_VERSION = 4;
 
@@ -63,6 +64,7 @@ export function migrateSavedState(candidate) {
   migrateBankingStatePart(state, candidate);
   migrateLifeEventStatePart(state, candidate);
   migrateProgressState(state);
+  migrateAiCompetitionState(state);
   return state;
 }
 

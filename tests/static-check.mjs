@@ -37,6 +37,7 @@ const requiredFiles = [
   "taxCalculator.js",
   "economyCycleEngine.js",
   "progressSystem.js",
+  "aiCompetitionSystem.js",
 ];
 
 for (const file of requiredFiles) {
@@ -61,5 +62,6 @@ assert.match(game, /showBankCenter/);
 assert.match(await readFile("lifeEventData.js", "utf8"), /lifeEvents/);
 assert.match(await readFile("insuranceData.js", "utf8"), /insurancePolicies/);
 assert.match(game, /showInsuranceCenter/);
+assert.match(await readFile("aiCompetitionSystem.js", "utf8"), /runAiTurnCycle/);
 
 console.log("Static build check passed.");

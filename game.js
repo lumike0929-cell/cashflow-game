@@ -118,6 +118,16 @@ import {
   avatarMarkup,
 } from "./gameExperience.js";
 import {
+  aiDifficultyModes,
+  aiTemplates,
+  buildAiPublicSummary,
+  calculateLeaderboard,
+  configureAiMode,
+  gameModes,
+  migrateAiCompetitionState,
+  runAiTurnCycle,
+} from "./aiCompetitionSystem.js";
+import {
   achievementDefinitions,
   addReport,
   badgeDefinitions,
@@ -190,6 +200,9 @@ const careers = [
 
 let selectedCareerId = "teacher";
 let selectedDifficultyId = "standard";
+let selectedGameMode = "solo";
+let selectedAiDifficulty = "standard";
+let selectedAiCount = 2;
 
 const boardTiles = [
   { type: "payday", icon: "月", title: "月结日", text: "领取工资与被动收入，支付全部支出。" },
@@ -394,7 +407,9 @@ function createNewGameState(career, difficultyId = "standard") {
   const adjustedCareer = createDifficultyAdjustedCareer(career, difficultyId);
   const nextState = createState(adjustedCareer);
   nextState.gameDifficulty = difficultyId;
+  configureAiMode(nextState, { mode: selectedGameMode, aiCount: selectedAiCount, difficulty: selectedAiDifficulty });
   migrateProgressState(nextState);
+  migrateAiCompetitionState(nextState);
   return nextState;
 }
 
@@ -453,6 +468,7 @@ function addLog(message) {
 function persistQuietly() {
   if (!state) return;
   migrateProgressState(state);
+  migrateAiCompetitionState(state);
   localStorage.setItem(state.activeChallenge ? CHALLENGE_STORAGE_KEY : STORAGE_KEY, JSON.stringify(state));
 }
 
@@ -508,6 +524,39 @@ function renderSetup() {
           </div>
           <small>${difficulty.description}</small>
         </div>
+        <div class="mode-picker" aria-label="选择游戏模式">
+          <span>模式：${gameModes.find((item) => item.id === selectedGameMode)?.title || "单人学习"}</span>
+          <div>
+            ${gameModes
+              .map(
+                (mode) => `
+                  <button type="button" class="${mode.id === selectedGameMode ? "selected" : ""}" data-game-mode="${mode.id}" aria-pressed="${mode.id === selectedGameMode}">
+                    ${mode.title}
+                  </button>
+                `,
+              )
+              .join("")}
+          </div>
+          <small>${gameModes.find((item) => item.id === selectedGameMode)?.description || "保持目前体验。"}</small>
+          ${
+            selectedGameMode === "solo"
+              ? ""
+              : `
+                <div class="ai-mode-options">
+                  <label>AI 数量
+                    <select id="aiCountSelect">
+                      ${[1, 2, 3].map((count) => `<option value="${count}" ${count === selectedAiCount ? "selected" : ""}>${count} 名</option>`).join("")}
+                    </select>
+                  </label>
+                  <label>AI 难度
+                    <select id="aiDifficultySelect">
+                      ${aiDifficultyModes.map((mode) => `<option value="${mode.id}" ${mode.id === selectedAiDifficulty ? "selected" : ""}>${mode.title}</option>`).join("")}
+                    </select>
+                  </label>
+                </div>
+              `
+          }
+        </div>
         ${homeProgress ? `
           <aside class="home-progress-summary" aria-label="继续游戏进度摘要">
             <span>当前进度</span>
@@ -549,6 +598,22 @@ function renderSetup() {
       renderSetup();
     });
   });
+  el.careerGrid.querySelectorAll("[data-game-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedGameMode = button.dataset.gameMode || selectedGameMode;
+      if (selectedGameMode === "quick-race") selectedAiCount = 2;
+      soundManager.play("tap");
+      renderSetup();
+    });
+  });
+  document.querySelector("#aiCountSelect")?.addEventListener("change", (event) => {
+    selectedAiCount = Math.max(1, Math.min(3, moneyValue(event.target.value)));
+    renderSetup();
+  });
+  document.querySelector("#aiDifficultySelect")?.addEventListener("change", (event) => {
+    selectedAiDifficulty = event.target.value || "standard";
+    renderSetup();
+  });
   document.querySelector("#startSelectedCareer")?.addEventListener("click", startSelectedCareer);
   document.querySelector("#homeProgressSummary")?.addEventListener("click", () => {
     state = savedState;
@@ -577,12 +642,13 @@ function careerShortNote(id) {
 function startSelectedCareer() {
   const career = careers.find((item) => item.id === selectedCareerId) || careers[0];
   state = createNewGameState(career, selectedDifficultyId);
+  const mode = gameModes.find((item) => item.id === state.gameMode) || gameModes[0];
   showGame();
   render();
   openSimpleModal({
     type: "开始",
     title: "现金流挑战开始",
-    text: `你现在是${career.name}，难度为${difficultyModes.find((item) => item.id === selectedDifficultyId)?.title || "标准"}。这座城市会陪你练习收入、支出、投资、保险、银行和人生事件。`,
+    text: `你现在是${career.name}，难度为${difficultyModes.find((item) => item.id === selectedDifficultyId)?.title || "标准"}，模式为${mode.title}。这座城市会陪你练习收入、支出、投资、保险、银行和人生事件。`,
     actions: [{ label: "开始掷骰", className: "primary", onClick: () => { closeModal(); maybeStartTutorial(); } }],
   });
 }
@@ -632,6 +698,7 @@ function render() {
   ensureEconomyState(state);
   ensureLifeEventState(state);
   migrateProgressState(state);
+  migrateAiCompetitionState(state);
   state.financialFreedomProgress = calculateFinancialFreedomProgress(state);
   syncMortgageLiabilities(state);
   showGame();
@@ -703,6 +770,7 @@ function finishTurnSoon(delay = 220) {
     if (["turnComplete", "showingResult", "openingEvent"].includes(uiState.turnPhase)) {
       setTurnPhase("idle");
       render();
+      maybeRunAiTurns();
     }
   }, animationMs(delay, Math.min(delay, 120)));
 }
@@ -747,6 +815,7 @@ function renderBoard() {
         <div class="avatar-anchor" id="avatarAnchor" style="left:${playerPoint.x}px; top:${playerPoint.y}px">
           ${avatarMarkup(state.career, uiState.avatarMood, uiState.avatarDirection)}
         </div>
+        ${renderAiMapAvatars()}
       </div>
     </div>
     <div class="map-toolbar" aria-label="地图控制">
@@ -775,10 +844,31 @@ function renderBoard() {
       if (assetType === "insurance") showInsuranceCenter();
     });
   });
+  el.board.querySelectorAll("[data-ai-finance]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      showAiFinance(button.dataset.aiFinance || "");
+    });
+  });
   requestAnimationFrame(() => {
     if (uiState.camera.follow) focusCameraOnPlayer(false);
     else applyCamera();
   });
+}
+
+function renderAiMapAvatars() {
+  if (!state?.aiPlayers?.length) return "";
+  return state.aiPlayers
+    .map((ai, index) => {
+      const point = boardPath[(ai.currentPosition || ai.position || 0) % boardPath.length] || boardPath[0];
+      const offset = (index + 1) * 12;
+      return `
+        <button class="ai-map-avatar" type="button" data-ai-finance="${ai.id}" style="left:${point.x + offset}px; top:${point.y + offset}px" aria-label="${ai.name} AI 对手">
+          <span>${ai.avatarKey}</span>
+        </button>
+      `;
+    })
+    .join("");
 }
 
 function shortTileTitle(tile) {
@@ -1008,6 +1098,17 @@ function renderActions() {
   const progressText = uiState.turnPhase === "moving" ? `前进 ${uiState.movingStep} / ${uiState.movingTotal}` : state.lastRoll ? `前进 ${state.lastRoll} 格` : "待掷骰";
   const debtButton = debt > 0 ? `<button type="button" id="repayDebt"><span>债</span><strong>偿还</strong></button>` : "";
   const newRunButton = state.gameOver ? `<button class="primary" type="button" id="newRun"><span>★</span><strong>再开</strong></button>` : "";
+  const leaderboard = state.aiPlayers?.length ? calculateLeaderboard(state) : [];
+  const playerRank = leaderboard.find((item) => item.isPlayer);
+  const aiTracker = state.aiPlayers?.length
+    ? `
+      <button class="hud-ai-tracker" type="button" id="openLeaderboard" aria-label="打开竞赛排名">
+        <span>赛</span>
+        <strong>排名 ${playerRank?.rank || "-"}/${leaderboard.length}</strong>
+        <em>${state.marketCycle?.phase || "market"} · ${state.aiActionSummaries?.[0]?.shortText || "AI 等待行动"}</em>
+      </button>
+    `
+    : "";
   const missionCards = buildMissionCards(state);
   const trackedMission = missionCards.find((item) => item.completed && !item.claimed) || missionCards.find((item) => item.status === "进行中" || item.status === "即将到期");
   const missionTracker = trackedMission
@@ -1030,11 +1131,14 @@ function renderActions() {
       <div class="hud-chip flow"><span>月现金流</span><strong>${money(netMonthlyCashflow())}</strong></div>
     </div>
     ${missionTracker}
+    ${aiTracker}
     <div class="hud-shortcuts" aria-label="游戏快捷入口">
       <button type="button" id="focusPlayerHud"><span>◎</span><strong>玩家</strong></button>
       <button type="button" id="openFinancePanel"><span>¥</span><strong>财务</strong></button>
       <button type="button" id="openBankCenter"><span>银</span><strong>银行</strong></button>
       <button type="button" id="openProgressCenter"><span>奖</span><strong>进度</strong></button>
+      ${state.aiPlayers?.length ? `<button type="button" id="openMarketNews"><span>市</span><strong>市场</strong></button>` : ""}
+      ${state.aiPlayers?.length ? `<button type="button" id="toggleAiSpeed"><span>速</span><strong>${state.aiAnimationSpeed === "skip" ? "观看" : "跳过"}</strong></button>` : ""}
       <button type="button" id="openPortfolio"><span>房</span><strong>房产</strong></button>
       <button type="button" id="openStockPortfolio"><span>股</span><strong>股票</strong></button>
       <button type="button" id="openBusinessPortfolio"><span>店</span><strong>生意</strong></button>
@@ -1046,6 +1150,7 @@ function renderActions() {
   `;
   document.querySelector("#focusPlayerHud")?.addEventListener("click", () => focusCameraOnPlayer(true));
   document.querySelector("#hudMissionTracker")?.addEventListener("click", () => showProgressCenter("missions"));
+  document.querySelector("#openLeaderboard")?.addEventListener("click", showLeaderboardPanel);
   document.querySelector("#toggleSound")?.addEventListener("click", toggleSound);
   document.querySelector("#openFinancePanel")?.addEventListener("click", () => {
     recordProgressEvent(state, "financeView");
@@ -1054,6 +1159,8 @@ function renderActions() {
   });
   document.querySelector("#openBankCenter")?.addEventListener("click", showBankCenter);
   document.querySelector("#openProgressCenter")?.addEventListener("click", () => showProgressCenter("freedom"));
+  document.querySelector("#openMarketNews")?.addEventListener("click", showMarketPanel);
+  document.querySelector("#toggleAiSpeed")?.addEventListener("click", toggleAiSpeed);
   document.querySelector("#repayDebt")?.addEventListener("click", repayDebt);
   document.querySelector("#newRun")?.addEventListener("click", resetGame);
   document.querySelector("#openPortfolio")?.addEventListener("click", () => {
@@ -1105,7 +1212,8 @@ function showUnlockToast(item) {
   `;
   toast.addEventListener("click", () => {
     toast.remove();
-    showProgressCenter(item.targetTab || (item.type === "徽章" ? "badges" : "achievements"));
+    if (item.targetTab === "leaderboard") showLeaderboardPanel();
+    else showProgressCenter(item.targetTab || (item.type === "徽章" ? "badges" : "achievements"));
   });
   document.body.append(toast);
   soundManager.play("happy");
@@ -1576,6 +1684,130 @@ function showFinancialPressure(pressure = evaluateFinancialPressure(state)) {
     ],
     outcome: "warning",
   });
+}
+
+function maybeRunAiTurns() {
+  if (!state?.aiPlayers?.length) return null;
+  if (!el.modal.classList.contains("hidden")) return null;
+  if (uiState.turnPhase !== "idle" || uiState.isRolling || uiState.isMoving) return null;
+  if (state.turnManager?.aiRunning) return null;
+  if (state.turnManager?.lastAiCycleRound === state.round) return null;
+  state.turnManager.aiRunning = true;
+  state.turnManager.status = "aiThinking";
+  const result = runAiTurnCycle(state, boardTiles);
+  state.turnManager.aiRunning = false;
+  persistQuietly();
+  render();
+  if (!result.skipped && state.leaderboardSettings?.showRoundSummary === "always") {
+    showRoundSummary(result.roundSummary);
+  } else if (!result.skipped && state.aiActionSummaries?.[0]) {
+    showUnlockToast({
+      iconKey: "赛",
+      type: "AI 回合",
+      title: "AI 行动完成",
+      description: state.aiActionSummaries[0].shortText,
+      targetTab: "leaderboard",
+    });
+  }
+  return result;
+}
+
+function showLeaderboardPanel() {
+  const leaderboard = calculateLeaderboard(state);
+  openSimpleModal({
+    type: "竞赛排名",
+    title: "本局排名",
+    text: "排名来自真实财务数据，默认比较财务自由进度、净资产和月现金流。",
+    metrics: leaderboard.map((item) => [
+      `${item.rank}. ${item.isPlayer ? "你" : item.name}`,
+      `${item.freedomPercent}% · 净资产 ${money(item.netWorth)} · 月现金流 ${money(item.monthlyCashflow)} · ${item.currentStatus}`,
+    ]),
+    actions: [
+      ...state.aiPlayers.slice(0, 3).map((ai) => ({ label: `查看 ${ai.name}`, onClick: () => showAiFinance(ai.id) })),
+      { label: "回合摘要", onClick: () => showRoundSummary(state.roundHistory?.[0]) },
+      { label: "关闭", className: "primary", onClick: closeModal },
+    ],
+  });
+}
+
+function showAiFinance(aiId) {
+  const summary = buildAiPublicSummary(state, aiId);
+  if (!summary) return;
+  openSimpleModal({
+    type: "AI 财务",
+    title: summary.name,
+    text: "这是公开财务摘要，不显示隐藏随机数、未来事件或内部权重。",
+    metrics: [
+      ["现金", money(summary.cash)],
+      ["月现金流", money(summary.monthlyCashflow)],
+      ["被动收入", money(summary.passiveIncome)],
+      ["净资产", money(summary.netWorth)],
+      ["资产数量", `${summary.assetCount}`],
+      ["负债", money(summary.liabilities)],
+      ["财务自由进度", `${summary.freedomPercent}%`],
+      ["投资组合", `股票 ${money(summary.portfolio.stocks)} · 房产 ${money(summary.portfolio.realEstate)} · 生意 ${money(summary.portfolio.businesses)}`],
+      ["最近决策", summary.recentDecisions.map((item) => item.shortText).join(" · ") || "等待行动"],
+    ],
+    actions: [
+      { label: "返回排名", onClick: showLeaderboardPanel },
+      { label: "关闭", className: "primary", onClick: closeModal },
+    ],
+  });
+}
+
+function showMarketPanel() {
+  const news = state.marketNews?.[0];
+  const phase = state.marketCycle?.phase || "recovery";
+  openSimpleModal({
+    type: "市场新闻",
+    title: news?.title || "市场等待更新",
+    text: news?.summary || "AI 竞赛每轮会生成一条本地规则市场新闻。",
+    metrics: [
+      ["市场阶段", phase],
+      ["影响范围", news?.affectedAssets?.join(" · ") || "尚无"],
+      ["持续时间", news ? `${news.effectDuration} 月` : "等待回合"],
+      ["学习提示", news?.learningTip || "这只是游戏市场规则，不是真实投资建议。"],
+    ],
+    actions: [
+      { label: "查看排名", onClick: showLeaderboardPanel },
+      { label: "关闭", className: "primary", onClick: closeModal },
+    ],
+  });
+}
+
+function showRoundSummary(summary = state.roundHistory?.[0]) {
+  if (!summary) {
+    openSimpleModal({
+      type: "回合摘要",
+      title: "还没有摘要",
+      text: "AI 完成一轮行动后会记录玩家、AI、市场和排名变化。",
+      actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+    });
+    return;
+  }
+  openSimpleModal({
+    type: "回合摘要",
+    title: `第 ${summary.round} 回合摘要`,
+    text: "摘要来自本轮真实行动，不会重复结算。",
+    metrics: [
+      ["玩家行动", summary.playerAction],
+      ["AI 行动", summary.aiActions.join(" · ")],
+      ["市场变化", summary.marketChange],
+      ["排名", summary.ranking.join(" · ")],
+      ["下一轮提示", summary.nextTip],
+    ],
+    actions: [
+      { label: "查看市场", onClick: showMarketPanel },
+      { label: "关闭", className: "primary", onClick: closeModal },
+    ],
+  });
+}
+
+function toggleAiSpeed() {
+  if (!state?.aiPlayers?.length) return;
+  state.aiAnimationSpeed = state.aiAnimationSpeed === "skip" ? "watch" : "skip";
+  persistQuietly();
+  renderActions();
 }
 
 function confirmStartChallenge(challengeId) {
@@ -4264,7 +4496,10 @@ function closeModal() {
   const nextTip = uiState.pendingTips.shift();
   if (nextTip) setTimeout(() => showContextTip(nextTip, true), prefersReducedMotion() ? 20 : 120);
   if (state && !state.gameOver && !nextTip && uiState.turnPhase === "idle") {
-    window.setTimeout(() => checkWin(), prefersReducedMotion() ? 20 : 120);
+    window.setTimeout(() => {
+      checkWin();
+      maybeRunAiTurns();
+    }, prefersReducedMotion() ? 20 : 120);
   }
 }
 
@@ -4687,6 +4922,22 @@ window.cashflowDebug = {
           shownNotifications: state.shownNotificationIds?.length || 0,
         }
       : null,
+    ai: state
+      ? {
+          gameMode: state.gameMode || "solo",
+          aiCount: state.aiPlayers?.length || 0,
+          aiDifficulty: state.aiDifficulty || "standard",
+          aiAnimationSpeed: state.aiAnimationSpeed || "fast",
+          currentActorId: state.currentActorId || "player",
+          turnStatus: state.turnManager?.status || "waitingPlayer",
+          lastAiCycleRound: state.turnManager?.lastAiCycleRound || 0,
+          leaderboard: state.aiPlayers?.length ? calculateLeaderboard(state).length : 1,
+          marketPhase: state.marketCycle?.phase || "recovery",
+          marketNews: state.marketNews?.length || 0,
+          roundHistory: state.roundHistory?.length || 0,
+          actionSummaries: state.aiActionSummaries?.length || 0,
+        }
+      : null,
   }),
   focusPlayer: () => focusCameraOnPlayer(true),
   zoomMap: (delta) => zoomCamera(delta),
@@ -4709,6 +4960,29 @@ window.cashflowDebug = {
     emitFinanceEffect(88, "同一笔交易", "debug-duplicate", "debug-transaction-once");
   },
   showProgressCenter,
+  configureAiRace: (count = 1, difficulty = "standard") => {
+    if (!state) state = createState(careers[3]);
+    configureAiMode(state, { mode: "ai-race", aiCount: count, difficulty });
+    persistQuietly();
+    render();
+    return window.cashflowDebug.getExperience().ai;
+  },
+  runAiCycle: () => {
+    if (!state) return null;
+    const result = runAiTurnCycle(state, boardTiles, () => 0.12);
+    persistQuietly();
+    render();
+    return {
+      skipped: result.skipped,
+      summaries: result.summaries?.length || 0,
+      marketTitle: result.market?.news?.title || state.marketNews?.[0]?.title || "",
+      leaderboard: calculateLeaderboard(state).length,
+    };
+  },
+  showLeaderboardPanel,
+  showMarketPanel,
+  showAiFinance: (aiId = state?.aiPlayers?.[0]?.id) => showAiFinance(aiId),
+  toggleAiSpeed,
   refreshProgressMissions: () => {
     if (!state) return null;
     const result = refreshActiveMissions(state);

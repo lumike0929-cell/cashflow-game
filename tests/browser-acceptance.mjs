@@ -84,6 +84,30 @@ try {
   });
   assert.equal(await page.locator(".map-asset-marker").count(), 0);
 
+  const aiModeSnapshot = await page.evaluate(() => window.cashflowDebug.configureAiRace(1, "standard"));
+  assert.equal(aiModeSnapshot.gameMode, "ai-race");
+  assert.equal(aiModeSnapshot.aiCount, 1);
+  assert.equal(await page.locator(".ai-map-avatar").count(), 1);
+  await page.evaluate(() => window.cashflowDebug.showLeaderboardPanel());
+  await expectText(page, "本局排名");
+  await page.evaluate(() => window.cashflowDebug.showAiFinance());
+  await expectText(page, "公开财务摘要");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  const aiCycle = await page.evaluate(() => window.cashflowDebug.runAiCycle());
+  assert.equal(aiCycle.skipped, false);
+  assert.equal(aiCycle.summaries, 1);
+  assert.ok(aiCycle.marketTitle.length > 0);
+  await page.evaluate(() => window.cashflowDebug.showMarketPanel());
+  await expectText(page, "市场新闻");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  const aiAfterCycle = await page.evaluate(() => window.cashflowDebug.getExperience().ai);
+  assert.equal(aiAfterCycle.leaderboard, 2);
+  assert.equal(aiAfterCycle.marketNews >= 1, true);
+  assert.equal(aiAfterCycle.actionSummaries >= 1, true);
+  await page.evaluate(() => window.cashflowDebug.toggleAiSpeed());
+  const aiAfterSpeed = await page.evaluate(() => window.cashflowDebug.getExperience().ai.aiAnimationSpeed);
+  assert.match(aiAfterSpeed, /watch|fast|skip/);
+
   await page.evaluate(() => window.cashflowDebug.showProgressCenter("freedom"));
   await expectText(page, "进度中心");
   await expectText(page, "目前阶段");
