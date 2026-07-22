@@ -1,4 +1,4 @@
-const CACHE_VERSION = "cashflow-game-shell-v23";
+const CACHE_VERSION = "cashflow-game-shell-rc1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const APP_SHELL = [
   "./progressSystem.js",
   "./aiCompetitionSystem.js",
   "./pwaSystem.js",
+  "./releaseInfo.js",
   "./manifest.webmanifest",
   "./i18n/index.js",
   "./i18n/formatters.js",

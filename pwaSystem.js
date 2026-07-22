@@ -1,10 +1,11 @@
 import { parseSavedState } from "./realEstateStorageMigration.js";
 import { EXPERIENCE_SETTINGS_KEY } from "./gameExperience.js";
 import { localeStorageKey, normalizeLocale } from "./i18n/index.js";
+import { releaseInfo } from "./releaseInfo.js";
 
-export const APP_VERSION = "1.23.0";
-export const PWA_CACHE_VERSION = "cashflow-game-shell-v23";
-export const BACKUP_SCHEMA_VERSION = 1;
+export const APP_VERSION = releaseInfo.appVersion;
+export const PWA_CACHE_VERSION = releaseInfo.serviceWorkerVersion;
+export const BACKUP_SCHEMA_VERSION = releaseInfo.backupSchemaVersion;
 export const NORMAL_SAVE_KEY = "cashflow-freedom-game-v1";
 export const CHALLENGE_SAVE_KEY = "cashflow-freedom-challenge-v1";
 export const AUTO_BACKUP_KEY = "cashflow-game-auto-backups-v1";

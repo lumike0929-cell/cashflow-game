@@ -214,6 +214,7 @@ import {
   trimGameReports,
   validateBackupEnvelope,
 } from "./pwaSystem.js";
+import { releaseInfo, releaseNotesForLocale } from "./releaseInfo.js";
 
 const STORAGE_KEY = "cashflow-freedom-game-v1";
 const CHALLENGE_STORAGE_KEY = "cashflow-freedom-challenge-v1";
@@ -5209,6 +5210,7 @@ function showGameMenu() {
     metrics: [
       [translateText("自动存档"), translateText("关键选择后会保存到这个浏览器")],
       [translateText("当前状态"), state ? `${formatMonth(state.month)} · ${t("finance.cash")} ${money(state.cash)}` : translateText("尚未开始")],
+      [t("release.version"), `${releaseInfo.appVersion} · ${releaseInfo.releaseLabel}`],
       [t("ui.language"), buildLocaleSelector("settingsLocaleSelect", "locale-select inline-locale")],
     ],
     actions: [
@@ -5221,6 +5223,7 @@ function showGameMenu() {
       { label: translateText("声音与画面"), onClick: showSoundSettings },
       { label: t("ui.settings"), onClick: showTutorialSettings },
       { label: t("modal.progressCenter"), disabled: !state, onClick: () => showProgressCenter("freedom") },
+      { label: t("release.viewNotes"), onClick: showReleaseNotes },
       { label: translateText("游戏规则"), onClick: showRules },
       { label: t("ui.parentGuide"), onClick: showParentGuide },
       { label: t("ui.restart"), className: "danger", onClick: confirmResetGame },
@@ -5229,6 +5232,31 @@ function showGameMenu() {
   });
   attachLocaleSelector("#settingsLocaleSelect", changeLocale);
   syncLocaleSelectors();
+}
+
+function showReleaseNotes() {
+  openSimpleModal({
+    type: t("release.title"),
+    title: `${t("release.title")} · ${releaseInfo.releaseLabel}`,
+    text: t("release.text"),
+    metrics: [
+      [t("release.version"), releaseInfo.appVersion],
+      [t("release.channel"), releaseInfo.releaseChannel],
+      [t("release.buildDate"), releaseInfo.buildDate],
+      [t("release.saveSchema"), releaseInfo.saveSchemaVersion],
+      [t("release.translationSchema"), releaseInfo.translationSchemaVersion],
+      [t("release.serviceWorker"), releaseInfo.serviceWorkerVersion],
+      [t("release.localData"), t("release.localDataText")],
+      [t("release.backupReminder"), t("release.backupReminderText")],
+      [t("release.testingVersion"), t("release.testingVersionText")],
+      [t("release.notes"), releaseNotesForLocale(uiState.locale).map((item) => `• ${item}`).join("<br>")],
+    ],
+    actions: [
+      { label: t("pwa.exportSave"), className: "primary", disabled: !state, onClick: exportSaveFile },
+      { label: t("ui.back"), onClick: showGameMenu },
+      { label: t("ui.close"), onClick: closeModal },
+    ],
+  });
 }
 
 function showInstallGuide() {
@@ -5701,6 +5729,9 @@ function showTutorialSettings() {
       ["名词提示", settings.glossaryTips ? "开启" : "关闭"],
       ["AI 精简提示", settings.compactAiTutorial ? "开启" : "关闭"],
       ["教学状态", uiState.tutorialComplete ? "已完成" : "进行中或未开始"],
+      [t("release.version"), releaseInfo.appVersion],
+      [t("release.channel"), releaseInfo.releaseChannel],
+      [t("release.serviceWorker"), releaseInfo.serviceWorkerVersion],
     ],
     actions: [
       { label: settings.tutorialHints ? "关闭教学提示" : "开启教学提示", onClick: () => toggleTutorialSetting("tutorialHints") },
@@ -5710,6 +5741,7 @@ function showTutorialSettings() {
       { label: "重播完整教学", className: "primary", onClick: () => { closeModal(); startTutorial(true); } },
       { label: "重播当前章节", onClick: () => { closeModal(); startTutorial(true); } },
       { label: "重置教学进度", className: "danger", onClick: confirmResetTutorialProgress },
+      { label: t("release.viewNotes"), onClick: showReleaseNotes },
       { label: "关闭", onClick: closeModal },
     ],
   });
@@ -6287,6 +6319,7 @@ window.cashflowDebug = {
   startChallengeDebug: () => startChallenge("starter-cashflow"),
   showInstallGuide,
   showStorageManager,
+  showReleaseNotes,
   exportBackupEnvelope: () => buildExportEnvelope(localStorage, { locale: uiState.locale }),
   exportBackupText: () => serializeBackup(buildExportEnvelope(localStorage, { locale: uiState.locale })),
   parseImportText,

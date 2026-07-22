@@ -6,6 +6,7 @@ const requiredFiles = [
   "styles.css",
   "game.js",
   "gameExperience.js",
+  "releaseInfo.js",
   "pwaSystem.js",
   "manifest.webmanifest",
   "sw.js",
@@ -80,9 +81,11 @@ assert.match(await readFile("i18n/index.js", "utf8"), /setLocale/);
 assert.match(await readFile("i18n/zh-TW.js", "utf8"), /財務自由/);
 assert.match(await readFile("i18n/zh-CN.js", "utf8"), /财务自由/);
 assert.match(await readFile("i18n/en.js", "utf8"), /Financial Freedom/);
+assert.match(await readFile("releaseInfo.js", "utf8"), /1\.24\.0-rc\.1/);
+assert.match(await readFile("releaseInfo.js", "utf8"), /Release Candidate 1/);
 assert.match(html, /rel="manifest" href="\.\/manifest\.webmanifest"/);
 assert.match(await readFile("manifest.webmanifest", "utf8"), /"display": "standalone"/);
-assert.match(await readFile("sw.js", "utf8"), /cashflow-game-shell-v23/);
+assert.match(await readFile("sw.js", "utf8"), /cashflow-game-shell-rc1/);
 assert.match(game, /registerServiceWorker/);
 
 console.log("Static build check passed.");

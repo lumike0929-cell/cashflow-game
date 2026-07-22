@@ -22,6 +22,7 @@ import {
 } from "../pwaSystem.js";
 import { EXPERIENCE_SETTINGS_KEY } from "../gameExperience.js";
 import { localeStorageKey } from "../i18n/index.js";
+import { releaseInfo, releaseNotesForLocale } from "../releaseInfo.js";
 
 class MemoryStorage {
   constructor() {
@@ -97,6 +98,7 @@ test("PWA manifest, icons, and service worker shell are present", async () => {
   await access("icons/apple-touch-icon.svg");
 
   const worker = await readFile("sw.js", "utf8");
+  assert.match(worker, /cashflow-game-shell-rc1/);
   assert.match(worker, /networkFirst/);
   assert.match(worker, /staleWhileRevalidate/);
   assert.match(worker, /response\.ok/);
@@ -106,6 +108,7 @@ test("PWA manifest, icons, and service worker shell are present", async () => {
 test("export envelope is valid, trimmed, and serializable", () => {
   const envelope = buildExportEnvelope(storageWithSave(), { locale: "zh-TW", now: "2026-07-22T10:00:00.000Z" });
   assert.equal(envelope.schemaVersion, BACKUP_SCHEMA_VERSION);
+  assert.equal(envelope.appVersion, releaseInfo.appVersion);
   assert.equal(envelope.locale, "zh-TW");
   assert.equal(envelope.normalGameSave.gameReports.length, 10);
   assert.equal(envelope.normalGameSave.cash, 28000);
@@ -116,6 +119,19 @@ test("export envelope is valid, trimmed, and serializable", () => {
   assert.equal(serialized.ok, true);
   assert.match(serialized.text, /"normalGameSave"/);
   assert.match(backupFileName(new Date("2026-07-22T03:04:00")), /cashflow-game-backup-2026-07-22-0304\.json/);
+});
+
+test("RC1 release information is complete and localized", () => {
+  assert.equal(releaseInfo.releaseLabel, "RC1");
+  assert.equal(releaseInfo.releaseChannel, "Release Candidate 1");
+  assert.equal(releaseInfo.serviceWorkerVersion, "cashflow-game-shell-rc1");
+  assert.equal(releaseInfo.saveSchemaVersion, 4);
+  assert.equal(releaseInfo.translationSchemaVersion, 1);
+  for (const locale of ["zh-TW", "zh-CN", "en"]) {
+    const notes = releaseNotesForLocale(locale);
+    assert.equal(notes.length >= 4, true);
+    assert.equal(notes.some((note) => /投資建議|投资建议|investment advice/.test(note)), true);
+  }
 });
 
 test("import parser accepts valid backups and rejects unsafe input", () => {

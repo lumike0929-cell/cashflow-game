@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 const files = [
   "game.js",
   "gameExperience.js",
+  "releaseInfo.js",
   "pwaSystem.js",
   "sw.js",
   "realEstateData.js",

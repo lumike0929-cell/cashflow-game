@@ -108,6 +108,7 @@ try {
     const manifestResponse = await fetch("./manifest.webmanifest");
     const manifest = await manifestResponse.json();
     const workerResponse = await fetch("./sw.js");
+    const iconResponse = await fetch("./icons/app-icon-192.svg");
     const exported = window.cashflowDebug.exportBackupText();
     const parsed = exported.ok ? window.cashflowDebug.parseImportText(exported.text) : { ok: false };
     const unsafe = window.cashflowDebug.parseImportText('{"schemaVersion":1,"__proto__":{"polluted":true}}');
@@ -118,7 +119,8 @@ try {
       display: manifest.display,
       iconCount: manifest.icons.length,
       workerOk: workerResponse.ok,
-      workerHasCache: (await workerResponse.text()).includes("cashflow-game-shell-v23"),
+      iconOk: iconResponse.ok,
+      workerHasCache: (await workerResponse.text()).includes("cashflow-game-shell-rc1"),
       serviceWorkerSupported: "serviceWorker" in navigator,
       exportedOk: exported.ok,
       parsedOk: parsed.ok,
@@ -132,6 +134,7 @@ try {
   assert.equal(pwaSnapshot.display, "standalone");
   assert.ok(pwaSnapshot.iconCount >= 4);
   assert.equal(pwaSnapshot.workerOk, true);
+  assert.equal(pwaSnapshot.iconOk, true);
   assert.equal(pwaSnapshot.workerHasCache, true);
   assert.equal(typeof pwaSnapshot.serviceWorkerSupported, "boolean");
   assert.equal(pwaSnapshot.exportedOk, true);
@@ -140,6 +143,10 @@ try {
   assert.equal(pwaSnapshot.unsafeRejected, true);
   assert.equal(pwaSnapshot.backups, 5);
   assert.ok(pwaSnapshot.storageBytes > 0);
+  await page.evaluate(() => window.cashflowDebug.showReleaseNotes());
+  await expectText(page, "RC1 发布说明");
+  await expectText(page, "1.24.0-rc.1");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.showStorageManager());
   await expectText(page, "存储空间");
   await page.evaluate(() => window.cashflowDebug.closeModal());
@@ -362,7 +369,7 @@ try {
     assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().turnPhase), "idle");
   }
 
-  const performanceRolls = Array.from({ length: 30 }, (_, index) => (index % 6) + 1);
+  const performanceRolls = Array.from({ length: 50 }, (_, index) => (index % 6) + 1);
   for (const roll of performanceRolls) {
     const before = await page.evaluate(() => window.cashflowDebug.getState().position);
     await page.evaluate((value) => window.cashflowDebug.rollFixed(value), roll);
@@ -551,9 +558,13 @@ try {
   assert.deepEqual(consoleErrors, []);
 
   for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 375, height: 667 },
     { width: 390, height: 844 },
+    { width: 430, height: 932 },
     { width: 768, height: 1024 },
     { width: 1024, height: 768 },
+    { width: 1280, height: 720 },
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(viewport);
@@ -600,9 +611,13 @@ try {
   }
 
   for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 375, height: 667 },
     { width: 390, height: 844 },
+    { width: 430, height: 932 },
     { width: 768, height: 1024 },
     { width: 1024, height: 768 },
+    { width: 1280, height: 720 },
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(viewport);

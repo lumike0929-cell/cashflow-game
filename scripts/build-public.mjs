@@ -5,6 +5,7 @@ const deployFiles = [
   "styles.css",
   "game.js",
   "gameExperience.js",
+  "releaseInfo.js",
   "pwaSystem.js",
   "manifest.webmanifest",
   "sw.js",

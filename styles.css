@@ -5677,13 +5677,13 @@ body.in-game .map-toolbar {
   }
 
   body.in-game .board-card {
-    min-height: calc(100vh - 286px);
+    min-height: max(350px, calc(100dvh - 286px));
     padding: 10px;
   }
 
   body.in-game .board {
-    min-height: calc(100vh - 376px);
-    height: calc(100vh - 376px);
+    min-height: max(306px, calc(100dvh - 376px));
+    height: max(306px, calc(100dvh - 376px));
     border-radius: 22px;
   }
 
