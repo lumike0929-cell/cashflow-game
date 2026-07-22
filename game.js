@@ -193,6 +193,27 @@ import {
   translateText,
   translationSchemaVersion,
 } from "./i18n/index.js";
+import {
+  applyServiceWorkerUpdate,
+  backupFileName,
+  buildExportEnvelope,
+  clearOfflineCaches,
+  clearOldBackups,
+  createAutoBackup,
+  dismissInstallPrompt,
+  estimateLocalStorage,
+  importBackupToStorage,
+  isStandaloneDisplay,
+  listenNetworkStatus,
+  listAutoBackups,
+  parseImportText,
+  registerServiceWorker,
+  restoreAutoBackup,
+  serializeBackup,
+  shouldShowInstallPrompt,
+  trimGameReports,
+  validateBackupEnvelope,
+} from "./pwaSystem.js";
 
 const STORAGE_KEY = "cashflow-freedom-game-v1";
 const CHALLENGE_STORAGE_KEY = "cashflow-freedom-challenge-v1";
@@ -352,6 +373,12 @@ const uiState = {
   playedEffectIds: new Set(),
   avatarState: "idle",
   liveMessage: "",
+  online: navigator.onLine !== false,
+  pwaStatus: "idle",
+  lastNetworkNotice: navigator.onLine !== false ? "online" : "offline",
+  pendingServiceWorker: null,
+  deferredInstallPrompt: null,
+  importPreview: null,
 };
 soundManager.setMuted(uiState.muted);
 soundManager.setVolume(uiState.volume);
@@ -744,6 +771,7 @@ function careerShortNote(id) {
 function startSelectedCareer() {
   const careerBase = careers.find((item) => item.id === selectedCareerId) || careers[0];
   const career = localizeCareer(careerBase);
+  if (localStorage.getItem(STORAGE_KEY)) createAutoBackup(localStorage, "new-game");
   state = createNewGameState(career, selectedDifficultyId);
   state.locale = uiState.locale;
   state.localeVersion = localeVersion;
@@ -5136,6 +5164,7 @@ function loadGame() {
 }
 
 function resetGame() {
+  createAutoBackup(localStorage, "restart");
   if (state?.activeChallenge) localStorage.removeItem(CHALLENGE_STORAGE_KEY);
   state = null;
   localStorage.removeItem(STORAGE_KEY);
@@ -5145,6 +5174,7 @@ function resetGame() {
 }
 
 function clearSavedGame() {
+  createAutoBackup(localStorage, "clear-save");
   localStorage.removeItem(STORAGE_KEY);
   state = null;
   soundManager.play("warning");
@@ -5184,6 +5214,10 @@ function showGameMenu() {
     actions: [
       { label: translateText("保存进度"), className: "primary", disabled: !state, onClick: saveGame },
       { label: translateText("读取存档"), onClick: loadGame },
+      { label: t("pwa.installApp"), onClick: showInstallGuide },
+      { label: t("pwa.storage"), onClick: showStorageManager },
+      { label: t("pwa.exportSave"), onClick: exportSaveFile },
+      { label: t("pwa.importSave"), onClick: showImportSave },
       { label: translateText("声音与画面"), onClick: showSoundSettings },
       { label: t("ui.settings"), onClick: showTutorialSettings },
       { label: t("modal.progressCenter"), disabled: !state, onClick: () => showProgressCenter("freedom") },
@@ -5195,6 +5229,399 @@ function showGameMenu() {
   });
   attachLocaleSelector("#settingsLocaleSelect", changeLocale);
   syncLocaleSelectors();
+}
+
+function showInstallGuide() {
+  dismissInstallPrompt(localStorage, 7);
+  const isStandalone = isStandaloneDisplay();
+  const platform = /iphone|ipad|ipod/i.test(navigator.userAgent) ? "ios" : /android/i.test(navigator.userAgent) ? "android" : "desktop";
+  const steps = platform === "ios"
+    ? [t("pwa.iosStepShare"), t("pwa.iosStepAdd"), t("pwa.iosStepConfirm")]
+    : [t("pwa.installChromeStep"), t("pwa.installStandaloneStep")];
+  openSimpleModal({
+    type: t("pwa.installApp"),
+    title: isStandalone ? t("pwa.installed") : t("pwa.installTitle"),
+    text: isStandalone ? t("pwa.standaloneReady") : t("pwa.installText"),
+    metrics: [
+      [t("pwa.platform"), platform === "ios" ? "iOS Safari" : platform === "android" ? "Android Chrome" : "Desktop"],
+      [t("pwa.installSteps"), steps.map((step, index) => `${index + 1}. ${step}`).join("<br>")],
+      [t("pwa.privacy"), t("pwa.localOnly")],
+    ],
+    actions: [
+      { label: t("pwa.installApp"), className: "primary", disabled: !uiState.deferredInstallPrompt, onClick: promptInstallApp },
+      { label: t("pwa.later"), onClick: closeModal },
+    ],
+  });
+}
+
+async function promptInstallApp() {
+  const promptEvent = uiState.deferredInstallPrompt;
+  if (!promptEvent) {
+    showInstallGuide();
+    return;
+  }
+  closeModal();
+  promptEvent.prompt();
+  await promptEvent.userChoice.catch(() => null);
+  uiState.deferredInstallPrompt = null;
+  dismissInstallPrompt(localStorage, 60);
+}
+
+function showStorageManager() {
+  const estimate = estimateLocalStorage(localStorage);
+  const backups = listAutoBackups(localStorage);
+  openSimpleModal({
+    type: t("pwa.storage"),
+    title: t("pwa.storageTitle"),
+    text: t("pwa.storageText"),
+    metrics: [
+      [t("pwa.estimatedUse"), formatBytes(estimate.totalBytes)],
+      [t("pwa.mainSave"), formatBytes(estimate.known.mainSave)],
+      [t("pwa.challengeSave"), formatBytes(estimate.known.challengeSave)],
+      [t("pwa.settings"), formatBytes(estimate.known.settings)],
+      [t("pwa.autoBackup"), `${backups.length} / 5 · ${formatBytes(estimate.known.backups)}`],
+      [t("pwa.cacheStatus"), t("pwa.cacheLocal")],
+    ],
+    actions: [
+      { label: t("pwa.exportSave"), className: "primary", onClick: exportSaveFile },
+      { label: t("pwa.importSave"), onClick: showImportSave },
+      { label: t("pwa.viewBackups"), onClick: showAutoBackups },
+      { label: t("pwa.cleanReports"), onClick: cleanOldReports },
+      { label: t("pwa.cleanBackups"), onClick: confirmCleanBackups },
+      { label: t("pwa.clearOfflineCache"), onClick: confirmClearOfflineCache },
+      { label: t("ui.close"), onClick: closeModal },
+    ],
+  });
+}
+
+function exportSaveFile() {
+  const envelope = buildExportEnvelope(localStorage, { locale: uiState.locale });
+  const serialized = serializeBackup(envelope);
+  if (!serialized.ok) {
+    showRecoverableTip(t("pwa.exportFailed"), t("pwa.exportFailedText"));
+    return;
+  }
+  const fileName = backupFileName();
+  try {
+    const blob = new Blob([serialized.text], { type: "application/json;charset=utf-8" });
+    const file = new File([blob], fileName, { type: "application/json" });
+    if (navigator.canShare?.({ files: [file] })) {
+      navigator.share({ files: [file], title: t("pwa.exportSave"), text: t("pwa.exportShareText") }).catch(() => downloadBlob(blob, fileName));
+    } else {
+      downloadBlob(blob, fileName);
+    }
+    openSimpleModal({
+      type: t("pwa.exportSave"),
+      title: t("pwa.exportReady"),
+      text: t("pwa.exportReadyText"),
+      metrics: [[t("pwa.fileName"), fileName], [t("pwa.privacy"), t("pwa.localOnly")]],
+      actions: [{ label: t("ui.gotIt"), className: "primary", onClick: closeModal }],
+    });
+  } catch {
+    showRecoverableTip(t("pwa.exportFailed"), t("pwa.exportFailedText"));
+  }
+}
+
+function showImportSave() {
+  openSimpleModal({
+    type: t("pwa.importSave"),
+    title: t("pwa.importTitle"),
+    text: t("pwa.importText"),
+    metrics: [
+      [t("pwa.safeImport"), t("pwa.safeImportText")],
+      [t("pwa.maxFileSize"), formatBytes(640000)],
+    ],
+    actions: [
+      { label: t("pwa.chooseFile"), className: "primary", onClick: chooseImportFile },
+      { label: t("ui.cancel"), onClick: closeModal },
+    ],
+  });
+}
+
+function chooseImportFile() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+  input.addEventListener("change", () => handleImportFile(input.files?.[0]), { once: true });
+  input.click();
+}
+
+function handleImportFile(file) {
+  if (!file || !file.name.toLowerCase().endsWith(".json") || file.size > 640000) {
+    showRecoverableTip(t("pwa.importFailed"), file?.size > 640000 ? t("pwa.fileTooLarge") : t("pwa.invalidFile"));
+    return;
+  }
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    const parsed = parseImportText(String(reader.result || ""));
+    if (!parsed.ok) {
+      showRecoverableTip(t("pwa.importFailed"), importErrorText(parsed.errors));
+      return;
+    }
+    uiState.importPreview = parsed.value;
+    showImportPreview(parsed.summary);
+  }, { once: true });
+  reader.addEventListener("error", () => showRecoverableTip(t("pwa.importFailed"), t("pwa.invalidFile")), { once: true });
+  reader.readAsText(file, "utf-8");
+}
+
+function showImportPreview(summary) {
+  openSimpleModal({
+    type: t("pwa.savePreview"),
+    title: t("pwa.importPreviewTitle"),
+    text: t("pwa.importPreviewText"),
+    metrics: [
+      [t("pwa.sourceVersion"), summary.appVersion],
+      [t("pwa.exportedAt"), summary.exportedAt?.slice(0, 19).replace("T", " ") || "-"],
+      [t("pwa.character"), translateText(summary.character)],
+      [t("hud.currentTurn"), `${formatMonth(summary.month)} · ${translateText("回合")} ${formatNumber(summary.round)}`],
+      [t("finance.cash"), money(summary.cash)],
+      [t("pwa.aiPlayers"), formatNumber(summary.aiPlayers)],
+    ],
+    actions: [
+      { label: t("pwa.replaceSave"), className: "danger", onClick: confirmImportReplace },
+      { label: t("pwa.importAsSlot"), onClick: importAsSlot },
+      { label: t("ui.cancel"), className: "primary", onClick: closeModal },
+    ],
+  });
+}
+
+function confirmImportReplace() {
+  openSimpleModal({
+    type: t("pwa.importSave"),
+    title: t("pwa.replaceConfirmTitle"),
+    text: t("pwa.replaceConfirmText"),
+    actions: [
+      { label: t("pwa.replaceSave"), className: "danger", onClick: () => applyImportedBackup(true) },
+      { label: t("ui.cancel"), className: "primary", onClick: () => showImportPreview(uiState.importPreview ? validateBackupEnvelope(uiState.importPreview).summary : {}) },
+    ],
+    outcome: "warning",
+  });
+}
+
+function importAsSlot() {
+  applyImportedBackup(false);
+}
+
+function applyImportedBackup(replace) {
+  if (!uiState.importPreview) return;
+  const result = importBackupToStorage(localStorage, uiState.importPreview, { replace });
+  if (!result.ok) {
+    showRecoverableTip(t("pwa.importFailed"), importErrorText(result.errors));
+    return;
+  }
+  if (replace) {
+    state = parseSavedState(localStorage.getItem(STORAGE_KEY));
+    if (state) {
+      ensureTutorialState(state);
+      render();
+    } else {
+      renderSetup();
+      showSetup();
+    }
+  }
+  uiState.importPreview = null;
+  openSimpleModal({
+    type: t("pwa.importSave"),
+    title: t("pwa.importSuccess"),
+    text: replace ? t("pwa.importSuccessText") : t("pwa.importSlotText"),
+    actions: [{ label: t("ui.gotIt"), className: "primary", onClick: closeModal }],
+  });
+}
+
+function showAutoBackups() {
+  const backups = listAutoBackups(localStorage);
+  openSimpleModal({
+    type: t("pwa.autoBackup"),
+    title: t("pwa.backupTitle"),
+    text: backups.length ? t("pwa.backupText") : t("pwa.noBackups"),
+    metrics: backups.map((backup) => [
+      `${backup.summary?.createdAt?.slice(0, 10) || backup.createdAt.slice(0, 10)} · ${translateText(backup.reason)}`,
+      `${translateText(backup.summary?.character || backup.character)} · ${formatMonth(backup.month || backup.summary?.month || 1)} · ${t("finance.cash")} ${money(backup.summary?.cash || 0)}`,
+    ]),
+    actions: [
+      ...backups.slice(0, 3).map((backup) => ({ label: `${t("pwa.restoreBackup")} ${backup.createdAt.slice(5, 10)}`, onClick: () => confirmRestoreBackup(backup.backupId) })),
+      { label: t("pwa.cleanBackups"), className: "danger", disabled: backups.length === 0, onClick: confirmCleanBackups },
+      { label: t("ui.back"), className: "primary", onClick: showStorageManager },
+    ],
+  });
+}
+
+function confirmRestoreBackup(backupId) {
+  openSimpleModal({
+    type: t("pwa.restoreBackup"),
+    title: t("pwa.restoreConfirmTitle"),
+    text: t("pwa.restoreConfirmText"),
+    actions: [
+      { label: t("pwa.restoreBackup"), className: "danger", onClick: () => restoreBackupNow(backupId) },
+      { label: t("ui.cancel"), className: "primary", onClick: showAutoBackups },
+    ],
+    outcome: "warning",
+  });
+}
+
+function restoreBackupNow(backupId) {
+  const result = restoreAutoBackup(localStorage, backupId);
+  if (!result.ok) {
+    showRecoverableTip(t("pwa.restoreFailed"), importErrorText(result.errors));
+    return;
+  }
+  state = parseSavedState(localStorage.getItem(STORAGE_KEY));
+  if (state) render();
+  openSimpleModal({
+    type: t("pwa.restoreBackup"),
+    title: t("pwa.restoreSuccess"),
+    text: t("pwa.restoreSuccessText"),
+    actions: [{ label: t("ui.gotIt"), className: "primary", onClick: closeModal }],
+  });
+}
+
+function cleanOldReports() {
+  const result = trimGameReports(localStorage);
+  openSimpleModal({
+    type: t("pwa.storage"),
+    title: result.ok ? t("pwa.cleanDone") : t("pwa.storageFailed"),
+    text: result.ok ? t("pwa.cleanReportsDone", { count: formatNumber(result.trimmed || 0) }) : t("pwa.storageFailedText"),
+    actions: [{ label: t("ui.gotIt"), className: "primary", onClick: showStorageManager }],
+  });
+}
+
+function confirmCleanBackups() {
+  openSimpleModal({
+    type: t("pwa.cleanBackups"),
+    title: t("pwa.cleanBackupsTitle"),
+    text: t("pwa.cleanBackupsText"),
+    actions: [
+      { label: t("pwa.cleanBackups"), className: "danger", onClick: cleanBackupsNow },
+      { label: t("ui.cancel"), className: "primary", onClick: showStorageManager },
+    ],
+    outcome: "warning",
+  });
+}
+
+function cleanBackupsNow() {
+  clearOldBackups(localStorage);
+  showStorageManager();
+}
+
+function confirmClearOfflineCache() {
+  openSimpleModal({
+    type: t("pwa.clearOfflineCache"),
+    title: t("pwa.clearCacheTitle"),
+    text: t("pwa.clearCacheText"),
+    actions: [
+      { label: t("pwa.clearOfflineCache"), className: "danger", onClick: clearOfflineCacheNow },
+      { label: t("ui.cancel"), className: "primary", onClick: showStorageManager },
+    ],
+    outcome: "warning",
+  });
+}
+
+async function clearOfflineCacheNow() {
+  const result = await clearOfflineCaches();
+  openSimpleModal({
+    type: t("pwa.clearOfflineCache"),
+    title: t("pwa.cleanDone"),
+    text: t("pwa.clearCacheDone", { count: formatNumber(result.cleared || 0) }),
+    actions: [{ label: t("ui.gotIt"), className: "primary", onClick: showStorageManager }],
+  });
+}
+
+function showUpdateAvailable(registration) {
+  uiState.pendingServiceWorker = registration;
+  if (["rolling", "moving", "resolvingEvent", "openingEvent"].includes(uiState.turnPhase)) return;
+  openSimpleModal({
+    type: t("pwa.updateAvailable"),
+    title: t("pwa.updateTitle"),
+    text: t("pwa.updateText"),
+    actions: [
+      { label: t("pwa.updateNow"), className: "primary", onClick: updateAppNow },
+      { label: t("pwa.later"), onClick: closeModal },
+    ],
+  });
+}
+
+function updateAppNow() {
+  persistQuietly();
+  const applied = applyServiceWorkerUpdate(uiState.pendingServiceWorker);
+  if (!applied) {
+    showRecoverableTip(t("pwa.updateFailed"), t("pwa.updateFailedText"));
+    return;
+  }
+  navigator.serviceWorker?.addEventListener("controllerchange", () => {
+    if (uiState.reloadingForUpdate) return;
+    uiState.reloadingForUpdate = true;
+    location.reload();
+  }, { once: true });
+}
+
+function showNetworkStatus(online) {
+  const status = online ? "online" : "offline";
+  if (uiState.lastNetworkNotice === status) return;
+  uiState.lastNetworkNotice = status;
+  uiState.pwaStatus = status;
+  uiState.online = online;
+  uiState.liveMessage = online ? t("pwa.onlineAgain") : t("pwa.offlineNow");
+  if (!state && !online) return;
+  showRecoverableTip(online ? t("pwa.onlineAgain") : t("pwa.offlineNow"), online ? t("pwa.onlineText") : t("pwa.offlineText"));
+}
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 400);
+}
+
+function importErrorText(errors = []) {
+  const first = errors[0] || "invalid";
+  const map = {
+    empty: t("pwa.invalidFile"),
+    tooLarge: t("pwa.fileTooLarge"),
+    invalidJson: t("pwa.invalidJson"),
+    unsafeKey: t("pwa.unsafeImport"),
+    newerVersion: t("pwa.newerVersion"),
+    storageFailed: t("pwa.storageFailedText"),
+    normalDuplicateTransactions: t("pwa.damagedSave"),
+    normalMigrationFailed: t("pwa.damagedSave"),
+  };
+  return map[first] || t("pwa.damagedSave");
+}
+
+function formatBytes(bytes) {
+  const value = Math.max(0, Number(bytes) || 0);
+  if (value < 1024) return `${formatNumber(value)} B`;
+  if (value < 1024 * 1024) return `${formatNumber(value / 1024, { maximumFractionDigits: 1 })} KB`;
+  return `${formatNumber(value / 1024 / 1024, { maximumFractionDigits: 1 })} MB`;
+}
+
+function initPwa() {
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    uiState.deferredInstallPrompt = event;
+    if (shouldShowInstallPrompt(localStorage) && state) {
+      window.setTimeout(() => {
+        if (!uiState.deferredInstallPrompt || isStandaloneDisplay()) return;
+        showInstallGuide();
+      }, 1200);
+    }
+  });
+  window.addEventListener("appinstalled", () => {
+    uiState.deferredInstallPrompt = null;
+    dismissInstallPrompt(localStorage, 90);
+    uiState.liveMessage = t("pwa.installed");
+  });
+  registerServiceWorker({
+    onUpdate: showUpdateAvailable,
+    onStatus: (status) => {
+      uiState.pwaStatus = status;
+    },
+  });
+  listenNetworkStatus(({ online }) => showNetworkStatus(online));
 }
 
 function confirmResetGame() {
@@ -5858,9 +6285,30 @@ window.cashflowDebug = {
     showFinancialPressure(evaluateFinancialPressure(state));
   },
   startChallengeDebug: () => startChallenge("starter-cashflow"),
+  showInstallGuide,
+  showStorageManager,
+  exportBackupEnvelope: () => buildExportEnvelope(localStorage, { locale: uiState.locale }),
+  exportBackupText: () => serializeBackup(buildExportEnvelope(localStorage, { locale: uiState.locale })),
+  parseImportText,
+  validateBackupEnvelope,
+  importBackupText: (text, replace = true) => {
+    const parsed = parseImportText(text);
+    if (!parsed.ok) return parsed;
+    return importBackupToStorage(localStorage, parsed.value, { replace });
+  },
+  createAutoBackup: (reason = "debug") => createAutoBackup(localStorage, reason),
+  listAutoBackups: () => listAutoBackups(localStorage),
+  restoreAutoBackup: (backupId) => restoreAutoBackup(localStorage, backupId),
+  estimateStorage: () => estimateLocalStorage(localStorage),
+  clearOfflineCaches,
+  simulateNetworkStatus: (online) => {
+    uiState.lastNetworkNotice = online ? "offline" : "online";
+    return showNetworkStatus(Boolean(online));
+  },
   dispatchVisibility: () => document.dispatchEvent(new Event("visibilitychange")),
   closeModal,
 };
 
+initPwa();
 renderSetup();
 render();

@@ -6,6 +6,13 @@ const requiredFiles = [
   "styles.css",
   "game.js",
   "gameExperience.js",
+  "pwaSystem.js",
+  "manifest.webmanifest",
+  "sw.js",
+  "icons/app-icon-192.svg",
+  "icons/app-icon-512.svg",
+  "icons/app-icon-maskable.svg",
+  "icons/apple-touch-icon.svg",
   "realEstateData.js",
   "realEstateCalculator.js",
   "realEstateTransactions.js",
@@ -73,5 +80,9 @@ assert.match(await readFile("i18n/index.js", "utf8"), /setLocale/);
 assert.match(await readFile("i18n/zh-TW.js", "utf8"), /財務自由/);
 assert.match(await readFile("i18n/zh-CN.js", "utf8"), /财务自由/);
 assert.match(await readFile("i18n/en.js", "utf8"), /Financial Freedom/);
+assert.match(html, /rel="manifest" href="\.\/manifest\.webmanifest"/);
+assert.match(await readFile("manifest.webmanifest", "utf8"), /"display": "standalone"/);
+assert.match(await readFile("sw.js", "utf8"), /cashflow-game-shell-v23/);
+assert.match(game, /registerServiceWorker/);
 
 console.log("Static build check passed.");

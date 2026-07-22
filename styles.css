@@ -5751,6 +5751,24 @@ body.in-game .map-toolbar {
   }
 }
 
+@media (display-mode: standalone) {
+  body {
+    min-height: 100dvh;
+  }
+
+  .topbar {
+    padding-top: max(10px, env(safe-area-inset-top));
+  }
+
+  body.in-game .layout {
+    min-height: 100dvh;
+  }
+
+  .modal-card {
+    max-height: calc(100dvh - max(28px, env(safe-area-inset-top)) - max(28px, env(safe-area-inset-bottom)));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

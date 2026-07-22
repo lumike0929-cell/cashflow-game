@@ -5,6 +5,9 @@ const deployFiles = [
   "styles.css",
   "game.js",
   "gameExperience.js",
+  "pwaSystem.js",
+  "manifest.webmanifest",
+  "sw.js",
   "realEstateCalculator.js",
   "realEstateData.js",
   "realEstateEventResolver.js",
@@ -48,9 +51,15 @@ const deployFiles = [
 await rm("public", { recursive: true, force: true });
 await mkdir("public", { recursive: true });
 await mkdir("public/i18n", { recursive: true });
+await mkdir("public/icons", { recursive: true });
 
 for (const file of deployFiles) {
   await copyFile(file, `public/${file}`);
 }
+
+await copyFile("icons/app-icon-192.svg", "public/icons/app-icon-192.svg");
+await copyFile("icons/app-icon-512.svg", "public/icons/app-icon-512.svg");
+await copyFile("icons/app-icon-maskable.svg", "public/icons/app-icon-maskable.svg");
+await copyFile("icons/apple-touch-icon.svg", "public/icons/apple-touch-icon.svg");
 
 console.log("Prepared public output directory.");

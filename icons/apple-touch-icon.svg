@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180" role="img" aria-label="Cashflow City Apple touch icon">
+  <rect width="180" height="180" rx="40" fill="#e9f8ec"/>
+  <path d="M24 122c19-21 42-31 66-31s48 10 68 31v25H24z" fill="#79c987"/>
+  <path d="M30 114h120v28H30z" fill="#5b6c75"/>
+  <rect x="33" y="70" width="37" height="43" rx="8" fill="#ffe796"/>
+  <path d="M29 70h45L51 49z" fill="#d8a21f"/>
+  <rect x="106" y="62" width="42" height="51" rx="9" fill="#79c8f2"/>
+  <path d="M101 62h52l-26-23z" fill="#2d8bc0"/>
+  <circle cx="90" cy="92" r="34" fill="#ffd86b" stroke="#b98014" stroke-width="8"/>
+  <text x="90" y="105" text-anchor="middle" font-family="system-ui, sans-serif" font-size="48" font-weight="900" fill="#64470e">¥</text>
+</svg>

@@ -9,6 +9,8 @@ const mimeTypes = {
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
+  ".svg": "image/svg+xml; charset=utf-8",
 };
 
 const server = createServer(async (request, response) => {
@@ -102,6 +104,63 @@ try {
     });
   });
   assert.equal(await page.locator(".map-asset-marker").count(), 0);
+  const pwaSnapshot = await page.evaluate(async () => {
+    const manifestResponse = await fetch("./manifest.webmanifest");
+    const manifest = await manifestResponse.json();
+    const workerResponse = await fetch("./sw.js");
+    const exported = window.cashflowDebug.exportBackupText();
+    const parsed = exported.ok ? window.cashflowDebug.parseImportText(exported.text) : { ok: false };
+    const unsafe = window.cashflowDebug.parseImportText('{"schemaVersion":1,"__proto__":{"polluted":true}}');
+    const importedSlot = exported.ok ? window.cashflowDebug.importBackupText(exported.text, false) : { ok: false };
+    for (let index = 0; index < 7; index += 1) window.cashflowDebug.createAutoBackup(`browser-${index}`);
+    return {
+      manifestOk: manifestResponse.ok,
+      display: manifest.display,
+      iconCount: manifest.icons.length,
+      workerOk: workerResponse.ok,
+      workerHasCache: (await workerResponse.text()).includes("cashflow-game-shell-v23"),
+      serviceWorkerSupported: "serviceWorker" in navigator,
+      exportedOk: exported.ok,
+      parsedOk: parsed.ok,
+      importedSlotOk: importedSlot.ok,
+      unsafeRejected: unsafe.ok === false && unsafe.errors.includes("unsafeKey"),
+      backups: window.cashflowDebug.listAutoBackups().length,
+      storageBytes: window.cashflowDebug.estimateStorage().totalBytes,
+    };
+  });
+  assert.equal(pwaSnapshot.manifestOk, true);
+  assert.equal(pwaSnapshot.display, "standalone");
+  assert.ok(pwaSnapshot.iconCount >= 4);
+  assert.equal(pwaSnapshot.workerOk, true);
+  assert.equal(pwaSnapshot.workerHasCache, true);
+  assert.equal(typeof pwaSnapshot.serviceWorkerSupported, "boolean");
+  assert.equal(pwaSnapshot.exportedOk, true);
+  assert.equal(pwaSnapshot.parsedOk, true);
+  assert.equal(pwaSnapshot.importedSlotOk, true);
+  assert.equal(pwaSnapshot.unsafeRejected, true);
+  assert.equal(pwaSnapshot.backups, 5);
+  assert.ok(pwaSnapshot.storageBytes > 0);
+  await page.evaluate(() => window.cashflowDebug.showStorageManager());
+  await expectText(page, "存储空间");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  const offlineNotice = await page.evaluate(() => {
+    window.cashflowDebug.simulateNetworkStatus(false);
+    return {
+      live: window.cashflowDebug.getExperience().liveMessage,
+      text: document.body.innerText,
+    };
+  });
+  assert.match(`${offlineNotice.live}\n${offlineNotice.text}`, /目前离线|目前離線|Offline Mode/);
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  const onlineNotice = await page.evaluate(() => {
+    window.cashflowDebug.simulateNetworkStatus(true);
+    return {
+      live: window.cashflowDebug.getExperience().liveMessage,
+      text: document.body.innerText,
+    };
+  });
+  assert.match(`${onlineNotice.live}\n${onlineNotice.text}`, /已恢复连接|已恢復連線|Back Online/);
+  await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.showGlossary("passiveIncome"));
   await expectText(page, "即使你没有一直工作");
   await page.evaluate(() => window.cashflowDebug.closeModal());

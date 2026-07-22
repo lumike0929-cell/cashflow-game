@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 const files = [
   "game.js",
   "gameExperience.js",
+  "pwaSystem.js",
+  "sw.js",
   "realEstateData.js",
   "realEstateCalculator.js",
   "realEstateTransactions.js",
@@ -58,6 +60,7 @@ const files = [
   "tests/progress.test.mjs",
   "tests/ai-competition.test.mjs",
   "tests/i18n.test.mjs",
+  "tests/pwa.test.mjs",
   "tests/browser-acceptance.mjs",
   "tests/static-check.mjs",
 ];
