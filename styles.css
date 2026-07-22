@@ -5769,6 +5769,161 @@ body.in-game .map-toolbar {
   }
 }
 
+.public-beta-banner {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(34, 91, 153, 0.16);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 251, 221, 0.94), rgba(235, 247, 255, 0.9));
+  box-shadow: 0 10px 22px rgba(27, 74, 126, 0.12);
+}
+
+.public-beta-banner span {
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #254c7a;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.public-beta-banner strong {
+  font-size: 15px;
+  color: #17385f;
+}
+
+.public-beta-banner p {
+  margin: 0;
+  color: #43546b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.public-beta-banner button {
+  min-height: 38px;
+  border-radius: 12px;
+}
+
+.feedback-form {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 760px);
+  text-align: start;
+}
+
+.feedback-form label {
+  display: grid;
+  gap: 6px;
+  color: #203048;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.feedback-form input,
+.feedback-form select,
+.feedback-form textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(49, 78, 117, 0.22);
+  border-radius: 12px;
+  padding: 10px 11px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #17243a;
+  font: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.feedback-form textarea {
+  resize: vertical;
+  min-height: 84px;
+}
+
+.feedback-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.feedback-checkbox {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(242, 247, 255, 0.92);
+}
+
+.feedback-checkbox input {
+  width: 18px;
+  height: 18px;
+}
+
+.feedback-validation {
+  min-height: 20px;
+  margin: 0;
+  color: #9d3228;
+  font-weight: 900;
+}
+
+.feedback-privacy-hint {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 246, 214, 0.85);
+  color: #59472a;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.feedback-preview {
+  max-height: min(48dvh, 420px);
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: #132238;
+  color: #ecf6ff;
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: start;
+}
+
+.issue-guide {
+  display: grid;
+  gap: 8px;
+  text-align: start;
+}
+
+.issue-guide ul {
+  margin: 0;
+  padding-inline-start: 18px;
+}
+
+.issue-guide p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.issue-guide span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(225, 238, 255, 0.95);
+  color: #213d62;
+  font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  .feedback-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

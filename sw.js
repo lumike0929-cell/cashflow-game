@@ -8,6 +8,7 @@ const APP_SHELL = [
   "./progressSystem.js",
   "./aiCompetitionSystem.js",
   "./pwaSystem.js",
+  "./feedbackSystem.js",
   "./releaseInfo.js",
   "./manifest.webmanifest",
   "./i18n/index.js",

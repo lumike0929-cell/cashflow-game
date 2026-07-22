@@ -39,6 +39,7 @@ const files = [
   "economyCycleEngine.js",
   "progressSystem.js",
   "aiCompetitionSystem.js",
+  "feedbackSystem.js",
   "i18n/index.js",
   "i18n/formatters.js",
   "i18n/glossary.js",
@@ -62,6 +63,7 @@ const files = [
   "tests/ai-competition.test.mjs",
   "tests/i18n.test.mjs",
   "tests/pwa.test.mjs",
+  "tests/feedback.test.mjs",
   "tests/browser-acceptance.mjs",
   "tests/static-check.mjs",
 ];

@@ -144,8 +144,44 @@ try {
   assert.equal(pwaSnapshot.backups, 5);
   assert.ok(pwaSnapshot.storageBytes > 0);
   await page.evaluate(() => window.cashflowDebug.showReleaseNotes());
-  await expectText(page, "RC1 发布说明");
+  await expectText(page, "公开测试版说明");
   await expectText(page, "1.24.0-rc.1");
+  assert.match(await page.locator("#cardModal").innerText(), /Public Beta/);
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.showFeedbackPanel());
+  await expectText(page, "回报 Cashflow 问题");
+  await expectText(page, "问题类型");
+  await page.locator("#feedbackSummary").fill("按钮在小屏幕上看起来太挤。");
+  const feedbackSnapshot = await page.evaluate(() => {
+    const diagnostics = window.cashflowDebug.buildDiagnostics();
+    const summary = window.cashflowDebug.buildGameSummary(false);
+    const report = window.cashflowDebug.buildFeedbackReportDebug({
+      issueType: "layout",
+      screen: "browser acceptance",
+      summary: "按钮在小屏幕上看起来太挤。",
+      frequency: "once",
+      includeDiagnostics: true,
+      includeGameSummary: true,
+    });
+    return {
+      channel: diagnostics.releaseChannel,
+      hasFullStorage: JSON.stringify(diagnostics).includes("localStorage"),
+      hasSaveDump: JSON.stringify(diagnostics).includes("stockTransactions"),
+      cashIsBand: typeof summary.cash === "string",
+      reportType: report.issueType,
+      reportHasDiagnostics: Boolean(report.diagnostics),
+    };
+  });
+  assert.equal(feedbackSnapshot.channel, "Public Beta");
+  assert.equal(feedbackSnapshot.hasFullStorage, false);
+  assert.equal(feedbackSnapshot.hasSaveDump, false);
+  assert.equal(feedbackSnapshot.cashIsBand, true);
+  assert.equal(feedbackSnapshot.reportType, "layout");
+  assert.equal(feedbackSnapshot.reportHasDiagnostics, true);
+  await page.evaluate(() => window.cashflowDebug.showKnownIssues());
+  await expectText(page, "尚未列出重大已知问题");
+  await page.evaluate(() => window.cashflowDebug.showPrivacyNotice());
+  await expectText(page, "不自动上传游戏资料");
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.showStorageManager());
   await expectText(page, "存储空间");

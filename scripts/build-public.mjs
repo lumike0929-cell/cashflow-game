@@ -41,6 +41,7 @@ const deployFiles = [
   "economyCycleEngine.js",
   "progressSystem.js",
   "aiCompetitionSystem.js",
+  "feedbackSystem.js",
   "i18n/index.js",
   "i18n/formatters.js",
   "i18n/glossary.js",

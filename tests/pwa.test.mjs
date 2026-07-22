@@ -121,9 +121,10 @@ test("export envelope is valid, trimmed, and serializable", () => {
   assert.match(backupFileName(new Date("2026-07-22T03:04:00")), /cashflow-game-backup-2026-07-22-0304\.json/);
 });
 
-test("RC1 release information is complete and localized", () => {
-  assert.equal(releaseInfo.releaseLabel, "RC1");
-  assert.equal(releaseInfo.releaseChannel, "Release Candidate 1");
+test("public beta release information is complete and localized", () => {
+  assert.equal(releaseInfo.releaseLabel, "RC1 Public Beta");
+  assert.equal(releaseInfo.releaseChannel, "Public Beta");
+  assert.equal(releaseInfo.nextFixTarget, "RC2");
   assert.equal(releaseInfo.serviceWorkerVersion, "cashflow-game-shell-rc1");
   assert.equal(releaseInfo.saveSchemaVersion, 4);
   assert.equal(releaseInfo.translationSchemaVersion, 1);

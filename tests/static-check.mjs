@@ -46,6 +46,7 @@ const requiredFiles = [
   "economyCycleEngine.js",
   "progressSystem.js",
   "aiCompetitionSystem.js",
+  "feedbackSystem.js",
   "i18n/index.js",
   "i18n/formatters.js",
   "i18n/glossary.js",
@@ -77,12 +78,13 @@ assert.match(await readFile("lifeEventData.js", "utf8"), /lifeEvents/);
 assert.match(await readFile("insuranceData.js", "utf8"), /insurancePolicies/);
 assert.match(game, /showInsuranceCenter/);
 assert.match(await readFile("aiCompetitionSystem.js", "utf8"), /runAiTurnCycle/);
+assert.match(await readFile("feedbackSystem.js", "utf8"), /buildDiagnosticsSummary/);
 assert.match(await readFile("i18n/index.js", "utf8"), /setLocale/);
 assert.match(await readFile("i18n/zh-TW.js", "utf8"), /財務自由/);
 assert.match(await readFile("i18n/zh-CN.js", "utf8"), /财务自由/);
 assert.match(await readFile("i18n/en.js", "utf8"), /Financial Freedom/);
 assert.match(await readFile("releaseInfo.js", "utf8"), /1\.24\.0-rc\.1/);
-assert.match(await readFile("releaseInfo.js", "utf8"), /Release Candidate 1/);
+assert.match(await readFile("releaseInfo.js", "utf8"), /Public Beta/);
 assert.match(html, /rel="manifest" href="\.\/manifest\.webmanifest"/);
 assert.match(await readFile("manifest.webmanifest", "utf8"), /"display": "standalone"/);
 assert.match(await readFile("sw.js", "utf8"), /cashflow-game-shell-rc1/);

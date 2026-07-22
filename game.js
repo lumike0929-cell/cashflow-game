@@ -215,6 +215,21 @@ import {
   validateBackupEnvelope,
 } from "./pwaSystem.js";
 import { releaseInfo, releaseNotesForLocale } from "./releaseInfo.js";
+import {
+  buildDiagnosticsSummary,
+  buildFeedbackReport,
+  buildGameStateSummary,
+  clearFeedbackDiagnostics,
+  feedbackErrorCodes,
+  feedbackFileName,
+  feedbackIssueTypes,
+  feedbackReportToMarkdown,
+  knownIssuesForRelease,
+  rc2IssueCategories,
+  rc2IssuePriorities,
+  recordFeedbackError,
+  recordFeedbackTrace,
+} from "./feedbackSystem.js";
 
 const STORAGE_KEY = "cashflow-freedom-game-v1";
 const CHALLENGE_STORAGE_KEY = "cashflow-freedom-challenge-v1";
@@ -380,6 +395,7 @@ const uiState = {
   pendingServiceWorker: null,
   deferredInstallPrompt: null,
   importPreview: null,
+  feedbackDraft: {},
 };
 soundManager.setMuted(uiState.muted);
 soundManager.setVolume(uiState.volume);
@@ -632,6 +648,12 @@ function renderSetup() {
         <div class="large-character-preview">${avatarMarkup(selected, "celebrating", "right")}</div>
       </div>
       <div class="selected-career-panel">
+        <aside class="public-beta-banner" aria-label="${t("feedback.betaBadge")}">
+          <span>${t("feedback.betaBadge")}</span>
+          <strong>${releaseInfo.releaseLabel}</strong>
+          <p>${t("feedback.betaShort")}</p>
+          <button type="button" id="homeFeedbackButton">${t("feedback.reportIssue")}</button>
+        </aside>
         <span class="eyebrow">${t("ui.selectCharacter")}</span>
         <h2>${selected.name}</h2>
         <strong class="career-role">${careerPersonality(selected.id)}</strong>
@@ -751,6 +773,7 @@ function renderSetup() {
     renderSetup();
   });
   document.querySelector("#startSelectedCareer")?.addEventListener("click", startSelectedCareer);
+  document.querySelector("#homeFeedbackButton")?.addEventListener("click", showFeedbackPanel);
   document.querySelector("#homeProgressSummary")?.addEventListener("click", () => {
     state = savedState;
     showProgressCenter("freedom");
@@ -1328,8 +1351,10 @@ function applyExperienceMode() {
 }
 
 function changeLocale(locale) {
+  saveFeedbackDraftFromDom();
   uiState.locale = setLocale(locale);
   saveLocale(localStorage, uiState.locale);
+  recordFeedbackTrace(localStorage, "LOCALE_CHANGED", { screen: currentScreenName() });
   if (state) {
     state.locale = uiState.locale;
     state.localeVersion = localeVersion;
@@ -1341,6 +1366,7 @@ function changeLocale(locale) {
   syncLocaleSelectors();
   if (state) render();
   else renderSetup();
+  if (!el.modal.classList.contains("hidden") && el.modal.querySelector(".modal-card")?.dataset.panel === "feedback") showFeedbackPanel();
 }
 
 function syncLocaleSelectors() {
@@ -3048,6 +3074,7 @@ async function rollDice(forcedRoll = null) {
     setAvatarState("idle");
     render();
     const roll = typeof forcedRoll === "number" ? Math.max(1, Math.min(6, Math.round(forcedRoll))) : Math.floor(Math.random() * 6) + 1;
+    recordFeedbackTrace(localStorage, "DICE_ROLLED", { screen: currentScreenName() });
     completeBeginnerMission("first-roll");
     const previous = state.position;
     uiState.previewIndices = nextIndices(previous, roll, boardTiles.length);
@@ -3085,8 +3112,10 @@ async function rollDice(forcedRoll = null) {
     setTurnPhase("openingEvent");
     renderActions();
     completeBeginnerMission("reserve-check");
+    recordFeedbackTrace(localStorage, "EVENT_OPENED", { screen: currentScreenName() });
     triggerTile(boardTiles[next]);
-  } catch {
+  } catch (error) {
+    recordFeedbackError(localStorage, "EVENT_RESOLUTION_FAILED", error?.message || "roll flow failed");
     setTurnPhase("idle");
     uiState.previewIndices = [];
     render();
@@ -5013,6 +5042,7 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [], outcom
   modalCard?.setAttribute("data-event-type", displayType);
   modalCard?.setAttribute("aria-label", displayTitle);
   modalCard?.setAttribute("data-outcome", outcome);
+  delete modalCard?.dataset.panel;
   modalCard?.classList.remove("progress-modal-card", "report-modal-card");
   el.dealMetrics.classList.remove("progress-center-body", "report-body");
   modalCard?.querySelector(".event-illustration")?.remove();
@@ -5136,7 +5166,15 @@ function closeModal() {
 
 function saveGame() {
   if (!state) return;
-  persistQuietly();
+  try {
+    persistQuietly();
+    recordFeedbackTrace(localStorage, "SAVE_COMPLETED", { screen: currentScreenName() });
+  } catch (error) {
+    recordFeedbackTrace(localStorage, "SAVE_FAILED", { screen: currentScreenName() });
+    recordFeedbackError(localStorage, "SAVE_WRITE_FAILED", error?.message || "save failed");
+    showRecoverableTip(t("pwa.storageFailed"), t("pwa.storageFailedText"));
+    return;
+  }
   openSimpleModal({
     type: "保存",
     title: "进度已保存",
@@ -5148,6 +5186,7 @@ function saveGame() {
 function loadGame() {
   const loaded = parseSavedState(localStorage.getItem(STORAGE_KEY));
   if (!loaded) {
+    recordFeedbackError(localStorage, "SAVE_PARSE_FAILED", "no valid save");
     localStorage.removeItem(STORAGE_KEY);
     openSimpleModal({
       type: "读取",
@@ -5160,6 +5199,7 @@ function loadGame() {
 
   state = loaded;
   addLog("读取并迁移了本地存档。");
+  recordFeedbackTrace(localStorage, "GAME_LOADED", { screen: currentScreenName() });
   persistQuietly();
   render();
 }
@@ -5223,7 +5263,10 @@ function showGameMenu() {
       { label: translateText("声音与画面"), onClick: showSoundSettings },
       { label: t("ui.settings"), onClick: showTutorialSettings },
       { label: t("modal.progressCenter"), disabled: !state, onClick: () => showProgressCenter("freedom") },
+      { label: t("feedback.reportIssue"), onClick: showFeedbackPanel },
       { label: t("release.viewNotes"), onClick: showReleaseNotes },
+      { label: t("feedback.knownIssues"), onClick: showKnownIssues },
+      { label: t("feedback.privacyNotice"), onClick: showPrivacyNotice },
       { label: translateText("游戏规则"), onClick: showRules },
       { label: t("ui.parentGuide"), onClick: showParentGuide },
       { label: t("ui.restart"), className: "danger", onClick: confirmResetGame },
@@ -5253,10 +5296,306 @@ function showReleaseNotes() {
     ],
     actions: [
       { label: t("pwa.exportSave"), className: "primary", disabled: !state, onClick: exportSaveFile },
+      { label: t("feedback.reportIssue"), onClick: showFeedbackPanel },
+      { label: t("feedback.knownIssues"), onClick: showKnownIssues },
+      { label: t("feedback.privacyNotice"), onClick: showPrivacyNotice },
       { label: t("ui.back"), onClick: showGameMenu },
       { label: t("ui.close"), onClick: closeModal },
     ],
   });
+}
+
+function showFeedbackPanel() {
+  saveFeedbackDraftFromDom();
+  openSimpleModal({
+    type: t("feedback.reportIssue"),
+    title: t("feedback.panelTitle"),
+    text: t("feedback.panelText"),
+    metrics: [
+      [t("feedback.betaBadge"), `${releaseInfo.releaseLabel} · ${releaseInfo.nextFixTarget}`],
+      [t("feedback.form"), feedbackFormHtml()],
+      [t("feedback.screenshotNoteTitle"), t("feedback.screenshotNote")],
+    ],
+    actions: [
+      { label: t("feedback.preview"), className: "primary", onClick: previewFeedbackReport },
+      { label: t("feedback.copy"), onClick: copyFeedbackReport },
+      { label: t("feedback.share"), onClick: shareFeedbackReport },
+      { label: t("feedback.downloadJson"), onClick: downloadFeedbackJson },
+      { label: t("feedback.downloadText"), onClick: downloadFeedbackText },
+      { label: t("feedback.clearDiagnostics"), onClick: confirmClearFeedbackDiagnostics },
+      { label: t("ui.close"), onClick: closeModal },
+    ],
+    outcome: "neutral",
+  });
+  el.modal.querySelector(".modal-card").dataset.panel = "feedback";
+}
+
+function feedbackFormHtml() {
+  const draft = uiState.feedbackDraft || {};
+  const issueOptions = feedbackIssueTypes.map((type) => `<option value="${type}" ${draft.issueType === type ? "selected" : ""}>${t(`feedback.issueTypes.${type}`)}</option>`).join("");
+  const frequencyOptions = ["now", "always", "sometimes", "once", "unsure"].map((type) => `<option value="${type}" ${draft.frequency === type ? "selected" : ""}>${t(`feedback.frequency.${type}`)}</option>`).join("");
+  return `
+    <form class="feedback-form" id="feedbackForm">
+      <p class="feedback-validation" id="feedbackValidation" aria-live="polite">${escapeHtml(draft.validation || "")}</p>
+      <label>${t("feedback.issueType")}
+        <select id="feedbackIssueType">${issueOptions}</select>
+      </label>
+      <label>${t("feedback.screen")}
+        <input id="feedbackScreen" maxlength="60" value="${escapeHtml(draft.screen || currentScreenName())}">
+      </label>
+      <label>${t("feedback.summary")}
+        <textarea id="feedbackSummary" maxlength="240" rows="3">${escapeHtml(draft.summary || "")}</textarea>
+      </label>
+      <label>${t("feedback.steps")}
+        <textarea id="feedbackSteps" maxlength="900" rows="4">${escapeHtml(draft.steps || "")}</textarea>
+      </label>
+      <label>${t("feedback.expected")}
+        <textarea id="feedbackExpected" maxlength="500" rows="3">${escapeHtml(draft.expected || "")}</textarea>
+      </label>
+      <label>${t("feedback.actual")}
+        <textarea id="feedbackActual" maxlength="500" rows="3">${escapeHtml(draft.actual || "")}</textarea>
+      </label>
+      <div class="feedback-grid">
+        <label>${t("feedback.frequencyLabel")}
+          <select id="feedbackFrequency">${frequencyOptions}</select>
+        </label>
+        <label class="feedback-checkbox">
+          <input id="feedbackAffectsSave" type="checkbox" ${draft.affectsSave ? "checked" : ""}>
+          <span>${t("feedback.affectsSave")}</span>
+        </label>
+      </div>
+      <label class="feedback-checkbox">
+        <input id="feedbackIncludeDiagnostics" type="checkbox" ${draft.includeDiagnostics !== false ? "checked" : ""}>
+        <span>${t("feedback.includeDiagnostics")}</span>
+      </label>
+      <label class="feedback-checkbox">
+        <input id="feedbackIncludeGameSummary" type="checkbox" ${draft.includeGameSummary ? "checked" : ""}>
+        <span>${t("feedback.includeGameSummary")}</span>
+      </label>
+      <label class="feedback-checkbox">
+        <input id="feedbackExactCash" type="checkbox" ${draft.exactCash ? "checked" : ""}>
+        <span>${t("feedback.exactCash")}</span>
+      </label>
+      <p class="feedback-privacy-hint">${t("feedback.privacyHint")}</p>
+    </form>
+  `;
+}
+
+function saveFeedbackDraftFromDom() {
+  const form = document.querySelector("#feedbackForm");
+  if (!form) return;
+  uiState.feedbackDraft = {
+    issueType: document.querySelector("#feedbackIssueType")?.value || "other",
+    screen: document.querySelector("#feedbackScreen")?.value || currentScreenName(),
+    summary: document.querySelector("#feedbackSummary")?.value || "",
+    steps: document.querySelector("#feedbackSteps")?.value || "",
+    expected: document.querySelector("#feedbackExpected")?.value || "",
+    actual: document.querySelector("#feedbackActual")?.value || "",
+    frequency: document.querySelector("#feedbackFrequency")?.value || "unsure",
+    affectsSave: Boolean(document.querySelector("#feedbackAffectsSave")?.checked),
+    includeDiagnostics: Boolean(document.querySelector("#feedbackIncludeDiagnostics")?.checked),
+    includeGameSummary: Boolean(document.querySelector("#feedbackIncludeGameSummary")?.checked),
+    exactCash: Boolean(document.querySelector("#feedbackExactCash")?.checked),
+  };
+}
+
+function collectFeedbackReport() {
+  saveFeedbackDraftFromDom();
+  const form = uiState.feedbackDraft || {};
+  if (!String(form.summary || "").trim()) {
+    uiState.feedbackDraft = { ...form, validation: t("feedback.required") };
+    showFeedbackPanel();
+    return null;
+  }
+  const diagnostics = buildCurrentDiagnostics();
+  const gameSummary = buildCurrentGameSummary(Boolean(form.exactCash));
+  return buildFeedbackReport(form, diagnostics, gameSummary);
+}
+
+function previewFeedbackReport() {
+  const report = collectFeedbackReport();
+  if (!report) return;
+  openSimpleModal({
+    type: t("feedback.preview"),
+    title: t("feedback.reportPreview"),
+    text: t("feedback.previewText"),
+    metrics: [
+      [t("feedback.diagnostics"), `<pre class="feedback-preview">${escapeHtml(JSON.stringify(report, null, 2))}</pre>`],
+    ],
+    actions: [
+      { label: t("feedback.copy"), className: "primary", onClick: () => copyReportText(report) },
+      { label: t("feedback.downloadJson"), onClick: () => downloadReportJson(report) },
+      { label: t("ui.back"), onClick: showFeedbackPanel },
+      { label: t("ui.close"), onClick: closeModal },
+    ],
+  });
+}
+
+function copyFeedbackReport() {
+  const report = collectFeedbackReport();
+  if (report) copyReportText(report);
+}
+
+function shareFeedbackReport() {
+  const report = collectFeedbackReport();
+  if (!report) return;
+  const text = feedbackReportToMarkdown(report, feedbackMarkdownLabels());
+  if (navigator.share) {
+    navigator.share({ title: t("feedback.reportIssue"), text }).then(() => {
+      showFeedbackResult(t("feedback.shareReady"), t("feedback.shareReadyText"));
+    }).catch(() => {
+      copyTextFallback(text, t("feedback.shareUnavailable"));
+    });
+    return;
+  }
+  copyTextFallback(text, t("feedback.shareUnavailable"));
+}
+
+function downloadFeedbackJson() {
+  const report = collectFeedbackReport();
+  if (report) downloadReportJson(report);
+}
+
+function downloadFeedbackText() {
+  const report = collectFeedbackReport();
+  if (!report) return;
+  const text = feedbackReportToMarkdown(report, feedbackMarkdownLabels());
+  downloadBlob(new Blob([text], { type: "text/markdown;charset=utf-8" }), feedbackFileName("md"));
+  showFeedbackResult(t("feedback.downloadReady"), t("feedback.downloadReadyText"));
+}
+
+function downloadReportJson(report) {
+  downloadBlob(new Blob([JSON.stringify(report, null, 2)], { type: "application/json;charset=utf-8" }), feedbackFileName("json"));
+  showFeedbackResult(t("feedback.downloadReady"), t("feedback.downloadReadyText"));
+}
+
+function copyReportText(report) {
+  const text = feedbackReportToMarkdown(report, feedbackMarkdownLabels());
+  copyTextFallback(text, t("feedback.copied"));
+}
+
+function copyTextFallback(text, successText) {
+  navigator.clipboard?.writeText(text).then(() => {
+    showFeedbackResult(t("feedback.copy"), successText);
+  }).catch(() => {
+    downloadBlob(new Blob([text], { type: "text/plain;charset=utf-8" }), feedbackFileName("txt"));
+    showFeedbackResult(t("feedback.copyFailed"), t("feedback.downloadReadyText"));
+  });
+}
+
+function showFeedbackResult(title, text) {
+  openSimpleModal({
+    type: t("feedback.reportIssue"),
+    title,
+    text,
+    actions: [
+      { label: t("feedback.reportIssue"), onClick: showFeedbackPanel },
+      { label: t("ui.close"), className: "primary", onClick: closeModal },
+    ],
+  });
+}
+
+function confirmClearFeedbackDiagnostics() {
+  openSimpleModal({
+    type: t("feedback.clearDiagnostics"),
+    title: t("feedback.clearDiagnostics"),
+    text: t("feedback.clearDiagnosticsText"),
+    actions: [
+      { label: t("feedback.clearDiagnostics"), className: "danger", onClick: () => {
+        clearFeedbackDiagnostics(localStorage);
+        showFeedbackResult(t("feedback.clearDiagnostics"), t("feedback.clearDiagnosticsDone"));
+      } },
+      { label: t("ui.back"), className: "primary", onClick: showFeedbackPanel },
+    ],
+    outcome: "warning",
+  });
+}
+
+function showPrivacyNotice() {
+  openSimpleModal({
+    type: t("feedback.privacyNotice"),
+    title: t("feedback.privacyNotice"),
+    text: t("feedback.privacyText"),
+    metrics: [
+      [t("feedback.localData"), t("feedback.localDataText")],
+      [t("feedback.noTracking"), t("feedback.noTrackingText")],
+      [t("feedback.playerChoice"), t("feedback.playerChoiceText")],
+      [t("feedback.backupReminder"), t("release.backupReminderText")],
+    ],
+    actions: [
+      { label: t("feedback.reportIssue"), onClick: showFeedbackPanel },
+      { label: t("ui.close"), className: "primary", onClick: closeModal },
+    ],
+  });
+}
+
+function showKnownIssues() {
+  const issues = knownIssuesForRelease();
+  openSimpleModal({
+    type: t("feedback.knownIssues"),
+    title: t("feedback.knownIssues"),
+    text: issues.length ? t("feedback.knownIssuesText") : t("feedback.knownIssuesEmpty"),
+    metrics: [
+      [t("feedback.currentStatus"), issues.length ? issues.map((issue) => `• ${escapeHtml(issue)}`).join("<br>") : t("feedback.noMajorIssues")],
+      [t("feedback.rc2Guide"), rc2IssueGuideHtml()],
+    ],
+    actions: [
+      { label: t("feedback.reportIssue"), className: "primary", onClick: showFeedbackPanel },
+      { label: t("ui.close"), onClick: closeModal },
+    ],
+  });
+}
+
+function rc2IssueGuideHtml() {
+  return `
+    <div class="issue-guide">
+      <strong>${t("feedback.priorities")}</strong>
+      <ul>${rc2IssuePriorities.map((item) => `<li><b>${item}</b> ${t(`feedback.priorityText.${item}`)}</li>`).join("")}</ul>
+      <strong>${t("feedback.categories")}</strong>
+      <p>${rc2IssueCategories.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</p>
+    </div>
+  `;
+}
+
+function buildCurrentDiagnostics() {
+  return buildDiagnosticsSummary({
+    storage: localStorage,
+    state,
+    locale: uiState.locale,
+    online: uiState.online,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    displayMode: isStandaloneDisplay() ? "standalone" : "browser",
+    currentScreen: currentScreenName(),
+    qualityMode: uiState.visualQuality,
+    reducedMotion: prefersReducedMotion(),
+  });
+}
+
+function buildCurrentGameSummary(exactCash = false) {
+  return buildGameStateSummary({ ...state, turnPhase: uiState.turnPhase }, { exactCash });
+}
+
+function currentScreenName() {
+  if (!el.modal.classList.contains("hidden")) return el.modalTitle.textContent || "modal";
+  if (state) return "board";
+  return "home";
+}
+
+function feedbackMarkdownLabels() {
+  return {
+    title: t("feedback.markdownTitle"),
+    issueType: t("feedback.issueType"),
+    screen: t("feedback.screen"),
+    summary: t("feedback.summary"),
+    frequency: t("feedback.frequencyLabel"),
+    affectsSave: t("feedback.affectsSave"),
+    steps: t("feedback.steps"),
+    expected: t("feedback.expected"),
+    actual: t("feedback.actual"),
+    diagnostics: t("feedback.diagnostics"),
+    gameSummary: t("feedback.gameSummary"),
+    notIncluded: t("feedback.notIncluded"),
+  };
 }
 
 function showInstallGuide() {
@@ -5570,6 +5909,7 @@ function showUpdateAvailable(registration) {
 }
 
 function updateAppNow() {
+  recordFeedbackTrace(localStorage, "UPDATE_STARTED", { screen: currentScreenName() });
   persistQuietly();
   const applied = applyServiceWorkerUpdate(uiState.pendingServiceWorker);
   if (!applied) {
@@ -5587,6 +5927,7 @@ function showNetworkStatus(online) {
   const status = online ? "online" : "offline";
   if (uiState.lastNetworkNotice === status) return;
   uiState.lastNetworkNotice = status;
+  recordFeedbackTrace(localStorage, online ? "APP_WENT_ONLINE" : "APP_WENT_OFFLINE", { screen: currentScreenName() });
   uiState.pwaStatus = status;
   uiState.online = online;
   uiState.liveMessage = online ? t("pwa.onlineAgain") : t("pwa.offlineNow");
@@ -5741,6 +6082,8 @@ function showTutorialSettings() {
       { label: "重播完整教学", className: "primary", onClick: () => { closeModal(); startTutorial(true); } },
       { label: "重播当前章节", onClick: () => { closeModal(); startTutorial(true); } },
       { label: "重置教学进度", className: "danger", onClick: confirmResetTutorialProgress },
+      { label: t("feedback.reportIssue"), onClick: showFeedbackPanel },
+      { label: t("feedback.privacyNotice"), onClick: showPrivacyNotice },
       { label: t("release.viewNotes"), onClick: showReleaseNotes },
       { label: "关闭", onClick: closeModal },
     ],
@@ -5828,6 +6171,8 @@ function showSoundSettings() {
       { label: "音效大一点", onClick: () => { adjustEffectVolume(0.15); showSoundSettings(); } },
       { label: "重新观看教学", onClick: () => { closeModal(); startTutorial(true); } },
       { label: "教学设置", onClick: showTutorialSettings },
+      { label: t("feedback.reportIssue"), onClick: showFeedbackPanel },
+      { label: t("feedback.privacyNotice"), onClick: showPrivacyNotice },
       { label: "家长／老师说明", onClick: showParentGuide },
       { label: "查看提示", onClick: showRules },
       { label: "关闭", onClick: closeModal },
@@ -6320,6 +6665,15 @@ window.cashflowDebug = {
   showInstallGuide,
   showStorageManager,
   showReleaseNotes,
+  showFeedbackPanel,
+  showPrivacyNotice,
+  showKnownIssues,
+  buildDiagnostics: () => buildCurrentDiagnostics(),
+  buildGameSummary: (exactCash = false) => buildCurrentGameSummary(exactCash),
+  buildFeedbackReportDebug: (form = { issueType: "other", screen: "debug", summary: "debug report", frequency: "unsure", includeDiagnostics: true }) => buildFeedbackReport(form, buildCurrentDiagnostics(), buildCurrentGameSummary(false)),
+  recordFeedbackTrace: (type = "APP_STARTED") => recordFeedbackTrace(localStorage, type, { screen: currentScreenName() }),
+  recordFeedbackError: (code = feedbackErrorCodes[0], message = "debug") => recordFeedbackError(localStorage, code, message),
+  clearFeedbackDiagnostics: () => clearFeedbackDiagnostics(localStorage),
   exportBackupEnvelope: () => buildExportEnvelope(localStorage, { locale: uiState.locale }),
   exportBackupText: () => serializeBackup(buildExportEnvelope(localStorage, { locale: uiState.locale })),
   parseImportText,
@@ -6343,5 +6697,6 @@ window.cashflowDebug = {
 };
 
 initPwa();
+recordFeedbackTrace(localStorage, "APP_STARTED", { screen: currentScreenName() });
 renderSetup();
 render();
