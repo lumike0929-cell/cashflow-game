@@ -37,10 +37,17 @@ const deployFiles = [
   "economyCycleEngine.js",
   "progressSystem.js",
   "aiCompetitionSystem.js",
+  "i18n/index.js",
+  "i18n/formatters.js",
+  "i18n/glossary.js",
+  "i18n/zh-TW.js",
+  "i18n/zh-CN.js",
+  "i18n/en.js",
 ];
 
 await rm("public", { recursive: true, force: true });
 await mkdir("public", { recursive: true });
+await mkdir("public/i18n", { recursive: true });
 
 for (const file of deployFiles) {
   await copyFile(file, `public/${file}`);

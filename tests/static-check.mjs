@@ -38,6 +38,12 @@ const requiredFiles = [
   "economyCycleEngine.js",
   "progressSystem.js",
   "aiCompetitionSystem.js",
+  "i18n/index.js",
+  "i18n/formatters.js",
+  "i18n/glossary.js",
+  "i18n/zh-TW.js",
+  "i18n/zh-CN.js",
+  "i18n/en.js",
 ];
 
 for (const file of requiredFiles) {
@@ -63,5 +69,9 @@ assert.match(await readFile("lifeEventData.js", "utf8"), /lifeEvents/);
 assert.match(await readFile("insuranceData.js", "utf8"), /insurancePolicies/);
 assert.match(game, /showInsuranceCenter/);
 assert.match(await readFile("aiCompetitionSystem.js", "utf8"), /runAiTurnCycle/);
+assert.match(await readFile("i18n/index.js", "utf8"), /setLocale/);
+assert.match(await readFile("i18n/zh-TW.js", "utf8"), /財務自由/);
+assert.match(await readFile("i18n/zh-CN.js", "utf8"), /财务自由/);
+assert.match(await readFile("i18n/en.js", "utf8"), /Financial Freedom/);
 
 console.log("Static build check passed.");

@@ -38,6 +38,12 @@ page.on("pageerror", (error) => consoleErrors.push(error.message));
 try {
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle" });
   await page.evaluate(() => localStorage.clear());
+  await page.selectOption("#topLocaleSelect", "en");
+  await expectText(page, "Cashflow Adventure City");
+  await expectText(page, "Build assets until passive income is higher than monthly expenses.");
+  await page.selectOption("#topLocaleSelect", "zh-TW");
+  await expectText(page, "現金流冒險城");
+  await page.selectOption("#topLocaleSelect", "zh-CN");
   await expectText(page, "现金流冒险城");
   await expectText(page, "建立资产，让被动收入超过每月支出。");
   const heroCheck = await page.evaluate(() => {
@@ -56,6 +62,7 @@ try {
   assert.equal(heroCheck.heroVisible, true);
   assert.equal(heroCheck.startVisible, true);
   assert.ok(heroCheck.width <= heroCheck.clientWidth + 1, `home overflow: ${heroCheck.width} > ${heroCheck.clientWidth}`);
+  await page.evaluate(() => window.cashflowDebug.showOnboarding(0));
   await expectText(page, "欢迎来到现金流冒险城");
   await page.getByText("家长／老师说明").click();
   await expectText(page, "这款游戏在练习什么？");
@@ -64,7 +71,7 @@ try {
   for (let index = 0; index < 3; index += 1) {
     await page.getByText("下一步").click();
   }
-  await page.getByText("开始教學").click();
+  await page.getByText("新手教学").click();
   const roleCount = await page.locator(".career-thumb").count();
   assert.equal(roleCount, 4);
   for (const roleName of ["小学老师", "软件工程师", "自由设计师", "牙科医生"]) {
@@ -100,7 +107,7 @@ try {
   await page.evaluate(() => window.cashflowDebug.closeModal());
   assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().glossaryViewedTerms >= 1), true);
   await page.evaluate(() => window.cashflowDebug.showTutorialSettings());
-  await expectText(page, "新手引导与儿童解说");
+  assert.match(await page.locator("#cardModal").innerText(), /新手引导与儿童解说|新手引導與兒童解說|Beginner Guide/);
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.showRecoverableTip("现在还不能掷骰", "当前事件还没处理完，完成或关闭事件卡后就能继续。"));
   await expectText(page, "当前事件还没处理完");
@@ -556,7 +563,7 @@ try {
       };
     });
     assert.equal(homeLayout.logoVisible, true);
-    assert.equal(homeLayout.heroVisible, true);
+    assert.equal(homeLayout.heroVisible, true, `${viewport.width}px hero hidden: ${JSON.stringify(homeLayout)}`);
     assert.equal(homeLayout.startVisible, true);
     assert.ok(homeLayout.width <= homeLayout.clientWidth + 1, `${viewport.width}px home overflow: ${homeLayout.width} > ${homeLayout.clientWidth}`);
     await page.evaluate(() => {

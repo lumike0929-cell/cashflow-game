@@ -169,9 +169,35 @@ import {
   refreshActiveMissions,
   startChallengeState,
 } from "./progressSystem.js";
+import {
+  applyStaticTranslations,
+  attachLocaleSelector,
+  buildLocaleSelector,
+  formatCurrency,
+  formatMonth,
+  formatNumber,
+  formatPercent,
+  getLocale,
+  localizeBoardTile,
+  localizeCareer,
+  localizedGlossary,
+  localizeExperienceCollection,
+  localizeTileVisual,
+  localeVersion,
+  readSavedLocale,
+  saveLocale,
+  setLocale,
+  supportedLocales,
+  t,
+  translateList,
+  translateText,
+  translationSchemaVersion,
+} from "./i18n/index.js";
 
 const STORAGE_KEY = "cashflow-freedom-game-v1";
 const CHALLENGE_STORAGE_KEY = "cashflow-freedom-challenge-v1";
+const savedLocale = readSavedLocale(localStorage, navigator);
+setLocale(savedLocale);
 
 const careers = [
   {
@@ -281,6 +307,7 @@ let state = null;
 const soundManager = createSoundManager();
 const savedExperience = loadExperienceSettings(localStorage);
 const uiState = {
+  locale: savedLocale,
   turnPhase: "idle",
   turnPhaseHistory: ["idle"],
   isRolling: false,
@@ -378,6 +405,9 @@ const el = {
 function createState(career) {
   return migrateSavedState({
     saveVersion: CURRENT_SAVE_VERSION,
+    locale: uiState.locale,
+    localeVersion,
+    translationSchemaVersion,
     career,
     month: 1,
     round: 1,
@@ -442,6 +472,9 @@ function createNewGameState(career, difficultyId = "standard") {
 
 function ensureTutorialState(nextState) {
   if (!nextState || typeof nextState !== "object") return nextState;
+  nextState.locale = supportedLocales.includes(nextState.locale) ? nextState.locale : uiState.locale;
+  nextState.localeVersion = localeVersion;
+  nextState.translationSchemaVersion = translationSchemaVersion;
   const currentStep = tutorialControllerSteps.some((step) => step.id === nextState.tutorialCurrentStep) ? nextState.tutorialCurrentStep : "welcome";
   const chapterProgress = nextState.tutorialChapterProgress && typeof nextState.tutorialChapterProgress === "object" ? nextState.tutorialChapterProgress : {};
   const viewedTerms = Array.isArray(nextState.glossaryViewedTerms) ? nextState.glossaryViewedTerms.slice(0, 60) : [];
@@ -504,9 +537,7 @@ function freedomRatio() {
 }
 
 function money(value) {
-  const safeValue = moneyValue(value);
-  const sign = safeValue < 0 ? "-" : "";
-  return `${sign}¥${Math.abs(safeValue).toLocaleString("zh-CN")}`;
+  return formatCurrency(moneyValue(value));
 }
 
 function moneyValue(value) {
@@ -536,13 +567,18 @@ function addLog(message) {
 
 function persistQuietly() {
   if (!state) return;
+  state.locale = uiState.locale;
+  state.localeVersion = localeVersion;
+  state.translationSchemaVersion = translationSchemaVersion;
   migrateProgressState(state);
   migrateAiCompetitionState(state);
   localStorage.setItem(state.activeChallenge ? CHALLENGE_STORAGE_KEY : STORAGE_KEY, JSON.stringify(state));
 }
 
 function renderSetup() {
-  const selected = careers.find((item) => item.id === selectedCareerId) || careers[0];
+  applyStaticTranslations();
+  const selectedBase = careers.find((item) => item.id === selectedCareerId) || careers[0];
+  const selected = localizeCareer(selectedBase);
   const adjusted = createDifficultyAdjustedCareer(selected, selectedDifficultyId);
   const difficulty = difficultyModes.find((item) => item.id === selectedDifficultyId) || difficultyModes[1];
   const monthlyBalance = adjusted.salary - adjusted.expenses;
@@ -554,7 +590,7 @@ function renderSetup() {
     el.heroCharacter.innerHTML = avatarMarkup(selected, "happy", "right");
   }
   if (el.startAdventure) {
-    el.startAdventure.textContent = localStorage.getItem(STORAGE_KEY) ? "开始新冒险" : "开始冒险";
+    el.startAdventure.textContent = localStorage.getItem(STORAGE_KEY) ? t("ui.startNewAdventure") : t("ui.startAdventure");
   }
   el.careerGrid.innerHTML = `
     <section class="character-select-stage motion-pop">
@@ -568,59 +604,59 @@ function renderSetup() {
         <div class="large-character-preview">${avatarMarkup(selected, "celebrating", "right")}</div>
       </div>
       <div class="selected-career-panel">
-        <span class="eyebrow">选择角色</span>
+        <span class="eyebrow">${t("ui.selectCharacter")}</span>
         <h2>${selected.name}</h2>
         <strong class="career-role">${careerPersonality(selected.id)}</strong>
         <p>${careerShortNote(selected.id)}</p>
         <p class="career-guidance">${careerGuidance[selected.id] || "适合想自由探索现金流的人。"}</p>
         <div class="career-stat-pills">
-          <span>工资 <strong>${money(adjusted.salary)}</strong></span>
-          <span>月支出 <strong>${money(adjusted.expenses)}</strong></span>
-          <span>现金 <strong>${money(adjusted.savings)}</strong></span>
-          <span>月结余 <strong>${money(monthlyBalance)}</strong></span>
+          <span>${t("finance.salary")} <strong>${money(adjusted.salary)}</strong></span>
+          <span>${t("finance.expenses")} <strong>${money(adjusted.expenses)}</strong></span>
+          <span>${t("finance.cash")} <strong>${money(adjusted.savings)}</strong></span>
+          <span>${t("finance.monthlyCashflow")} <strong>${money(monthlyBalance)}</strong></span>
         </div>
-        <div class="difficulty-picker" aria-label="选择难度">
-          <span>难度：${difficulty.title}</span>
+        <div class="difficulty-picker" aria-label="${translateText("选择难度")}">
+          <span>${translateText("难度")}：${translateText(difficulty.title)}</span>
           <div>
             ${difficultyModes
               .map(
                 (mode) => `
                   <button type="button" class="${mode.id === selectedDifficultyId ? "selected" : ""}" data-difficulty="${mode.id}" aria-pressed="${mode.id === selectedDifficultyId}">
-                    ${mode.title}
+                    ${translateText(mode.title)}
                   </button>
                 `,
               )
               .join("")}
           </div>
-          <small>${difficulty.description}</small>
+          <small>${translateText(difficulty.description)}</small>
         </div>
-        <div class="mode-picker" aria-label="选择游戏模式">
-          <span>模式：${gameModes.find((item) => item.id === selectedGameMode)?.title || "单人学习"}</span>
+        <div class="mode-picker" aria-label="${translateText("选择游戏模式")}">
+          <span>${translateText("模式")}：${translateText(gameModes.find((item) => item.id === selectedGameMode)?.title || "单人学习")}</span>
           <div>
             ${gameModes
               .map(
                 (mode) => `
                   <button type="button" class="${mode.id === selectedGameMode ? "selected" : ""}" data-game-mode="${mode.id}" aria-pressed="${mode.id === selectedGameMode}">
-                    ${mode.title}
+                    ${translateText(mode.title)}
                   </button>
                 `,
               )
               .join("")}
           </div>
-          <small>${gameModes.find((item) => item.id === selectedGameMode)?.description || "保持目前体验。"}</small>
+          <small>${translateText(gameModes.find((item) => item.id === selectedGameMode)?.description || "保持目前体验。")}</small>
           ${
             selectedGameMode === "solo"
               ? ""
               : `
                 <div class="ai-mode-options">
-                  <label>AI 数量
+                  <label>AI ${translateText("数量")}
                     <select id="aiCountSelect">
-                      ${[1, 2, 3].map((count) => `<option value="${count}" ${count === selectedAiCount ? "selected" : ""}>${count} 名</option>`).join("")}
+                      ${[1, 2, 3].map((count) => `<option value="${count}" ${count === selectedAiCount ? "selected" : ""}>${count} ${getLocale() === "en" ? "AI" : "名"}</option>`).join("")}
                     </select>
                   </label>
-                  <label>AI 难度
+                  <label>AI ${translateText("难度")}
                     <select id="aiDifficultySelect">
-                      ${aiDifficultyModes.map((mode) => `<option value="${mode.id}" ${mode.id === selectedAiDifficulty ? "selected" : ""}>${mode.title}</option>`).join("")}
+                      ${aiDifficultyModes.map((mode) => `<option value="${mode.id}" ${mode.id === selectedAiDifficulty ? "selected" : ""}>${translateText(mode.title)}</option>`).join("")}
                     </select>
                   </label>
                 </div>
@@ -628,29 +664,31 @@ function renderSetup() {
           }
         </div>
         ${homeProgress ? `
-          <aside class="home-progress-summary" aria-label="继续游戏进度摘要">
-            <span>当前进度</span>
+          <aside class="home-progress-summary" aria-label="${translateText("继续游戏进度摘要")}">
+            <span>${translateText("当前进度")}</span>
             <strong>${Math.round(homeProgress.percent)}% · ${homeProgress.stage}</strong>
-            <small>${currentMission ? `任务：${currentMission.title} ${moneyValue(currentMission.progress)} / ${moneyValue(currentMission.target)}` : "暂无当前任务"}</small>
-            ${recentBadge ? `<em>最近徽章：${recentBadge.iconKey} ${recentBadge.title}</em>` : ""}
-            <button type="button" id="homeProgressSummary">查看进度中心</button>
+            <small>${currentMission ? `${t("hud.currentMission")}：${translateText(currentMission.title)} ${formatNumber(currentMission.progress)} / ${formatNumber(currentMission.target)}` : translateText("暂无当前任务")}</small>
+            ${recentBadge ? `<em>${translateText("最近徽章")}：${recentBadge.iconKey} ${translateText(recentBadge.title)}</em>` : ""}
+            <button type="button" id="homeProgressSummary">${t("actions.openProgress")}</button>
           </aside>
         ` : ""}
       </div>
-      <div class="career-thumb-rail" aria-label="角色缩图">
+      <div class="career-thumb-rail" aria-label="${translateText("角色缩图")}">
         ${careers
           .map(
-            (career) => `
+            (careerBase) => {
+              const career = localizeCareer(careerBase);
+              return `
               <button class="career-thumb ${career.id === selected.id ? "selected" : ""}" type="button" data-career="${career.id}" aria-pressed="${career.id === selected.id}">
                 <span class="career-icon">${avatarMarkup(career, career.id === selected.id ? "happy" : "neutral", "right")}</span>
                 <strong>${career.name}</strong>
                 <small>${careerPersonality(career.id)}</small>
               </button>
-            `,
+            `; },
           )
           .join("")}
       </div>
-      <button class="primary select-start-button" id="startSelectedCareer" type="button">选择并开始</button>
+      <button class="primary select-start-button" id="startSelectedCareer" type="button">${t("ui.chooseAndStart")}</button>
     </section>
   `;
 
@@ -696,35 +734,29 @@ function renderSetup() {
 }
 
 function careerPersonality(id) {
-  return {
-    teacher: "探险型老师",
-    engineer: "系统发明家",
-    designer: "创意小店长",
-    doctor: "稳健规划师",
-  }[id] || "城市冒险家";
+  return localizeCareer({ id }).personality || translateText("城市冒险家");
 }
 
 function careerShortNote(id) {
-  return {
-    teacher: "稳定起步，适合练习小额机会。",
-    engineer: "现金流较宽，适合比较不同资产。",
-    designer: "灵活经营，适合尝试小生意。",
-    doctor: "收入高，也要管理高支出。",
-  }[id] || "在城市中学习现金流选择。";
+  return localizeCareer({ id }).shortNote || translateText("在城市中学习现金流选择。");
 }
 
 function startSelectedCareer() {
-  const career = careers.find((item) => item.id === selectedCareerId) || careers[0];
+  const careerBase = careers.find((item) => item.id === selectedCareerId) || careers[0];
+  const career = localizeCareer(careerBase);
   state = createNewGameState(career, selectedDifficultyId);
+  state.locale = uiState.locale;
+  state.localeVersion = localeVersion;
+  state.translationSchemaVersion = translationSchemaVersion;
   completeBeginnerMission("choose-character");
   const mode = gameModes.find((item) => item.id === state.gameMode) || gameModes[0];
   showGame();
   render();
   openSimpleModal({
-    type: "开始",
-    title: "现金流挑战开始",
-    text: `你现在是${career.name}，难度为${difficultyModes.find((item) => item.id === selectedDifficultyId)?.title || "标准"}，模式为${mode.title}。你的目标是把现金逐步转成能带来收入的资产，同时保留足够安全垫。`,
-    actions: [{ label: "开始掷骰", className: "primary", onClick: () => { closeModal(); maybeStartTutorial(); } }],
+    type: translateText("开始"),
+    title: translateText("现金流挑战开始"),
+    text: translateText(`你现在是${career.name}，难度为${difficultyModes.find((item) => item.id === selectedDifficultyId)?.title || "标准"}，模式为${mode.title}。你的目标是把现金逐步转成能带来收入的资产，同时保留足够安全垫。`),
+    actions: [{ label: translateText("开始掷骰"), className: "primary", onClick: () => { closeModal(); maybeStartTutorial(); } }],
   });
 }
 
@@ -740,23 +772,24 @@ function showCharacterSelection() {
 }
 
 function showOnboarding(index = uiState.onboardingIndex || 0) {
-  const safeIndex = Math.max(0, Math.min(onboardingPages.length - 1, moneyValue(index)));
+  const pages = localizeExperienceCollection("onboardingPages", onboardingPages);
+  const safeIndex = Math.max(0, Math.min(pages.length - 1, moneyValue(index)));
   uiState.onboardingIndex = safeIndex;
-  const page = onboardingPages[safeIndex] || onboardingPages[0];
+  const page = pages[safeIndex] || pages[0];
   saveExperience();
   openSimpleModal({
-    type: "欢迎教学",
+    type: translateText("欢迎教学"),
     title: page.title,
     text: page.text,
     metrics: [
-      ["第几步", `${safeIndex + 1} / ${onboardingPages.length}`],
-      ["小提醒", safeIndex === 0 ? "财务自由是游戏里的简化目标，不是人生唯一答案。" : "每一步都可以跳过，之后也能重播。"],
-      ["图示", page.icon],
+      [translateText("第几步"), `${safeIndex + 1} / ${pages.length}`],
+      [translateText("小提醒"), safeIndex === 0 ? translateText("财务自由是游戏里的简化目标，不是人生唯一答案。") : translateText("每一步都可以跳过，之后也能重播。")],
+      [translateText("图示"), page.icon],
     ],
     actions: [
-      { label: "上一步", disabled: safeIndex === 0, onClick: () => showOnboarding(safeIndex - 1) },
-      { label: safeIndex >= onboardingPages.length - 1 ? "开始教學" : "下一步", className: "primary", onClick: () => {
-        if (safeIndex >= onboardingPages.length - 1) {
+      { label: t("ui.previous"), disabled: safeIndex === 0, onClick: () => showOnboarding(safeIndex - 1) },
+      { label: safeIndex >= pages.length - 1 ? t("ui.tutorial") : t("ui.next"), className: "primary", onClick: () => {
+        if (safeIndex >= pages.length - 1) {
           uiState.onboardingCompleted = true;
           uiState.onboardingIndex = 0;
           saveExperience();
@@ -766,13 +799,13 @@ function showOnboarding(index = uiState.onboardingIndex || 0) {
           showOnboarding(safeIndex + 1);
         }
       } },
-      { label: "直接开始", onClick: () => {
+      { label: translateText("直接开始"), onClick: () => {
         uiState.onboardingCompleted = true;
         saveExperience();
         closeModal();
         showCharacterSelection();
       } },
-      { label: "家长／老师说明", onClick: showParentGuide },
+      { label: t("ui.parentGuide"), onClick: showParentGuide },
     ],
     outcome: "success",
   });
@@ -799,6 +832,7 @@ function unlockAudio() {
 }
 
 function render() {
+  applyStaticTranslations();
   applyExperienceMode();
   if (!state) {
     showSetup();
@@ -820,17 +854,18 @@ function render() {
   syncMortgageLiabilities(state);
   showGame();
   const freedom = Math.min(150, state.financialFreedomProgress.percent);
-  el.careerLabel.textContent = state.career.name;
-  el.gameTitle.textContent = state.victoryState?.triggered ? "财务自由模式" : "现金流资产挑战";
+  const displayCareer = localizeCareer(state.career || {});
+  el.careerLabel.textContent = displayCareer.name || state.career.name;
+  el.gameTitle.textContent = state.victoryState?.triggered ? translateText("财务自由模式") : translateText("现金流资产挑战");
   el.gameSubtitle.textContent = state.victoryState?.triggered
-    ? `被动收入 ${money(state.financialFreedomProgress.passiveIncome)} 已覆盖必要支出 ${money(state.financialFreedomProgress.necessaryExpenses)}。`
-    : `现金 ${money(state.cash)}，净月现金流 ${money(netMonthlyCashflow())}，净资产 ${money(calculateNetWorth(state))}。`;
-  el.freedomPercent.textContent = `${freedom}%`;
+    ? translateText(`被动收入 ${money(state.financialFreedomProgress.passiveIncome)} 已覆盖必要支出 ${money(state.financialFreedomProgress.necessaryExpenses)}。`)
+    : `${t("finance.cash")} ${money(state.cash)}，${t("finance.monthlyCashflow")} ${money(netMonthlyCashflow())}，${t("finance.netWorth")} ${money(calculateNetWorth(state))}。`;
+  el.freedomPercent.textContent = formatPercent(freedom);
   el.freedomBar.style.width = `${Math.min(100, freedom)}%`;
-  el.roundLabel.textContent = `第 ${state.month} 月`;
+  el.roundLabel.textContent = formatMonth(state.month);
   el.diceValue.innerHTML = diceMarkup(state.lastRoll || 1, uiState.diceRolling);
   el.rollDice.disabled = !canRoll();
-  el.rollDice.textContent = uiState.turnPhase === "moving" ? `前进 ${uiState.movingStep} / ${uiState.movingTotal}` : uiState.turnPhase === "rolling" ? "骰子旋转中" : uiState.turnPhase === "diceResult" ? `前进 ${state.lastRoll || 1} 格` : "掷骰前进";
+  el.rollDice.textContent = uiState.turnPhase === "moving" ? t("hud.movingProgress", { current: uiState.movingStep, total: uiState.movingTotal }) : uiState.turnPhase === "rolling" ? t("hud.rolling") : uiState.turnPhase === "diceResult" ? t("hud.moveSpaces", { count: state.lastRoll || 1 }) : t("hud.rollDice");
   el.rollDice.setAttribute("aria-label", el.rollDice.textContent);
   renderBoard();
   renderActions();
@@ -846,18 +881,18 @@ function render() {
 
 function phaseLabel(phase = uiState.turnPhase) {
   return {
-    idle: "准备掷骰",
-    rolling: "骰子旋转中",
-    diceResult: "显示骰点",
-    preparingMove: "准备前进",
-    moving: `正在前进 ${uiState.movingStep} / ${uiState.movingTotal}`,
-    arriving: "已到达",
-    openingEvent: "打开事件",
-    resolvingEvent: "处理事件中",
-    showingResult: "结算结果",
-    turnComplete: "结算完成",
-    paused: "已暂停",
-  }[phase] || "准备掷骰";
+    idle: t("hud.ready"),
+    rolling: t("hud.rolling"),
+    diceResult: t("hud.diceResult"),
+    preparingMove: t("hud.preparingMove"),
+    moving: t("hud.movingProgress", { current: uiState.movingStep, total: uiState.movingTotal }),
+    arriving: t("hud.arriving"),
+    openingEvent: t("hud.openingEvent"),
+    resolvingEvent: t("hud.resolvingEvent"),
+    showingResult: t("hud.showingResult"),
+    turnComplete: t("hud.turnComplete"),
+    paused: t("hud.paused"),
+  }[phase] || t("hud.ready");
 }
 
 function setTurnPhase(phase) {
@@ -896,7 +931,7 @@ function renderBoard() {
   const playerPoint = boardPath[state.position % boardPath.length] || boardPath[0];
   const atmosphere = atmosphereForRound(state.round, uiState.atmosphere);
   el.board.innerHTML = `
-    <div class="city-map-viewport atmosphere-${atmosphere}" id="cityMapViewport" aria-label="可拖曳缩放的现金流城市地图">
+    <div class="city-map-viewport atmosphere-${atmosphere}" id="cityMapViewport" aria-label="${translateText("可拖曳缩放的现金流城市地图")}">
       <div class="city-map-stage" id="cityMapStage">
         ${createCitySceneSvg()}
         ${createEnvironmentOverlay(atmosphere)}
@@ -904,8 +939,9 @@ function renderBoard() {
         ${renderMapAssetMarkers()}
         ${boardTiles
           .map((tile, index) => {
+            const displayTile = localizeBoardTile(tile, index);
             const point = boardPath[index % boardPath.length] || boardPath[0];
-            const visual = tileVisual(tile.type);
+            const visual = localizeTileVisual(tile.type, tileVisual(tile.type));
             const isActive = state.position === index;
             const previewOrder = uiState.previewIndices.indexOf(index);
             const isPreview = previewOrder >= 0;
@@ -917,11 +953,11 @@ function renderBoard() {
                 type="button"
                 data-tile-index="${index}"
                 style="left:${point.x}px; top:${point.y}px"
-                aria-label="${tile.title}，${visual.category}"
+                aria-label="${displayTile.title}，${visual.category}"
               >
-                <span class="tile-icon">${tile.icon}</span>
+                <span class="tile-icon">${displayTile.icon}</span>
                 <span class="tile-copy">
-                  <strong>${shortTileTitle(tile)}</strong>
+                  <strong>${shortTileTitle(displayTile)}</strong>
                   <small>${visual.category}</small>
                   <em>${visual.badge}</em>
                 </span>
@@ -937,11 +973,11 @@ function renderBoard() {
         ${renderAiMapAvatars()}
       </div>
     </div>
-    <div class="map-toolbar" aria-label="地图控制">
-      <button type="button" id="zoomOutMap" aria-label="缩小地图">−</button>
-      <button type="button" id="focusPlayer" aria-label="回到玩家">回到玩家</button>
-      <button type="button" id="zoomInMap" aria-label="放大地图">＋</button>
-      <button type="button" id="toggleMiniMap" aria-label="切换小地图">${uiState.minimapCollapsed ? "地图" : "收起"}</button>
+    <div class="map-toolbar" aria-label="${translateText("地图控制")}">
+      <button type="button" id="zoomOutMap" aria-label="${translateText("缩小地图")}">−</button>
+      <button type="button" id="focusPlayer" aria-label="${t("hud.focusPlayer")}">${t("hud.focusPlayer")}</button>
+      <button type="button" id="zoomInMap" aria-label="${translateText("放大地图")}">＋</button>
+      <button type="button" id="toggleMiniMap" aria-label="${translateText("切换小地图")}">${uiState.minimapCollapsed ? translateText("地图") : translateText("收起")}</button>
     </div>
     ${renderMiniMap()}
   `;
@@ -993,10 +1029,10 @@ function renderMiniMap() {
     label: ai.avatarKey,
   }));
   return `
-    <button class="city-minimap" id="cityMiniMap" type="button" aria-label="小地图，点击移动视口">
+    <button class="city-minimap" id="cityMiniMap" type="button" aria-label="${translateText("小地图，点击移动视口")}">
       <span class="mini-road"></span>
       <span class="mini-viewport" style="left:${viewLeft}%; top:${viewTop}%; width:${viewWidth}%; height:${viewHeight}%"></span>
-      <span class="mini-player" style="left:${player.x}%; top:${player.y}%">你</span>
+      <span class="mini-player" style="left:${player.x}%; top:${player.y}%">${getLocale() === "en" ? "You" : "你"}</span>
       ${aiPoints.map((point) => `<span class="mini-ai" style="left:${point.x}%; top:${point.y}%" aria-hidden="true">${point.label}</span>`).join("")}
     </button>
   `;
@@ -1009,7 +1045,7 @@ function renderAiMapAvatars() {
       const point = boardPath[(ai.currentPosition || ai.position || 0) % boardPath.length] || boardPath[0];
       const offset = (index + 1) * 12;
       return `
-        <button class="ai-map-avatar" type="button" data-ai-finance="${ai.id}" style="left:${point.x + offset}px; top:${point.y + offset}px" aria-label="${ai.name} AI 对手">
+        <button class="ai-map-avatar" type="button" data-ai-finance="${ai.id}" style="left:${point.x + offset}px; top:${point.y + offset}px" aria-label="${ai.name} AI ${translateText("对手")}">
           <span>${ai.avatarKey}</span>
         </button>
       `;
@@ -1018,7 +1054,7 @@ function renderAiMapAvatars() {
 }
 
 function shortTileTitle(tile) {
-  return {
+  const mapped = {
     payday: "月结",
     opportunity: "房产",
     propertyEvent: "持有",
@@ -1038,6 +1074,7 @@ function shortTileTitle(tile) {
     family: "家庭",
     charity: "慈善",
   }[tile.type] || tile.title.slice(0, 4);
+  return translateText(mapped);
 }
 
 function renderMapAssetMarkers() {
@@ -1047,7 +1084,7 @@ function renderMapAssetMarkers() {
       x: 450 + index * 48,
       y: 392 + (index % 2) * 38,
       icon: propertyIcon(item.category),
-      label: "房产",
+      label: t("hud.realEstate"),
       tone: "green",
       id: item.id,
       type: "property",
@@ -1057,7 +1094,7 @@ function renderMapAssetMarkers() {
       x: 920 + index * 46,
       y: 360 + (index % 2) * 36,
       icon: stockIcon(item.sector),
-      label: "股票",
+      label: t("hud.stock"),
       tone: "violet",
       id: item.stockId,
       type: "stock",
@@ -1067,7 +1104,7 @@ function renderMapAssetMarkers() {
       x: 560 + index * 48,
       y: 665 + (index % 2) * 36,
       icon: businessIcon(item.category),
-      label: "生意",
+      label: t("hud.business"),
       tone: "amber",
       id: item.businessId,
       type: "business",
@@ -1077,7 +1114,7 @@ function renderMapAssetMarkers() {
       x: 1195 + index * 42,
       y: 570 + index * 32,
       icon: "盾",
-      label: "保险",
+      label: t("hud.protection"),
       tone: "blue",
       id: item.id,
       type: "insurance",
@@ -1087,7 +1124,7 @@ function renderMapAssetMarkers() {
       x: 712 + index * 42,
       y: 340 + index * 34,
       icon: "贷",
-      label: "贷款",
+      label: t("finance.totalDebt"),
       tone: "slate",
       id: item.id,
       type: "bank",
@@ -1233,6 +1270,7 @@ function applyCamera() {
 }
 
 function saveExperience() {
+  saveLocale(localStorage, uiState.locale);
   saveExperienceSettings(localStorage, {
     muted: uiState.muted,
     volume: uiState.volume,
@@ -1254,42 +1292,65 @@ function saveExperience() {
 }
 
 function applyExperienceMode() {
+  document.body.dataset.locale = uiState.locale;
   document.body.dataset.quality = uiState.visualQuality;
   document.body.dataset.motion = prefersReducedMotion() ? "reduced" : "full";
   document.body.dataset.atmosphere = atmosphereForRound(state?.round || 1, uiState.atmosphere);
 }
 
+function changeLocale(locale) {
+  uiState.locale = setLocale(locale);
+  saveLocale(localStorage, uiState.locale);
+  if (state) {
+    state.locale = uiState.locale;
+    state.localeVersion = localeVersion;
+    state.translationSchemaVersion = translationSchemaVersion;
+    persistQuietly();
+  }
+  saveExperience();
+  applyStaticTranslations();
+  syncLocaleSelectors();
+  if (state) render();
+  else renderSetup();
+}
+
+function syncLocaleSelectors() {
+  document.querySelectorAll("#topLocaleSelect, #settingsLocaleSelect").forEach((select) => {
+    if (select instanceof HTMLSelectElement) select.value = uiState.locale;
+  });
+}
+
 function showTilePreview(index) {
-  const tile = boardTiles[index];
+  const tile = localizeBoardTile(boardTiles[index], index);
   if (!tile) return;
-  const visual = tileVisual(tile.type);
+  const visual = localizeTileVisual(tile.type, tileVisual(tile.type));
   openSimpleModal({
-    type: "格子预览",
+    type: t("modal.tilePreview"),
     title: tile.title,
-    text: "这是格子预览，不会结算事件或改变资料。",
+    text: translateText("这是格子预览，不会结算事件或改变资料。"),
     metrics: [
-      ["类别", visual.category],
-      ["状态", visual.status],
-      ["说明", tile.text],
-      ["位置", `${index + 1} / ${boardTiles.length}`],
+      [translateText("类别"), visual.category],
+      [translateText("状态"), visual.status],
+      [translateText("说明"), tile.text],
+      [translateText("位置"), `${index + 1} / ${boardTiles.length}`],
     ],
-    actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+    actions: [{ label: t("ui.gotIt"), className: "primary", onClick: closeModal }],
   });
 }
 
 function renderActions() {
   const debt = state.liabilities.reduce((sum, item) => sum + moneyValue(item.balance), 0);
-  const progressText = uiState.turnPhase === "moving" ? `前进 ${uiState.movingStep} / ${uiState.movingTotal}` : state.lastRoll ? `前进 ${state.lastRoll} 格` : "待掷骰";
-  const debtButton = debt > 0 ? `<button type="button" id="repayDebt"><span>债</span><strong>偿还</strong></button>` : "";
-  const newRunButton = state.gameOver ? `<button class="primary" type="button" id="newRun"><span>★</span><strong>再开</strong></button>` : "";
+  const progressText = uiState.turnPhase === "moving" ? t("hud.movingProgress", { current: uiState.movingStep, total: uiState.movingTotal }) : state.lastRoll ? t("hud.moveSpaces", { count: state.lastRoll }) : translateText("待掷骰");
+  const debtButton = debt > 0 ? `<button type="button" id="repayDebt"><span>Debt</span><strong>${t("actions.repay")}</strong></button>` : "";
+  const newRunButton = state.gameOver ? `<button class="primary" type="button" id="newRun"><span>★</span><strong>${translateText("再开")}</strong></button>` : "";
   const leaderboard = state.aiPlayers?.length ? calculateLeaderboard(state) : [];
   const playerRank = leaderboard.find((item) => item.isPlayer);
   const aiTracker = state.aiPlayers?.length
     ? `
-      <button class="hud-ai-tracker" type="button" id="openLeaderboard" aria-label="打开竞赛排名">
-        <span>赛</span>
-        <strong>排名 ${playerRank?.rank || "-"}/${leaderboard.length}</strong>
-        <em>${state.marketCycle?.phase || "market"} · ${state.aiActionSummaries?.[0]?.shortText || "AI 等待行动"}</em>
+      <button class="hud-ai-tracker" type="button" id="openLeaderboard" aria-label="${translateText("打开竞赛排名")}">
+        <span>Rank</span>
+        <strong>${t("hud.leaderboard")} ${playerRank?.rank || "-"}/${leaderboard.length}</strong>
+        <em>${translateText(state.marketCycle?.phase || "market")} · ${translateText(state.aiActionSummaries?.[0]?.shortText || "AI 等待行动")}</em>
       </button>
     `
     : "";
@@ -1297,48 +1358,48 @@ function renderActions() {
   const trackedMission = missionCards.find((item) => item.completed && !item.claimed) || missionCards.find((item) => item.status === "进行中" || item.status === "即将到期");
   const missionTracker = trackedMission
     ? `
-      <button class="hud-mission-tracker ${trackedMission.completed ? "completed" : ""}" type="button" id="hudMissionTracker" aria-label="打开当前任务">
-        <span>${trackedMission.completed ? "✓" : "任"}</span>
-        <strong>${trackedMission.title}</strong>
-        <em>${moneyValue(trackedMission.progress)} / ${moneyValue(trackedMission.target)}</em>
+      <button class="hud-mission-tracker ${trackedMission.completed ? "completed" : ""}" type="button" id="hudMissionTracker" aria-label="${translateText("打开当前任务")}">
+        <span>${trackedMission.completed ? "✓" : "M"}</span>
+        <strong>${translateText(trackedMission.title)}</strong>
+        <em>${formatNumber(trackedMission.progress)} / ${formatNumber(trackedMission.target)}</em>
       </button>
     `
     : "";
   const beginnerMission = uiState.tutorialSettings.tutorialHints ? nextBeginnerMission() : null;
   const beginnerTracker = beginnerMission
     ? `
-      <button class="hud-beginner-tracker" type="button" id="hudBeginnerTracker" aria-label="打开新手任务">
+      <button class="hud-beginner-tracker" type="button" id="hudBeginnerTracker" aria-label="${translateText("打开新手任务")}">
         <span>${beginnerMission.iconKey}</span>
-        <strong>${beginnerMission.title}</strong>
-        <em>新手 ${beginnerMissionCards().filter((mission) => mission.completed).length} / ${beginnerMissionTemplates.length}</em>
+        <strong>${translateText(beginnerMission.title)}</strong>
+        <em>${translateText("新手")} ${beginnerMissionCards().filter((mission) => mission.completed).length} / ${beginnerMissionTemplates.length}</em>
       </button>
     `
     : "";
   el.actionStack.innerHTML = `
     <div class="hud-status game-hud-status">
-      <span>目前状态</span>
-      <strong>${uiState.hudStatus}</strong>
+      <span>${t("hud.status")}</span>
+      <strong>${translateText(uiState.hudStatus)}</strong>
       <em>${progressText}</em>
     </div>
     <div class="hud-summary-grid">
-      <div class="hud-chip cash"><span>现金</span><strong>${money(state.cash)}</strong></div>
-      <div class="hud-chip flow"><span>月现金流</span><strong>${money(netMonthlyCashflow())}</strong></div>
+      <div class="hud-chip cash"><span>${t("finance.cash")}</span><strong>${money(state.cash)}</strong></div>
+      <div class="hud-chip flow"><span>${t("finance.monthlyCashflow")}</span><strong>${money(netMonthlyCashflow())}</strong></div>
     </div>
     ${missionTracker}
     ${beginnerTracker}
     ${aiTracker}
-    <div class="hud-shortcuts" aria-label="游戏快捷入口">
-      <button type="button" id="focusPlayerHud"><span>◎</span><strong>玩家</strong></button>
-      <button type="button" id="openFinancePanel"><span>¥</span><strong>财务</strong></button>
-      <button type="button" id="openBankCenter"><span>银</span><strong>银行</strong></button>
-      <button type="button" id="openProgressCenter"><span>奖</span><strong>进度</strong></button>
-      ${state.aiPlayers?.length ? `<button type="button" id="openMarketNews"><span>市</span><strong>市场</strong></button>` : ""}
-      ${state.aiPlayers?.length ? `<button type="button" id="toggleAiSpeed"><span>速</span><strong>${state.aiAnimationSpeed === "skip" ? "观看" : "跳过"}</strong></button>` : ""}
-      <button type="button" id="openPortfolio"><span>房</span><strong>房产</strong></button>
-      <button type="button" id="openStockPortfolio"><span>股</span><strong>股票</strong></button>
-      <button type="button" id="openBusinessPortfolio"><span>店</span><strong>生意</strong></button>
-      <button type="button" id="openLifeCenter"><span>盾</span><strong>保障</strong></button>
-      <button type="button" id="toggleSound"><span>${uiState.muted ? "静" : "声"}</span><strong>${uiState.muted ? "开启" : "静音"}</strong></button>
+    <div class="hud-shortcuts" aria-label="${translateText("游戏快捷入口")}">
+      <button type="button" id="focusPlayerHud"><span>◎</span><strong>${t("hud.player")}</strong></button>
+      <button type="button" id="openFinancePanel"><span>¥</span><strong>${t("hud.finance")}</strong></button>
+      <button type="button" id="openBankCenter"><span>B</span><strong>${t("hud.bank")}</strong></button>
+      <button type="button" id="openProgressCenter"><span>★</span><strong>${t("hud.progress")}</strong></button>
+      ${state.aiPlayers?.length ? `<button type="button" id="openMarketNews"><span>M</span><strong>${t("hud.market")}</strong></button>` : ""}
+      ${state.aiPlayers?.length ? `<button type="button" id="toggleAiSpeed"><span>»</span><strong>${state.aiAnimationSpeed === "skip" ? translateText("观看") : t("ui.skip")}</strong></button>` : ""}
+      <button type="button" id="openPortfolio"><span>RE</span><strong>${t("hud.realEstate")}</strong></button>
+      <button type="button" id="openStockPortfolio"><span>S</span><strong>${t("hud.stock")}</strong></button>
+      <button type="button" id="openBusinessPortfolio"><span>Biz</span><strong>${t("hud.business")}</strong></button>
+      <button type="button" id="openLifeCenter"><span>Safe</span><strong>${t("hud.protection")}</strong></button>
+      <button type="button" id="toggleSound"><span>${uiState.muted ? "Off" : "On"}</span><strong>${uiState.muted ? t("ui.unmute") : t("ui.mute")}</strong></button>
       ${debtButton}
       ${newRunButton}
     </div>
@@ -2276,11 +2337,12 @@ function showRoundTeachingTip() {
 
 function glossaryMatches(text = "") {
   const lower = String(text).toLowerCase();
-  return glossaryTerms.filter((term) => lower.includes(term.term.toLowerCase()) || lower.includes(term.shortDefinition.slice(0, 2)) || String(text).includes(term.term)).slice(0, 4);
+  return localizedGlossary().filter((term) => lower.includes(term.term.toLowerCase()) || lower.includes(term.shortDefinition.slice(0, 2).toLowerCase()) || String(text).includes(term.term)).slice(0, 4);
 }
 
 function showGlossary(termId = null) {
-  const terms = termId ? glossaryTerms.filter((term) => term.id === termId) : glossaryTerms;
+  const allTerms = localizedGlossary();
+  const terms = termId ? allTerms.filter((term) => term.id === termId) : allTerms;
   const selectedTerm = terms[0];
   if (termId && selectedTerm && state) {
     ensureTutorialState(state);
@@ -2288,22 +2350,22 @@ function showGlossary(termId = null) {
     completeBeginnerMission("view-cashflow");
   }
   openSimpleModal({
-    type: "财务词典",
-    title: selectedTerm ? selectedTerm.term : "儿童财务词典",
+    type: t("ui.financeGlossary"),
+    title: selectedTerm ? selectedTerm.term : t("ui.financeGlossary"),
     text: selectedTerm
-      ? `${selectedTerm.shortDefinition} 例子：${selectedTerm.childExample}`
-      : "用简单、准确、不承诺收益的话解释游戏中的财务名词。",
+      ? `${selectedTerm.shortDefinition} ${translateText("例子")}：${selectedTerm.childExample}`
+      : translateText("用简单、准确、不承诺收益的话解释游戏中的财务名词。"),
     metrics: selectedTerm
       ? [
-          ["为什么重要", selectedTerm.whyItMatters],
-          ["相关词", selectedTerm.relatedTerms.join("、") || "无"],
-          ["提醒", "这是游戏中的简化学习说明，不是真实投资建议"],
+          [translateText("为什么重要"), selectedTerm.whyItMatters],
+          [translateText("相关词"), selectedTerm.relatedTerms.join(getLocale() === "en" ? ", " : "、") || translateText("无")],
+          [translateText("提醒"), t("modal.localModelNotice")],
         ]
-      : glossaryTerms.map((term) => [`${term.iconKey} ${term.term}`, term.shortDefinition]).slice(0, 24),
+      : allTerms.map((term) => [`${term.iconKey} ${term.term}`, term.shortDefinition]).slice(0, 24),
     actions: [
-      ...(termId ? [{ label: "查看全部词典", onClick: () => showGlossary() }] : []),
-      { label: "家长／老师说明", onClick: showParentGuide },
-      { label: "关闭", className: "primary", onClick: closeModal },
+      ...(termId ? [{ label: translateText("查看全部词典"), onClick: () => showGlossary() }] : []),
+      { label: t("ui.parentGuide"), onClick: showParentGuide },
+      { label: t("ui.close"), className: "primary", onClick: closeModal },
     ],
   });
 }
@@ -2312,22 +2374,24 @@ function renderTutorial() {
   document.querySelector("#tutorialOverlay")?.remove();
   if (!uiState.tutorial.active) return;
   const step = tutorialSteps[uiState.tutorial.index] || tutorialSteps[0];
+  const stepTitle = translateText(step.title);
+  const stepText = translateText(step.text);
   const overlay = document.createElement("div");
   overlay.className = `tutorial-overlay target-${step.target}`;
   overlay.id = "tutorialOverlay";
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
-  overlay.setAttribute("aria-label", `新手教学：${step.title}`);
+  overlay.setAttribute("aria-label", `${t("ui.tutorial")}：${stepTitle}`);
   overlay.innerHTML = `
     <div class="tutorial-spotlight" aria-hidden="true"></div>
     <div class="tutorial-card">
       <span class="tutorial-count">${uiState.tutorial.index + 1} / ${tutorialSteps.length}</span>
-      <h2>${step.title}</h2>
-      <p>${step.text}</p>
+      <h2>${stepTitle}</h2>
+      <p>${stepText}</p>
       <div class="tutorial-actions">
-        <button type="button" id="tutorialBack" ${uiState.tutorial.index === 0 ? "disabled" : ""}>上一步</button>
-        <button type="button" id="tutorialSkip">跳过</button>
-        <button class="primary" type="button" id="tutorialNext">${uiState.tutorial.index >= tutorialSteps.length - 1 ? "完成" : "下一步"}</button>
+        <button type="button" id="tutorialBack" ${uiState.tutorial.index === 0 ? "disabled" : ""}>${t("ui.previous")}</button>
+        <button type="button" id="tutorialSkip">${t("ui.skip")}</button>
+        <button class="primary" type="button" id="tutorialNext">${uiState.tutorial.index >= tutorialSteps.length - 1 ? t("ui.complete") : translateText("下一步")}</button>
       </div>
     </div>
   `;
@@ -4910,11 +4974,15 @@ function checkWin() {
 
 function openSimpleModal({ type, title, text, metrics = [], actions = [], outcome = "neutral" }) {
   if (uiState.turnPhase === "openingEvent") setTurnPhase("resolvingEvent");
-  el.modalType.textContent = type;
-  el.modalTitle.textContent = title;
-  el.modalText.textContent = text;
+  const displayType = translateText(type);
+  const displayTitle = translateText(title);
+  const displayText = translateText(text);
+  el.modalType.textContent = displayType;
+  el.modalTitle.textContent = displayTitle;
+  el.modalText.textContent = displayText;
   const modalCard = el.modal.querySelector(".modal-card");
-  modalCard?.setAttribute("data-event-type", type);
+  modalCard?.setAttribute("data-event-type", displayType);
+  modalCard?.setAttribute("aria-label", displayTitle);
   modalCard?.setAttribute("data-outcome", outcome);
   modalCard?.classList.remove("progress-modal-card", "report-modal-card");
   el.dealMetrics.classList.remove("progress-center-body", "report-body");
@@ -4924,14 +4992,14 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [], outcom
     .map(
       ([label, value]) => `
         <div class="metric">
-          <span>${label}</span>
-          <strong>${value}</strong>
+          <span>${translateText(label)}</span>
+          <strong>${typeof value === "string" && !/<[a-z][\s\S]*>/i.test(value) ? translateText(value) : value}</strong>
         </div>
       `,
     )
     .join("");
-  const coach = decisionCoachHtml(type, title, text, metrics);
-  const glossary = glossaryChipsHtml(`${type} ${title} ${text} ${metrics.map(([label, value]) => `${label} ${value}`).join(" ")}`);
+  const coach = decisionCoachHtml(displayType, displayTitle, displayText, metrics);
+  const glossary = glossaryChipsHtml(`${displayType} ${displayTitle} ${displayText} ${metrics.map(([label, value]) => `${translateText(label)} ${typeof value === "string" ? translateText(value) : value}`).join(" ")}`);
   if (coach) el.dealMetrics.insertAdjacentHTML("beforeend", coach);
   if (glossary) el.dealMetrics.insertAdjacentHTML("beforeend", glossary);
   el.modalActions.innerHTML = "";
@@ -4939,7 +5007,7 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [], outcom
   actions.forEach((action) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = action.label;
+    button.textContent = translateText(action.label);
     if (action.className) button.className = action.className;
     if (action.disabled) button.disabled = true;
     button.addEventListener("click", () => {
@@ -4967,30 +5035,30 @@ function decisionCoachHtml(type, title, text, metrics) {
   if (!state || !uiState.tutorialSettings.decisionHints || !actionsLikelyDecision(type, title, text)) return "";
   const labels = metrics.map(([label]) => String(label)).join(" ");
   const questions = [
-    labels.includes("现金") || text.includes("现金") ? "做完以后，现金还够处理意外吗？" : "这个选择会让现金变多还是变少？",
-    labels.includes("现金流") || labels.includes("月供") || labels.includes("租金") ? "每月现金流会增加还是减少？" : "之后每个月会不会多一笔固定支出？",
-    labels.includes("风险") || text.includes("风险") ? "如果市场变差，这个选择可能有什么风险？" : "它是资产、负债，还是一次性消费？",
+    labels.includes("现金") || labels.includes("Cash") || text.includes("现金") || text.includes("Cash") ? translateText("做完以后，现金还够处理意外吗？") : translateText("这个选择会让现金变多还是变少？"),
+    labels.includes("现金流") || labels.includes("Cash Flow") || labels.includes("月供") || labels.includes("租金") ? translateText("每月现金流会增加还是减少？") : translateText("之后每个月会不会多一笔固定支出？"),
+    labels.includes("风险") || labels.includes("Risk") || text.includes("风险") || text.includes("risk") ? translateText("如果市场变差，这个选择可能有什么风险？") : translateText("它是资产、负债，还是一次性消费？"),
   ].slice(0, 3);
   const level = Math.max(0, Math.min(2, moneyValue(state.decisionHintLevel)));
   return `
-    <section class="decision-coach" aria-label="先想一想">
-      <strong>先想一想</strong>
+    <section class="decision-coach" aria-label="${translateText("先想一想")}">
+      <strong>${translateText("先想一想")}</strong>
       <ul>${questions.map((question) => `<li>${escapeHtml(question)}</li>`).join("")}</ul>
       <div class="hint-actions">
-        <button type="button" data-hint-level="0">轻提示</button>
-        <button type="button" data-hint-level="1">计算提示</button>
-        <button type="button" data-hint-level="2">完整解释</button>
+        <button type="button" data-hint-level="0">${translateText("轻提示")}</button>
+        <button type="button" data-hint-level="1">${translateText("计算提示")}</button>
+        <button type="button" data-hint-level="2">${translateText("完整解释")}</button>
       </div>
-      <p class="hint-layer ${level >= 0 ? "" : "hidden"}" data-hint-layer="0">先比较现金、月现金流和风险，不需要急着做决定。</p>
-      <p class="hint-layer ${level >= 1 ? "" : "hidden"}" data-hint-layer="1">看卡片里的真实数字：收入 − 支出 − 月付款，才是留下的钱。</p>
-      <p class="hint-layer ${level >= 2 ? "" : "hidden"}" data-hint-layer="2">如果现金太少或负债太高，可以放弃机会、等待、查看银行或卖出资产。游戏不会保证任何投资赚钱。</p>
+      <p class="hint-layer ${level >= 0 ? "" : "hidden"}" data-hint-layer="0">${translateText("先比较现金、月现金流和风险，不需要急着做决定。")}</p>
+      <p class="hint-layer ${level >= 1 ? "" : "hidden"}" data-hint-layer="1">${translateText("看卡片里的真实数字：收入 − 支出 − 月付款，才是留下的钱。")}</p>
+      <p class="hint-layer ${level >= 2 ? "" : "hidden"}" data-hint-layer="2">${translateText("如果现金太少或负债太高，可以放弃机会、等待、查看银行或卖出资产。游戏不会保证任何投资赚钱。")}</p>
     </section>
   `;
 }
 
 function actionsLikelyDecision(type = "", title = "", text = "") {
   const combined = `${type} ${title} ${text}`;
-  return /(机会|购买|买入|出售|贷款|借款|投资|升级|保险|税|支出|事件|房产|股票|小生意|银行)/.test(combined);
+  return /(机会|購買|购买|买入|買入|出售|贷款|貸款|借款|投资|投資|升级|升級|保险|保險|税|稅|支出|事件|房产|房產|股票|小生意|银行|銀行|Deal|Buy|Sell|Loan|Borrow|Invest|Upgrade|Insurance|Tax|Expense|Event|Property|Stocks|Business|Bank)/i.test(combined);
 }
 
 function glossaryChipsHtml(content = "") {
@@ -4998,8 +5066,8 @@ function glossaryChipsHtml(content = "") {
   const matches = glossaryMatches(content);
   if (!matches.length) return "";
   return `
-    <section class="glossary-chip-row" aria-label="财务名词提示">
-      <strong>词典</strong>
+    <section class="glossary-chip-row" aria-label="${translateText("财务名词提示")}">
+      <strong>${translateText("词典")}</strong>
       ${matches.map((term) => `<button type="button" data-glossary-term="${term.id}">${term.iconKey} ${term.term}</button>`).join("")}
     </section>
   `;
@@ -5105,25 +5173,28 @@ function confirmClearSavedGame() {
 
 function showGameMenu() {
   openSimpleModal({
-    type: "游戏选单",
-    title: "现金流冒险城",
-    text: "保存、读取、重新开始和设置都放在这里，主画面可以专心显示棋盘。",
+    type: translateText("游戏选单"),
+    title: t("home.heroTitle"),
+    text: translateText("保存、读取、重新开始和设置都放在这里，主画面可以专心显示棋盘。"),
     metrics: [
-      ["自动存档", "关键选择后会保存到这个浏览器"],
-      ["当前状态", state ? `第 ${state.month} 月 · 现金 ${money(state.cash)}` : "尚未开始"],
+      [translateText("自动存档"), translateText("关键选择后会保存到这个浏览器")],
+      [translateText("当前状态"), state ? `${formatMonth(state.month)} · ${t("finance.cash")} ${money(state.cash)}` : translateText("尚未开始")],
+      [t("ui.language"), buildLocaleSelector("settingsLocaleSelect", "locale-select inline-locale")],
     ],
     actions: [
-      { label: "保存进度", className: "primary", disabled: !state, onClick: saveGame },
-      { label: "读取存档", onClick: loadGame },
-      { label: "声音与画面", onClick: showSoundSettings },
-      { label: "教学设置", onClick: showTutorialSettings },
-      { label: "进度中心", disabled: !state, onClick: () => showProgressCenter("freedom") },
-      { label: "游戏规则", onClick: showRules },
-      { label: "家长／老师说明", onClick: showParentGuide },
-      { label: "重新开始", className: "danger", onClick: confirmResetGame },
-      { label: "关闭", onClick: closeModal },
+      { label: translateText("保存进度"), className: "primary", disabled: !state, onClick: saveGame },
+      { label: translateText("读取存档"), onClick: loadGame },
+      { label: translateText("声音与画面"), onClick: showSoundSettings },
+      { label: t("ui.settings"), onClick: showTutorialSettings },
+      { label: t("modal.progressCenter"), disabled: !state, onClick: () => showProgressCenter("freedom") },
+      { label: translateText("游戏规则"), onClick: showRules },
+      { label: t("ui.parentGuide"), onClick: showParentGuide },
+      { label: t("ui.restart"), className: "danger", onClick: confirmResetGame },
+      { label: t("ui.close"), onClick: closeModal },
     ],
   });
+  attachLocaleSelector("#settingsLocaleSelect", changeLocale);
+  syncLocaleSelectors();
 }
 
 function confirmResetGame() {
@@ -5396,6 +5467,9 @@ el.progressHome?.addEventListener("click", () => {
 el.soundHome?.addEventListener("click", showSoundSettings);
 el.clearSaveHome?.addEventListener("click", confirmClearSavedGame);
 el.closeModal.addEventListener("click", closeModal);
+attachLocaleSelector("#topLocaleSelect", changeLocale);
+syncLocaleSelectors();
+applyStaticTranslations();
 el.modal.addEventListener("click", (event) => {
   if (event.target === el.modal) {
     el.modal.querySelector(".modal-card")?.animate(
