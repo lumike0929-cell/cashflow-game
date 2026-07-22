@@ -4,12 +4,20 @@ import {
   achievementDefinitions,
   addReport,
   badgeDefinitions,
+  buildAchievementGroups,
+  buildBadgeCollection,
+  buildChallengeCards,
+  buildMilestoneTimeline,
+  buildMissionCards,
+  buildProgressDashboard,
+  buildReportSections,
   calculateFinancialFreedomProgress,
   challengeDefinitions,
   claimCompletedMissions,
   continueFreedomMode,
   createDifficultyAdjustedCareer,
   createGameReport,
+  createShareCard,
   difficultyModes,
   evaluateFinancialPressure,
   evaluateProgress,
@@ -17,7 +25,9 @@ import {
   migrateProgressState,
   milestoneDefinitions,
   missionTemplates,
+  nextProgressNotification,
   recordProgressEvent,
+  refreshActiveMissions,
   startChallengeState,
 } from "../progressSystem.js";
 
@@ -116,7 +126,87 @@ test("任务进度可更新、领取并在刷新迁移后恢复", () => {
   assert.equal(claimed.length >= 1, true);
   const restored = migrateProgressState(JSON.parse(JSON.stringify(state)));
   assert.equal(restored.completedMissions.length >= 1, true);
+  assert.equal(restored.activeMissions.length <= 3, true);
   assert.ok(missionTemplates.length >= 10);
+});
+
+test("Sprint 17 进度中心派生资料完整且任务刷新有冷却", () => {
+  const state = baseState({
+    cash: 70000,
+    round: 16,
+    month: 6,
+    ownedProperties: [{ monthlyRent: 9000, monthlyExpenses: 500, mortgagePayment: 0, currentValue: 200000, mortgageBalance: 0 }],
+    insurancePolicies: [{ active: true, monthlyPremium: 300 }],
+  });
+  evaluateProgress(state, { turnPhase: "idle", hasOpenEvent: false });
+  const dashboard = buildProgressDashboard(state);
+  assert.equal(Number.isFinite(dashboard.percent), true);
+  assert.ok(dashboard.passiveSources.length >= 1);
+  assert.ok(dashboard.expenseSources.length >= 1);
+
+  const missions = buildMissionCards(state);
+  assert.equal(missions.length <= 3, true);
+  assert.ok(missions[0].status.length > 0);
+  assert.ok(missions[0].howToComplete.length > 0);
+
+  const refreshed = refreshActiveMissions(state);
+  assert.equal(refreshed.refreshed, true);
+  const cooldown = refreshActiveMissions(state);
+  assert.equal(cooldown.refreshed, false);
+  assert.ok(cooldown.nextAllowedRound > state.round);
+});
+
+test("Sprint 17 成就、徽章、时间线、通知队列和报告资料可展示", () => {
+  const state = baseState({
+    round: 18,
+    cash: 90000,
+    stockTransactions: [{ type: "买入", cashChange: -1000 }],
+    ownedProperties: [{ monthlyRent: 7000, monthlyExpenses: 200, mortgagePayment: 0, currentValue: 180000, mortgageBalance: 0 }],
+    businessHoldings: [{ currentValue: 30000, cumulativeProfit: 12000 }],
+    businessTransactions: [{ type: "升級" }],
+    insurancePolicies: [{ active: true, monthlyPremium: 100 }],
+  });
+  evaluateProgress(state, { turnPhase: "idle", hasOpenEvent: false });
+  const groups = buildAchievementGroups(state, "all", "all");
+  assert.ok(Object.keys(groups).length >= 1);
+  const unlocked = buildAchievementGroups(state, "unlocked", "all");
+  assert.ok(Object.values(unlocked).flat().length >= 1);
+  const badges = buildBadgeCollection(state);
+  assert.equal(badges.length, badgeDefinitions.length);
+  assert.ok(badges.some((item) => item.unlocked));
+  const timeline = buildMilestoneTimeline(state);
+  assert.ok(timeline.length >= 1);
+  const rounds = timeline.map((item) => item.round || 0);
+  assert.deepEqual(rounds, rounds.slice().sort((a, b) => a - b));
+  const notification = nextProgressNotification(state);
+  assert.ok(notification);
+  const duplicate = state.shownNotificationIds.includes(notification.notificationId);
+  assert.equal(duplicate, true);
+
+  for (let index = 0; index < 12; index += 1) {
+    const report = createGameReport({ ...state, round: index + 1 }, "manual");
+    addReport(state, { ...report, id: `manual-${index}` });
+  }
+  assert.equal(state.gameReports.length, 10);
+  const sections = buildReportSections(state, state.gameReports[0]);
+  assert.ok(sections.summary.length >= 6);
+  assert.ok(sections.sections.length >= 7);
+  const share = createShareCard(state, state.gameReports[0]);
+  assert.ok(share.dataUrl.startsWith("data:image/svg+xml"));
+  assert.match(share.text, /现金流冒险城/);
+});
+
+test("Sprint 17 挑战卡保留正常存档并保存最佳成绩", () => {
+  const normal = baseState({ cash: 20000, round: 9, liabilities: [{ balance: 12000, payment: 500 }] });
+  const cardsBefore = buildChallengeCards(normal);
+  assert.equal(cardsBefore.length, challengeDefinitions.length);
+  const challenge = startChallengeState(normal, "starter-cashflow", { savings: 30000 });
+  challenge.baseExpenses = 1000;
+  challenge.salary = 5000;
+  evaluateProgress(challenge, { turnPhase: "idle", hasOpenEvent: false });
+  const cardsAfter = buildChallengeCards(challenge);
+  assert.ok(cardsAfter.find((item) => item.id === "starter-cashflow")?.bestResult.length > 0);
+  assert.equal(normal.round, 9);
 });
 
 test("挑战使用独立状态、超时可结算、难度参数有界", () => {

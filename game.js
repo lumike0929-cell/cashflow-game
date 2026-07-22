@@ -121,18 +121,28 @@ import {
   achievementDefinitions,
   addReport,
   badgeDefinitions,
+  buildAchievementGroups,
+  buildBadgeCollection,
+  buildChallengeCards,
+  buildMilestoneTimeline,
+  buildMissionCards,
+  buildProgressDashboard,
+  buildReportSections,
   calculateFinancialFreedomProgress,
   challengeDefinitions,
   claimCompletedMissions,
   continueFreedomMode,
   createDifficultyAdjustedCareer,
   createGameReport,
+  createShareCard,
   difficultyModes,
   evaluateFinancialPressure,
   evaluateProgress,
   migrateProgressState,
   milestoneDefinitions,
+  nextProgressNotification,
   recordProgressEvent,
+  refreshActiveMissions,
   startChallengeState,
 } from "./progressSystem.js";
 
@@ -422,6 +432,15 @@ function moneyValue(value) {
   return Object.is(rounded, -0) ? 0 : rounded;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function pick(list) {
   return list[Math.floor(Math.random() * list.length)] || list[0];
 }
@@ -442,6 +461,10 @@ function renderSetup() {
   const adjusted = createDifficultyAdjustedCareer(selected, selectedDifficultyId);
   const difficulty = difficultyModes.find((item) => item.id === selectedDifficultyId) || difficultyModes[1];
   const monthlyBalance = adjusted.salary - adjusted.expenses;
+  const savedState = parseSavedState(localStorage.getItem(STORAGE_KEY));
+  const homeProgress = savedState ? calculateFinancialFreedomProgress(savedState) : null;
+  const recentBadge = savedState?.badges?.find((item) => item.unlocked);
+  const currentMission = savedState ? buildMissionCards(savedState)[0] : null;
   if (el.heroCharacter) {
     el.heroCharacter.innerHTML = avatarMarkup(selected, "happy", "right");
   }
@@ -485,6 +508,15 @@ function renderSetup() {
           </div>
           <small>${difficulty.description}</small>
         </div>
+        ${homeProgress ? `
+          <aside class="home-progress-summary" aria-label="继续游戏进度摘要">
+            <span>当前进度</span>
+            <strong>${Math.round(homeProgress.percent)}% · ${homeProgress.stage}</strong>
+            <small>${currentMission ? `任务：${currentMission.title} ${moneyValue(currentMission.progress)} / ${moneyValue(currentMission.target)}` : "暂无当前任务"}</small>
+            ${recentBadge ? `<em>最近徽章：${recentBadge.iconKey} ${recentBadge.title}</em>` : ""}
+            <button type="button" id="homeProgressSummary">查看进度中心</button>
+          </aside>
+        ` : ""}
       </div>
       <div class="career-thumb-rail" aria-label="角色缩图">
         ${careers
@@ -518,6 +550,10 @@ function renderSetup() {
     });
   });
   document.querySelector("#startSelectedCareer")?.addEventListener("click", startSelectedCareer);
+  document.querySelector("#homeProgressSummary")?.addEventListener("click", () => {
+    state = savedState;
+    showProgressCenter("freedom");
+  });
 }
 
 function careerPersonality(id) {
@@ -972,6 +1008,17 @@ function renderActions() {
   const progressText = uiState.turnPhase === "moving" ? `前进 ${uiState.movingStep} / ${uiState.movingTotal}` : state.lastRoll ? `前进 ${state.lastRoll} 格` : "待掷骰";
   const debtButton = debt > 0 ? `<button type="button" id="repayDebt"><span>债</span><strong>偿还</strong></button>` : "";
   const newRunButton = state.gameOver ? `<button class="primary" type="button" id="newRun"><span>★</span><strong>再开</strong></button>` : "";
+  const missionCards = buildMissionCards(state);
+  const trackedMission = missionCards.find((item) => item.completed && !item.claimed) || missionCards.find((item) => item.status === "进行中" || item.status === "即将到期");
+  const missionTracker = trackedMission
+    ? `
+      <button class="hud-mission-tracker ${trackedMission.completed ? "completed" : ""}" type="button" id="hudMissionTracker" aria-label="打开当前任务">
+        <span>${trackedMission.completed ? "✓" : "任"}</span>
+        <strong>${trackedMission.title}</strong>
+        <em>${moneyValue(trackedMission.progress)} / ${moneyValue(trackedMission.target)}</em>
+      </button>
+    `
+    : "";
   el.actionStack.innerHTML = `
     <div class="hud-status game-hud-status">
       <span>目前状态</span>
@@ -982,6 +1029,7 @@ function renderActions() {
       <div class="hud-chip cash"><span>现金</span><strong>${money(state.cash)}</strong></div>
       <div class="hud-chip flow"><span>月现金流</span><strong>${money(netMonthlyCashflow())}</strong></div>
     </div>
+    ${missionTracker}
     <div class="hud-shortcuts" aria-label="游戏快捷入口">
       <button type="button" id="focusPlayerHud"><span>◎</span><strong>玩家</strong></button>
       <button type="button" id="openFinancePanel"><span>¥</span><strong>财务</strong></button>
@@ -997,6 +1045,7 @@ function renderActions() {
     </div>
   `;
   document.querySelector("#focusPlayerHud")?.addEventListener("click", () => focusCameraOnPlayer(true));
+  document.querySelector("#hudMissionTracker")?.addEventListener("click", () => showProgressCenter("missions"));
   document.querySelector("#toggleSound")?.addEventListener("click", toggleSound);
   document.querySelector("#openFinancePanel")?.addEventListener("click", () => {
     recordProgressEvent(state, "financeView");
@@ -1027,8 +1076,9 @@ function processProgress(allowVictory = true) {
     turnPhase: uiState.turnPhase,
     hasOpenEvent: !el.modal.classList.contains("hidden"),
   });
-  if (result.unlocked.length) {
-    showUnlockToast(result.unlocked[0]);
+  if (el.modal.classList.contains("hidden")) {
+    const notification = nextProgressNotification(state);
+    if (notification) showUnlockToast(notification);
   }
   if (allowVictory && result.victory.triggered) {
     showVictoryReport(result.victory.report);
@@ -1055,7 +1105,7 @@ function showUnlockToast(item) {
   `;
   toast.addEventListener("click", () => {
     toast.remove();
-    showProgressCenter("achievements");
+    showProgressCenter(item.targetTab || (item.type === "徽章" ? "badges" : "achievements"));
   });
   document.body.append(toast);
   soundManager.play("happy");
@@ -1074,24 +1124,31 @@ function showProgressCenter(tab = "freedom") {
     ["challenges", "挑战"],
     ["reports", "报告"],
   ];
-  const content = progressCenterMetrics(tab);
   openSimpleModal({
     type: "Progress Center",
     title: "进度中心",
     text: "这里记录短期任务、中期里程碑和最终财务自由目标。内容都是游戏中的简化学习模型。",
-    metrics: content,
+    metrics: [],
     actions: [
-      ...tabs.map(([id, label]) => ({
-        label,
-        className: id === tab ? "primary" : "",
-        onClick: () => showProgressCenter(id),
-      })),
       ...(tab === "missions" ? [{ label: "领取完成任务", className: "primary", onClick: claimMissionsAndRefresh }] : []),
+      ...(tab === "missions" ? [{ label: "刷新任务", onClick: refreshMissionsAndRefresh }] : []),
       ...(tab === "reports" ? [{ label: "生成当前报告", className: "primary", onClick: createManualReport }] : []),
-      ...(tab === "challenges" ? challengeDefinitions.slice(0, 3).map((item) => ({ label: `开始：${item.title}`, onClick: () => confirmStartChallenge(item.id) })) : []),
+      ...(tab === "reports" && state.gameReports.length ? [{ label: "生成分享卡片", onClick: () => showShareCard(state.gameReports[0]) }] : []),
       { label: "关闭", onClick: closeModal },
     ],
   });
+  const modalCard = el.modal.querySelector(".modal-card");
+  modalCard?.classList.add("progress-modal-card");
+  el.dealMetrics.classList.add("progress-center-body");
+  el.dealMetrics.innerHTML = `
+    <div class="progress-center-shell" data-progress-tab="${tab}">
+      <nav class="progress-tab-rail" aria-label="进度中心分页">
+        ${tabs.map(([id, label]) => `<button type="button" class="${id === tab ? "selected" : ""}" data-progress-tab="${id}" aria-pressed="${id === tab}">${label}</button>`).join("")}
+      </nav>
+      ${progressTabHtml(tab)}
+    </div>
+  `;
+  attachProgressCenterHandlers();
 }
 
 function progressCenterMetrics(tab) {
@@ -1135,9 +1192,278 @@ function progressCenterMetrics(tab) {
     : [["暂无报告", "胜利、挑战结束或手动生成后会显示。"]];
 }
 
+function progressTabHtml(tab) {
+  if (tab === "freedom") return freedomDashboardHtml();
+  if (tab === "missions") return missionsHtml();
+  if (tab === "achievements") return achievementsHtml();
+  if (tab === "badges") return badgesHtml();
+  if (tab === "challenges") return challengesHtml();
+  if (tab === "reports") return reportsHtml();
+  return freedomDashboardHtml();
+}
+
+function freedomDashboardHtml() {
+  const dashboard = buildProgressDashboard(state);
+  const gauge = Math.min(100, dashboard.displayPercent);
+  return `
+    <section class="freedom-dashboard">
+      <div class="freedom-gauge-card">
+        <div class="freedom-gauge" style="--progress:${gauge}">
+          <span>${Math.round(dashboard.percent)}%</span>
+          <small>${dashboard.stage}</small>
+        </div>
+        <div class="stage-markers" aria-label="财务自由阶段">
+          <span>0</span><span>25</span><span>50</span><span>75</span><span>100%</span>
+        </div>
+      </div>
+      <div class="freedom-dashboard-main">
+        <div class="progress-metric-row">
+          <article><span>目前阶段</span><strong>${dashboard.stage}</strong></article>
+          <article><span>被动收入</span><strong>${money(dashboard.passiveIncome)}</strong></article>
+          <article><span>必要支出</span><strong>${money(dashboard.necessaryExpenses)}</strong></article>
+          <article><span>每月差额</span><strong>${money(-dashboard.remaining)}</strong></article>
+          <article><span>下一阶段</span><strong>${dashboard.nextStage}</strong><small>还差 ${money(dashboard.nextStageIncomeGap)}</small></article>
+        </div>
+        <p class="progress-learning-note">${dashboard.educationTip}</p>
+      </div>
+      <div class="progress-split-grid">
+        <section>
+          <h3>主要被动收入来源</h3>
+          ${sourceListHtml(dashboard.passiveSources, "positive")}
+        </section>
+        <section>
+          <h3>最主要支出来源</h3>
+          ${sourceListHtml(dashboard.expenseSources, "warning")}
+        </section>
+        <section class="progress-history-card">
+          <h3>最近 5 次进度变化</h3>
+          ${dashboard.recentChanges.length ? dashboard.recentChanges.map((item) => `<p><strong>${item.stage}</strong><span>第 ${item.round} 回合 · ${item.change >= 0 ? "上升" : "下降"} ${Math.abs(item.change)}%</span></p>`).join("") : "<p><strong>等待变化</strong><span>完成收入或支出变化后会记录。</span></p>"}
+        </section>
+      </div>
+      ${milestoneTimelineHtml()}
+    </section>
+  `;
+}
+
+function sourceListHtml(items, tone) {
+  return `
+    <div class="source-list ${tone}">
+      ${items.map((item) => `<p><span>${escapeHtml(item.iconKey)}</span><strong>${escapeHtml(item.label)}</strong><em>${money(item.amount)}</em></p>`).join("")}
+    </div>
+  `;
+}
+
+function missionsHtml() {
+  const missions = buildMissionCards(state);
+  if (!missions.length) {
+    return `<section class="progress-empty"><strong>目前没有合适任务</strong><p>继续玩几回合后，系统会根据状态安排新的短期目标。</p></section>`;
+  }
+  return `
+    <section class="mission-board">
+      ${missions.map((missionItem) => `
+        <article class="mission-card ${missionItem.completed ? "completed" : ""}">
+          <div class="mission-card-head">
+            <span>${missionItem.completed ? "✓" : "任"}</span>
+            <div><strong>${escapeHtml(missionItem.title)}</strong><small>${escapeHtml(missionItem.category)} · ${escapeHtml(missionItem.difficulty)}</small></div>
+            <em>${escapeHtml(missionItem.status)}</em>
+          </div>
+          <p>${escapeHtml(missionItem.description)}</p>
+          <div class="mission-progress" aria-label="任务进度 ${missionItem.progressPercent}%"><span style="width:${missionItem.progressPercent}%"></span></div>
+          <div class="mission-meta">
+            <span>${moneyValue(missionItem.progress)} / ${moneyValue(missionItem.target)}</span>
+            <span>剩余 ${missionItem.remainingRounds} 回合</span>
+            <span>奖励：${escapeHtml(missionItem.reward?.label || "徽章光效")}</span>
+          </div>
+          <button type="button" data-mission-help="${missionItem.id}">怎么完成</button>
+          <small class="mission-help hidden" id="mission-help-${missionItem.id}">${escapeHtml(missionItem.howToComplete)}</small>
+        </article>
+      `).join("")}
+    </section>
+    <p class="progress-learning-note">任务只会从正常玩法推进，刷新有冷却，不能无限刷出奖励。</p>
+  `;
+}
+
+function achievementsHtml(filter = "all", category = "all") {
+  const groups = buildAchievementGroups(state, filter, category);
+  const categories = ["all", ...new Set(state.achievements.map((item) => item.category))];
+  const filters = [["all", "全部"], ["unlocked", "已解锁"], ["locked", "未解锁"], ["recent", "最近解锁"]];
+  return `
+    <section class="achievement-panel">
+      <div class="progress-filter-row">
+        ${filters.map(([id, label]) => `<button type="button" class="${id === filter ? "selected" : ""}" data-achievement-filter="${id}">${label}</button>`).join("")}
+      </div>
+      <div class="progress-filter-row compact">
+        ${categories.map((name) => `<button type="button" class="${name === category ? "selected" : ""}" data-achievement-category="${escapeHtml(name)}">${name === "all" ? "全部类别" : escapeHtml(name)}</button>`).join("")}
+      </div>
+      <div class="achievement-groups">
+        ${Object.keys(groups).length ? Object.entries(groups).map(([group, items]) => `
+          <section>
+            <h3>${escapeHtml(group)}</h3>
+            <div class="achievement-grid">
+              ${items.map((item) => `
+                <article class="achievement-card ${item.unlocked ? "unlocked" : "locked"}">
+                  <span>${item.unlocked ? escapeHtml(item.iconKey) : "？"}</span>
+                  <strong>${escapeHtml(item.displayTitle)}</strong>
+                  <p>${escapeHtml(item.displayDescription)}</p>
+                  <small>${item.unlocked ? `第 ${item.unlockedAtRound || "-"} 回合解锁` : escapeHtml(item.progressLabel)}</small>
+                </article>
+              `).join("")}
+            </div>
+          </section>
+        `).join("") : `<section class="progress-empty"><strong>没有符合筛选的成就</strong><p>切换筛选或继续游戏试试看。</p></section>`}
+      </div>
+    </section>
+  `;
+}
+
+function badgesHtml() {
+  const badges = buildBadgeCollection(state);
+  const recent = badges.find((item) => item.unlocked);
+  return `
+    <section class="badge-collection">
+      ${recent ? `<div class="recent-badge"><span>${escapeHtml(recent.iconKey)}</span><strong>最近徽章：${escapeHtml(recent.title)}</strong><small>${escapeHtml(recent.description)}</small></div>` : ""}
+      <div class="badge-grid">
+        ${badges.map((badge) => `
+          <button type="button" class="badge-card ${badge.unlocked ? "unlocked" : "locked"}" data-badge-id="${badge.id}">
+            <span>${badge.unlocked ? escapeHtml(badge.iconKey) : "锁"}</span>
+            <strong>${badge.unlocked ? escapeHtml(badge.title) : "未解锁徽章"}</strong>
+            <small>${escapeHtml(badge.rarity)} · ${badge.unlocked ? `第 ${badge.unlockedAtRound || "-"} 回合` : escapeHtml(badge.description)}</small>
+          </button>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function milestoneTimelineHtml() {
+  const timeline = buildMilestoneTimeline(state);
+  return `
+    <section class="milestone-timeline">
+      <h3>里程碑时间线</h3>
+      ${timeline.length ? timeline.map((item) => `
+        <article>
+          <span>${escapeHtml(item.iconKey)}</span>
+          <div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.result)} · ${escapeHtml(item.learningTip)}</small></div>
+        </article>
+      `).join("") : `<p><strong>还没有里程碑</strong><span>完成第一回合后就会开始记录。</span></p>`}
+    </section>
+  `;
+}
+
+function challengesHtml() {
+  const challenges = buildChallengeCards(state);
+  return `
+    <section class="challenge-select">
+      <p class="progress-learning-note">挑战会使用独立挑战存档，不覆盖正常游戏存档。中途可以退出并回到正常存档。</p>
+      <div class="challenge-grid">
+        ${challenges.map((item) => `
+          <article class="challenge-card ${item.completed ? "completed" : ""}">
+            <span>${item.completed ? "✓" : "挑"}</span>
+            <strong>${escapeHtml(item.title)}</strong>
+            <p>${escapeHtml(item.description)}</p>
+            <small>${escapeHtml(item.difficulty)} · ${item.roundLimit} 回合 · 奖励 ${escapeHtml(item.rewardBadge)}</small>
+            <em>${escapeHtml(item.bestResult)}</em>
+            <button type="button" data-start-challenge="${item.id}">开始挑战</button>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function reportsHtml() {
+  const reports = state.gameReports || [];
+  return `
+    <section class="report-center">
+      ${reports.length ? reports.slice(0, 10).map((report, index) => `
+        <article class="report-card">
+          <div><strong>${report.reason === "victory" ? "财务自由报告" : "游戏报告"}</strong><small>第 ${report.round} 回合 · ${escapeHtml(report.createdAt?.slice(0, 10) || "本地")}</small></div>
+          <span>${report.freedomPercent}%</span>
+          <button type="button" data-view-report="${report.id}">查看报告</button>
+          ${index === 0 ? `<button type="button" data-share-report="${report.id}">分享卡片</button>` : ""}
+        </article>
+      `).join("") : `<section class="progress-empty"><strong>暂无历史报告</strong><p>胜利、挑战结束或手动生成后会保留最近 10 份。</p></section>`}
+    </section>
+  `;
+}
+
+function attachProgressCenterHandlers() {
+  el.dealMetrics.querySelectorAll(".progress-tab-rail [data-progress-tab]").forEach((button) => {
+    button.addEventListener("click", () => showProgressCenter(button.dataset.progressTab || "freedom"));
+  });
+  el.dealMetrics.querySelectorAll("[data-mission-help]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const help = document.querySelector(`#mission-help-${button.dataset.missionHelp}`);
+      help?.classList.toggle("hidden");
+    });
+  });
+  el.dealMetrics.querySelectorAll("[data-achievement-filter]").forEach((button) => {
+    button.addEventListener("click", () => updateAchievementPanel(button.dataset.achievementFilter || "all", currentAchievementCategory()));
+  });
+  el.dealMetrics.querySelectorAll("[data-achievement-category]").forEach((button) => {
+    button.addEventListener("click", () => updateAchievementPanel(currentAchievementFilter(), button.dataset.achievementCategory || "all"));
+  });
+  el.dealMetrics.querySelectorAll("[data-start-challenge]").forEach((button) => {
+    button.addEventListener("click", () => confirmStartChallenge(button.dataset.startChallenge || "starter-cashflow"));
+  });
+  el.dealMetrics.querySelectorAll("[data-view-report]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const report = state.gameReports.find((item) => item.id === button.dataset.viewReport);
+      if (report) showGameReport(report, "历史结算报告");
+    });
+  });
+  el.dealMetrics.querySelectorAll("[data-share-report]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const report = state.gameReports.find((item) => item.id === button.dataset.shareReport);
+      if (report) showShareCard(report);
+    });
+  });
+  el.dealMetrics.querySelectorAll("[data-badge-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const badge = state.badges.find((item) => item.id === button.dataset.badgeId);
+      if (!badge) return;
+      openSimpleModal({
+        type: "徽章收藏",
+        title: badge.unlocked ? badge.title : "未解锁徽章",
+        text: badge.unlocked ? badge.description : "继续完成对应目标后会点亮这个徽章。",
+        metrics: [["类别", badge.category], ["状态", badge.unlocked ? `第 ${badge.unlockedAtRound || "-"} 回合解锁` : "尚未解锁"]],
+        actions: [{ label: "返回徽章", className: "primary", onClick: () => showProgressCenter("badges") }],
+      });
+    });
+  });
+}
+
+function updateAchievementPanel(filter, category) {
+  const shell = el.dealMetrics.querySelector(".progress-center-shell");
+  if (!shell) return;
+  shell.innerHTML = `
+    <nav class="progress-tab-rail" aria-label="进度中心分页">
+      ${[["freedom", "财务自由"], ["missions", "任务"], ["achievements", "成就"], ["badges", "徽章"], ["challenges", "挑战"], ["reports", "报告"]].map(([id, label]) => `<button type="button" class="${id === "achievements" ? "selected" : ""}" data-progress-tab="${id}" aria-pressed="${id === "achievements"}">${label}</button>`).join("")}
+    </nav>
+    ${achievementsHtml(filter, category)}
+  `;
+  attachProgressCenterHandlers();
+}
+
+function currentAchievementFilter() {
+  return el.dealMetrics.querySelector("[data-achievement-filter].selected")?.dataset.achievementFilter || "all";
+}
+
+function currentAchievementCategory() {
+  return el.dealMetrics.querySelector("[data-achievement-category].selected")?.dataset.achievementCategory || "all";
+}
+
 function claimMissionsAndRefresh() {
   const claimed = claimCompletedMissions(state);
   if (claimed.length) addLog(`领取 ${claimed.length} 个任务奖励。`);
+  persistQuietly();
+  render();
+  showProgressCenter("missions");
+}
+
+function refreshMissionsAndRefresh() {
+  const result = refreshActiveMissions(state);
+  addLog(result.refreshed ? "刷新了当前任务。" : result.reason);
   persistQuietly();
   render();
   showProgressCenter("missions");
@@ -1156,41 +1482,72 @@ function showVictoryReport(report) {
 }
 
 function showGameReport(report, title = "游戏结算报告") {
+  const sections = buildReportSections(state, report);
   openSimpleModal({
     type: "结算报告",
     title,
     text: "这份报告使用游戏规则整理，不是真实投资建议。你可以继续自由模式，或开始新挑战。",
-    metrics: [
-      ["总回合数", `${report.round}`],
-      ["总月份", `${report.month}`],
-      ["最终现金", money(report.cash)],
-      ["月收入", money(report.totalIncome)],
-      ["月支出", money(report.monthlyExpenses)],
-      ["月现金流", money(report.monthlyCashflow)],
-      ["被动收入", money(report.passiveIncome)],
-      ["财务自由进度", `${report.freedomPercent}%`],
-      ["净资产", money(report.netWorth)],
-      ["总资产", money(report.totalAssets)],
-      ["总负债", money(report.totalLiabilities)],
-      ["房产数量", `${report.propertyCount}`],
-      ["股票持仓", `${report.stockHoldingCount}`],
-      ["小生意数量", `${report.businessCount}`],
-      ["保单数量", `${report.activeInsuranceCount}`],
-      ["解锁成就", `${report.unlockedAchievements}`],
-      ["完成任务", `${report.completedMissions}`],
-      ["最大单笔收入", money(report.largestIncome)],
-      ["最大单笔支出", money(report.largestExpense)],
-      ["重要决策", report.keyDecisions.join(" · ")],
-      ["做得好的地方", report.goodSummary],
-      ["可以改善", report.improveSummary],
-      ["下一局可尝试", report.nextStrategy],
-    ],
+    metrics: [],
     actions: [
+      { label: "分享卡片", onClick: () => showShareCard(report) },
       { label: "继续自由模式", className: "primary", onClick: continueAfterVictory },
       { label: "开始新挑战", onClick: () => showProgressCenter("challenges") },
       { label: "返回首页", onClick: resetGame },
     ],
     outcome: "success",
+  });
+  el.modal.querySelector(".modal-card")?.classList.add("report-modal-card");
+  el.dealMetrics.classList.add("report-body");
+  el.dealMetrics.innerHTML = `
+    <section class="game-report-layout">
+      <div class="report-hero">
+        <strong>${report.freedomPercent >= 100 ? "已达成财务自由" : "本局复盘"}</strong>
+        <span>${report.freedomPercent}%</span>
+        <small>第 ${report.round} 回合 · 第 ${report.month} 月</small>
+      </div>
+      <div class="report-summary-grid">
+        ${sections.summary.map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join("")}
+      </div>
+      <div class="report-section-grid">
+        ${sections.sections.map((section) => `
+          <article>
+            <h3>${escapeHtml(section.title)}</h3>
+            ${section.items.map((item) => `<p>${escapeHtml(item)}</p>`).join("")}
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function showShareCard(report) {
+  const card = createShareCard(state, report);
+  openSimpleModal({
+    type: "分享卡片",
+    title: "本地分享卡片",
+    text: "卡片在浏览器本地生成，不上传服务器。若设备不支持分享，可以复制文字摘要。",
+    metrics: [],
+    actions: [
+      { label: "复制文字", className: "primary", onClick: () => copyShareText(card.text) },
+      { label: "返回报告", onClick: () => showGameReport(report, "游戏结算报告") },
+    ],
+  });
+  el.dealMetrics.classList.add("report-body");
+  el.dealMetrics.innerHTML = `
+    <section class="share-card-panel">
+      <img alt="现金流冒险城分享卡片预览" src="${card.dataUrl}">
+      <p>${escapeHtml(card.text)}</p>
+    </section>
+  `;
+}
+
+function copyShareText(text) {
+  navigator.clipboard?.writeText(text).catch(() => {});
+  openSimpleModal({
+    type: "分享卡片",
+    title: "文字摘要已准备好",
+    text,
+    actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
   });
 }
 
@@ -3857,6 +4214,8 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [], outcom
   const modalCard = el.modal.querySelector(".modal-card");
   modalCard?.setAttribute("data-event-type", type);
   modalCard?.setAttribute("data-outcome", outcome);
+  modalCard?.classList.remove("progress-modal-card", "report-modal-card");
+  el.dealMetrics.classList.remove("progress-center-body", "report-body");
   modalCard?.querySelector(".event-illustration")?.remove();
   modalCard?.insertAdjacentHTML("afterbegin", eventIllustrationMarkup(type));
   el.dealMetrics.innerHTML = metrics
@@ -4110,8 +4469,17 @@ el.startAdventure?.addEventListener("click", showCharacterSelection);
 el.rulesHome?.addEventListener("click", showRules);
 el.progressHome?.addEventListener("click", () => {
   if (!state) {
-    const previewState = createNewGameState(careers.find((item) => item.id === selectedCareerId) || careers[0], selectedDifficultyId);
-    state = previewState;
+    const loaded = parseSavedState(localStorage.getItem(STORAGE_KEY));
+    if (!loaded) {
+      openSimpleModal({
+        type: "进度中心",
+        title: "还没有可追踪的进度",
+        text: "开始一局后，任务、成就、徽章和报告会自动记录在这个浏览器里。",
+        actions: [{ label: "知道了", className: "primary", onClick: closeModal }],
+      });
+      return;
+    }
+    state = loaded;
   }
   showProgressCenter("freedom");
 });
@@ -4315,6 +4683,8 @@ window.cashflowDebug = {
           reports: state.gameReports?.length || 0,
           victory: state.victoryState,
           challenge: state.activeChallenge,
+          pendingNotifications: state.pendingNotifications?.length || 0,
+          shownNotifications: state.shownNotificationIds?.length || 0,
         }
       : null,
   }),
@@ -4339,6 +4709,18 @@ window.cashflowDebug = {
     emitFinanceEffect(88, "同一笔交易", "debug-duplicate", "debug-transaction-once");
   },
   showProgressCenter,
+  refreshProgressMissions: () => {
+    if (!state) return null;
+    const result = refreshActiveMissions(state);
+    persistQuietly();
+    render();
+    return result;
+  },
+  showShareCard: () => {
+    if (!state) return;
+    const report = state.gameReports[0] || addReport(state, createGameReport(state, "manual"));
+    showShareCard(report);
+  },
   completeProgressMissions: () => {
     if (!state) return;
     recordProgressEvent(state, "financeView");

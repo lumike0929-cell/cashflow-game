@@ -144,6 +144,7 @@ export function createDifficultyAdjustedCareer(career, difficultyId = "standard"
 
 export function migrateProgressState(state) {
   if (!state || typeof state !== "object") return state;
+  const previousStage = state.financialFreedomProgress?.stage || null;
   state.progressVersion = PROGRESS_STORAGE_VERSION;
   state.gameDifficulty = findDifficulty(state.gameDifficulty || "standard").id;
   state.progressStats = {
@@ -171,6 +172,10 @@ export function migrateProgressState(state) {
   state.gameReports = Array.isArray(state.gameReports) ? state.gameReports.slice(0, 10) : [];
   state.victoryState = normalizeVictoryState(state.victoryState);
   state.unlockQueue = Array.isArray(state.unlockQueue) ? state.unlockQueue.slice(0, 12) : [];
+  state.pendingNotifications = normalizeNotifications(state.pendingNotifications || state.unlockQueue);
+  state.shownNotificationIds = Array.isArray(state.shownNotificationIds) ? state.shownNotificationIds.slice(0, 80) : [];
+  state.progressHistory = normalizeProgressHistory(state.progressHistory, previousStage);
+  state.missionRefresh = normalizeMissionRefresh(state.missionRefresh);
   ensureMissionSlots(state);
   return state;
 }
@@ -194,8 +199,10 @@ export function calculateFinancialFreedomProgress(state) {
 
 export function evaluateProgress(state, options = {}) {
   migrateProgressState(state);
+  const previousProgress = state.financialFreedomProgress;
   const progress = calculateFinancialFreedomProgress(state);
   state.financialFreedomProgress = progress;
+  recordProgressHistory(state, previousProgress, progress);
   updateCashflowStreak(state);
   updateMissions(state);
   const unlocked = [
@@ -237,7 +244,193 @@ export function claimCompletedMissions(state) {
   state.completedMissions = [...claimed, ...state.completedMissions].slice(0, 60);
   state.activeMissions = state.activeMissions.filter((missionItem) => !missionItem.claimed);
   ensureMissionSlots(state);
+  claimed.forEach((missionItem) => queueProgressNotification(state, {
+    id: `mission-claimed-${missionItem.id}`,
+    type: "任务",
+    iconKey: "任",
+    title: missionItem.title,
+    description: "任务奖励已领取，新的短期目标已更新。",
+    targetTab: "missions",
+  }));
   return claimed;
+}
+
+export function refreshActiveMissions(state) {
+  migrateProgressState(state);
+  const round = Math.max(1, moneyNumber(state.round, 1));
+  if (round < state.missionRefresh.nextAllowedRound) {
+    return {
+      refreshed: false,
+      reason: `第 ${state.missionRefresh.nextAllowedRound} 回合后可以刷新任务。`,
+      nextAllowedRound: state.missionRefresh.nextAllowedRound,
+    };
+  }
+  state.missionRefresh = {
+    count: Math.min(99, state.missionRefresh.count + 1),
+    lastRound: round,
+    nextAllowedRound: round + 5,
+  };
+  state.activeMissions = [];
+  ensureMissionSlots(state);
+  queueProgressNotification(state, {
+    id: `missions-refreshed-${round}-${state.missionRefresh.count}`,
+    type: "任务",
+    iconKey: "刷",
+    title: "任务已刷新",
+    description: "新的任务会根据目前游戏状态继续追踪。",
+    targetTab: "missions",
+  });
+  return { refreshed: true, activeMissions: state.activeMissions };
+}
+
+export function buildProgressDashboard(state) {
+  migrateProgressState(state);
+  const progress = calculateFinancialFreedomProgress(state);
+  const next = nextFreedomStage(progress.percent);
+  const history = state.progressHistory.slice(0, 5);
+  const passiveSources = passiveIncomeSources(state).filter((item) => item.amount > 0).slice(0, 4);
+  const expenseSources = expenseSourcesForProgress(state).filter((item) => item.amount > 0).slice(0, 4);
+  return {
+    ...progress,
+    nextStage: next.stage,
+    nextStagePercent: next.percent,
+    nextStageRemainingPercent: Math.max(0, moneyNumber(next.percent - progress.percent)),
+    nextStageIncomeGap: progress.necessaryExpenses > 0 ? Math.max(0, moneyNumber((next.percent / 100) * progress.necessaryExpenses - progress.passiveIncome)) : 0,
+    recentChanges: history,
+    passiveSources: passiveSources.length ? passiveSources : [{ label: "尚无被动收入", amount: 0, iconKey: "起" }],
+    expenseSources: expenseSources.length ? expenseSources : [{ label: "尚无必要支出", amount: 0, iconKey: "稳" }],
+  };
+}
+
+export function buildMissionCards(state) {
+  migrateProgressState(state);
+  updateMissions(state);
+  const round = Math.max(1, moneyNumber(state.round, 1));
+  return state.activeMissions.slice(0, 3).map((missionItem) => ({
+    ...missionItem,
+    status: missionStatus(missionItem, round),
+    remainingRounds: Math.max(0, moneyNumber(missionItem.expiresAtRound) - round),
+    progressPercent: missionItem.target <= 0 ? 0 : Math.min(100, Math.round((moneyNumber(missionItem.progress) / moneyNumber(missionItem.target, 1)) * 100)),
+    howToComplete: missionHelp(missionItem.id),
+  }));
+}
+
+export function buildAchievementGroups(state, filter = "all", category = "all") {
+  migrateProgressState(state);
+  const filtered = state.achievements.filter((item) => {
+    const filterMatch = filter === "all"
+      || (filter === "unlocked" && item.unlocked)
+      || (filter === "locked" && !item.unlocked)
+      || (filter === "recent" && item.unlocked && moneyNumber(item.unlockedAtRound) >= Math.max(1, moneyNumber(state.round) - 10));
+    const categoryMatch = category === "all" || item.category === category;
+    return filterMatch && categoryMatch;
+  });
+  return groupByCategory(filtered.map((item) => ({
+    ...item,
+    displayTitle: item.hidden && !item.unlocked ? "神秘成就" : item.title,
+    displayDescription: item.hidden && !item.unlocked ? "继续探索城市后会揭晓。" : item.description,
+    progressLabel: achievementProgressLabel(state, item),
+  })));
+}
+
+export function buildBadgeCollection(state) {
+  migrateProgressState(state);
+  return state.badges.map((item) => ({
+    ...item,
+    rarity: item.id === "freedom" ? "传奇" : item.category === "财务自由" ? "稀有" : "普通",
+    outline: !item.unlocked,
+  }));
+}
+
+export function buildMilestoneTimeline(state) {
+  migrateProgressState(state);
+  return state.milestones
+    .filter((item) => item.unlocked)
+    .slice()
+    .sort((a, b) => moneyNumber(a.unlockedAtRound) - moneyNumber(b.unlockedAtRound) || moneyNumber(a.unlockedAtMonth) - moneyNumber(b.unlockedAtMonth))
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      iconKey: item.iconKey,
+      category: item.category,
+      round: item.unlockedAtRound,
+      month: item.unlockedAtMonth,
+      result: `第 ${item.unlockedAtRound || "-"} 回合 · 第 ${item.unlockedAtMonth || "-"} 月`,
+      learningTip: item.learningTip,
+    }));
+}
+
+export function buildChallengeCards(state) {
+  migrateProgressState(state);
+  return challengeDefinitions.map((item) => {
+    const best = state.challengeBestResults[item.id] || {};
+    return {
+      ...item,
+      bestResult: best.completed ? `最佳 ${best.bestRound} 回合` : best.lastResult === "timedOut" ? "曾经超时" : "尚未完成",
+      completed: Boolean(best.completed),
+      independentSave: true,
+    };
+  });
+}
+
+export function buildReportSections(state, report) {
+  migrateProgressState(state);
+  const activeReport = report || state.gameReports[0] || createGameReport(state, "preview");
+  return {
+    summary: [
+      ["总回合", `${activeReport.round}`],
+      ["最终现金", moneyText(activeReport.cash)],
+      ["月现金流", moneyText(activeReport.monthlyCashflow)],
+      ["被动收入", moneyText(activeReport.passiveIncome)],
+      ["净资产", moneyText(activeReport.netWorth)],
+      ["财务自由进度", `${activeReport.freedomPercent}%`],
+    ],
+    sections: [
+      { title: "收入结构", items: [`月收入 ${moneyText(activeReport.totalIncome)}`, `被动收入 ${moneyText(activeReport.passiveIncome)}`] },
+      { title: "支出结构", items: [`月支出 ${moneyText(activeReport.monthlyExpenses)}`, `最大单笔支出 ${moneyText(activeReport.largestExpense)}`] },
+      { title: "资产组合", items: [`房产 ${activeReport.propertyCount} 项`, `股票 ${activeReport.stockHoldingCount} 种`, `小生意 ${activeReport.businessCount} 个`] },
+      { title: "负债状况", items: [`总负债 ${moneyText(activeReport.totalLiabilities)}`, `保单 ${activeReport.activeInsuranceCount} 张`] },
+      { title: "完成内容", items: [`任务 ${activeReport.completedMissions} 个`, `成就 ${activeReport.unlockedAchievements} 个`] },
+      { title: "关键决策", items: activeReport.keyDecisions },
+      { title: "教育总结", items: buildEducationSummary(activeReport) },
+    ],
+  };
+}
+
+export function createShareCard(state, report) {
+  migrateProgressState(state);
+  const activeReport = report || state.gameReports[0] || createGameReport(state, "share");
+  const recentBadge = state.badges.find((item) => item.unlocked) || { title: "现金流新手", iconKey: "起" };
+  const summary = buildEducationSummary(activeReport)[0] || "你正在练习现金流选择。";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960" viewBox="0 0 720 960">
+  <rect width="720" height="960" rx="44" fill="#e8f3ec"/>
+  <rect x="42" y="42" width="636" height="876" rx="38" fill="#fffdf2" stroke="#d8a21f" stroke-width="6"/>
+  <circle cx="604" cy="138" r="58" fill="#fff4cf"/>
+  <text x="72" y="132" font-family="system-ui, sans-serif" font-size="46" font-weight="900" fill="#17201d">现金流冒险城</text>
+  <text x="72" y="190" font-family="system-ui, sans-serif" font-size="28" font-weight="800" fill="#246b9f">我的游戏结算卡</text>
+  <text x="72" y="292" font-family="system-ui, sans-serif" font-size="96" font-weight="900" fill="#1f7a52">${Math.min(999, moneyNumber(activeReport.freedomPercent))}%</text>
+  <text x="72" y="340" font-family="system-ui, sans-serif" font-size="28" font-weight="800" fill="#66736d">财务自由进度</text>
+  ${shareCardLine(72, 430, "回合", `${activeReport.round}`)}
+  ${shareCardLine(72, 500, "最终现金", moneyText(activeReport.cash))}
+  ${shareCardLine(72, 570, "月现金流", moneyText(activeReport.monthlyCashflow))}
+  ${shareCardLine(72, 640, "被动收入", moneyText(activeReport.passiveIncome))}
+  ${shareCardLine(72, 710, "净资产", moneyText(activeReport.netWorth))}
+  <rect x="72" y="768" width="576" height="86" rx="24" fill="#e3f4eb"/>
+  <text x="104" y="820" font-family="system-ui, sans-serif" font-size="26" font-weight="900" fill="#17201d">${escapeSvg(recentBadge.iconKey)} ${escapeSvg(recentBadge.title)}</text>
+  <text x="72" y="888" font-family="system-ui, sans-serif" font-size="22" font-weight="800" fill="#66736d">${escapeSvg(summary).slice(0, 40)}</text>
+</svg>`;
+  const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  return { svg, dataUrl, text: `现金流冒险城：第 ${activeReport.round} 回合，财务自由进度 ${activeReport.freedomPercent}%，净资产 ${moneyText(activeReport.netWorth)}。${summary}` };
+}
+
+export function nextProgressNotification(state) {
+  migrateProgressState(state);
+  const shown = new Set(state.shownNotificationIds);
+  const next = state.pendingNotifications.find((item) => !shown.has(item.notificationId));
+  if (!next) return null;
+  state.shownNotificationIds = [next.notificationId, ...state.shownNotificationIds].slice(0, 80);
+  state.pendingNotifications = state.pendingNotifications.filter((item) => item.notificationId !== next.notificationId).slice(0, 12);
+  return next;
 }
 
 export function evaluateVictoryState(state, options = {}) {
@@ -485,6 +678,14 @@ function queueUnlocks(state, items) {
   const existing = new Set(state.unlockQueue.map((item) => `${item.type}-${item.id}`));
   const fresh = items.filter((item) => !existing.has(`${item.type}-${item.id}`));
   state.unlockQueue = [...state.unlockQueue, ...fresh].slice(-12);
+  fresh.forEach((item) => queueProgressNotification(state, {
+    id: `${item.type}-${item.id}`,
+    type: item.type,
+    iconKey: item.iconKey,
+    title: item.title,
+    description: item.description || item.learningTip || "新的进度已记录。",
+    targetTab: item.type === "徽章" ? "badges" : item.type === "里程碑" ? "freedom" : "achievements",
+  }));
 }
 
 function updateCashflowStreak(state) {
@@ -575,6 +776,201 @@ function normalizeActiveChallenge(value) {
     reportShown: Boolean(value.reportShown),
     startingDebt: Math.max(0, moneyNumber(value.startingDebt)),
   };
+}
+
+function normalizeNotifications(value) {
+  return (Array.isArray(value) ? value : [])
+    .filter((item) => item && typeof item === "object")
+    .slice(-12)
+    .map((item) => {
+      const id = String(item.id || `${item.type || "progress"}-${item.title || Date.now()}`);
+      const type = String(item.type || "进度");
+      return {
+        notificationId: String(item.notificationId || `${type}-${id}`),
+        id,
+        type,
+        iconKey: String(item.iconKey || "奖").slice(0, 2),
+        title: String(item.title || "新的进度"),
+        description: String(item.description || item.learningTip || "新的进度已记录。"),
+        targetTab: String(item.targetTab || "achievements"),
+      };
+    });
+}
+
+function normalizeProgressHistory(value, previousStage) {
+  if (Array.isArray(value) && value.length) {
+    return value
+      .filter((item) => item && typeof item === "object")
+      .slice(0, 20)
+      .map((item) => ({
+        month: moneyNumber(item.month, 1),
+        round: moneyNumber(item.round, 1),
+        percent: clampPercent(item.percent),
+        stage: item.stage || previousStage || "起步",
+        change: moneyNumber(item.change),
+      }));
+  }
+  return [];
+}
+
+function normalizeMissionRefresh(value) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    count: Math.max(0, moneyNumber(source.count)),
+    lastRound: Math.max(0, moneyNumber(source.lastRound)),
+    nextAllowedRound: Math.max(1, moneyNumber(source.nextAllowedRound, 1)),
+  };
+}
+
+function recordProgressHistory(state, previous, progress) {
+  const previousPercent = clampPercent(previous?.percent);
+  const change = moneyNumber(progress.percent - previousPercent);
+  const last = state.progressHistory[0];
+  if (last && last.round === state.round && last.month === state.month && last.percent === progress.percent) return;
+  if (change === 0 && last?.stage === progress.stage) return;
+  state.progressHistory = [
+    {
+      month: Math.max(1, moneyNumber(state.month, 1)),
+      round: Math.max(1, moneyNumber(state.round, 1)),
+      percent: progress.percent,
+      stage: progress.stage,
+      change,
+    },
+    ...state.progressHistory,
+  ].slice(0, 20);
+  if (previous?.stage && previous.stage !== progress.stage && progress.percent > previousPercent) {
+    queueProgressNotification(state, {
+      id: `freedom-stage-${progress.stage}`,
+      type: "阶段",
+      iconKey: "阶",
+      title: `进入「${progress.stage}」`,
+      description: `财务自由进度来到 ${progress.percent}%。`,
+      targetTab: "freedom",
+    });
+  }
+}
+
+function queueProgressNotification(state, item) {
+  const normalized = normalizeNotifications([item])[0];
+  if (!normalized) return;
+  const existing = new Set([
+    ...state.pendingNotifications.map((entry) => entry.notificationId),
+    ...state.shownNotificationIds,
+  ]);
+  if (existing.has(normalized.notificationId)) return;
+  state.pendingNotifications = [...state.pendingNotifications, normalized].slice(-12);
+}
+
+function nextFreedomStage(percent) {
+  if (percent < 25) return { stage: "建立基础", percent: 25 };
+  if (percent < 50) return { stage: "现金流成长", percent: 50 };
+  if (percent < 75) return { stage: "接近自由", percent: 75 };
+  if (percent < 100) return { stage: "财务自由", percent: 100 };
+  return { stage: "自由模式", percent: 100 };
+}
+
+function passiveIncomeSources(state) {
+  return [
+    { label: "房产租金", amount: totalRent(state), iconKey: "房" },
+    { label: "股票股息", amount: totalDividends(state), iconKey: "股" },
+    { label: "小生意利润", amount: totalBusinessProfit(state), iconKey: "店" },
+    { label: "其他资产", amount: Math.max(0, calculatePassiveIncome(state) - totalRent(state) - totalDividends(state) - totalBusinessProfit(state)), iconKey: "资" },
+  ];
+}
+
+function expenseSourcesForProgress(state) {
+  const mortgage = Array.isArray(state.ownedProperties) ? state.ownedProperties.reduce((sum, item) => sum + moneyNumber(item.mortgagePayment), 0) : 0;
+  const property = Array.isArray(state.ownedProperties) ? state.ownedProperties.reduce((sum, item) => sum + moneyNumber(item.monthlyExpenses), 0) : 0;
+  const insurance = Array.isArray(state.insurancePolicies) ? state.insurancePolicies.filter((item) => item.active).reduce((sum, item) => sum + moneyNumber(item.monthlyPremium), 0) : 0;
+  const debt = Array.isArray(state.liabilities) ? state.liabilities.reduce((sum, item) => sum + moneyNumber(item.payment), 0) : 0;
+  return [
+    { label: "生活支出", amount: moneyNumber(state.baseExpenses), iconKey: "家" },
+    { label: "贷款月供", amount: debt + mortgage, iconKey: "贷" },
+    { label: "房产持有", amount: property, iconKey: "修" },
+    { label: "保险保费", amount: insurance, iconKey: "盾" },
+  ];
+}
+
+function missionStatus(missionItem, round) {
+  if (missionItem.claimed) return "已领取";
+  if (missionItem.completed) return "已完成待领取";
+  if (round > moneyNumber(missionItem.expiresAtRound)) return "已过期";
+  if (moneyNumber(missionItem.expiresAtRound) - round <= 3) return "即将到期";
+  return "进行中";
+}
+
+function missionHelp(id) {
+  return {
+    "cash-reserve": "少做大额支出，或通过收入事件增加现金。",
+    "stock-trade": "落到股票机会格时，可以买入或卖出虚构股票。",
+    "property-card": "落到房产机会格，打开机会卡即可推进。",
+    "repay-debt": "打开银行中心，选择合适的贷款偿还。",
+    "business-upgrade": "拥有小生意后，在详情里购买未完成升级。",
+    "buy-insurance": "打开保险中心，购买一张适合当前风险的保单。",
+    "positive-two": "让收入大于支出，并连续维持两个月。",
+    "view-finance": "打开财务面板查看现金流摘要。",
+    "learn-event": "落到学习格并完成学习事件。",
+    "passive-500": "通过房产、股息或小生意提高每月被动收入。",
+  }[id] || "继续正常游戏即可推进这个任务。";
+}
+
+function groupByCategory(items) {
+  return items.reduce((groups, item) => {
+    const category = item.category || "其他";
+    if (!groups[category]) groups[category] = [];
+    groups[category].push(item);
+    return groups;
+  }, {});
+}
+
+function achievementProgressLabel(state, item) {
+  if (item.unlocked) return "已解锁";
+  if (item.id === "round-10") return `${Math.min(10, moneyNumber(state.round))} / 10 回合`;
+  if (item.id === "round-30") return `${Math.min(30, moneyNumber(state.round))} / 30 回合`;
+  if (item.id === "round-50") return `${Math.min(50, moneyNumber(state.round))} / 50 回合`;
+  if (item.id === "cash-10k") return `${moneyText(Math.min(10000, moneyNumber(state.cash)))} / ¥10,000`;
+  if (item.id === "cash-50k") return `${moneyText(Math.min(50000, moneyNumber(state.cash)))} / ¥50,000`;
+  if (item.id === "property-3") return `${Math.min(3, state.ownedProperties?.length || 0)} / 3 房产`;
+  if (item.id === "stock-3") return `${Math.min(3, state.stockHoldings?.length || 0)} / 3 股票`;
+  if (item.id === "why-10") return `${Math.min(10, state.progressStats?.whyViews || 0)} / 10 次`;
+  return "继续游戏推进";
+}
+
+function buildEducationSummary(report) {
+  const good = [
+    report.freedomPercent >= 50 ? "你已经让被动收入明显接近支出。" : "你开始追踪现金、收入和支出。",
+    report.netWorth >= 0 ? "净资产保持为正，说明资产与负债仍可管理。" : "你已经看见负债压力如何影响净资产。",
+    report.completedMissions > 0 ? "你完成了短期任务，回合目标更清楚。" : "你愿意打开报告复盘，这是很好的学习习惯。",
+  ];
+  const improve = [
+    report.monthlyCashflow < 0 ? "下局可以先降低固定支出或提高稳定收入。" : "下局可以继续观察现金流是否稳定。",
+    report.totalLiabilities > report.totalAssets ? "下局可以更早比较借款月供与资产收入。" : "下局可以练习更多元的收入来源。",
+    report.passiveIncome < report.monthlyExpenses ? "下局可以寻找能持续产生现金流的资产。" : "下局可以练习守住成果并管理风险。",
+  ];
+  const next = [
+    "先保留安全现金，再比较机会卡的收入与成本。",
+    "不要把分散说成没有风险，重点是减少单一事件影响。",
+    "这只是游戏学习规则，不是真实投资建议。",
+  ];
+  return [...good.slice(0, 3), ...improve.slice(0, 3), ...next.slice(0, 3)];
+}
+
+function moneyText(value) {
+  const safe = moneyNumber(value);
+  const sign = safe < 0 ? "-" : "";
+  return `${sign}¥${Math.abs(safe).toLocaleString("zh-CN")}`;
+}
+
+function shareCardLine(x, y, label, value) {
+  return `<text x="${x}" y="${y}" font-family="system-ui, sans-serif" font-size="24" font-weight="800" fill="#66736d">${escapeSvg(label)}</text><text x="${x + 190}" y="${y}" font-family="system-ui, sans-serif" font-size="30" font-weight="900" fill="#17201d">${escapeSvg(value)}</text>`;
+}
+
+function escapeSvg(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 function findDifficulty(id) {

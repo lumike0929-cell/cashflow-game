@@ -87,6 +87,11 @@ try {
   await page.evaluate(() => window.cashflowDebug.showProgressCenter("freedom"));
   await expectText(page, "进度中心");
   await expectText(page, "目前阶段");
+  for (const tab of ["missions", "achievements", "badges", "challenges", "reports", "freedom"]) {
+    await page.evaluate((nextTab) => window.cashflowDebug.showProgressCenter(nextTab), tab);
+    const modalText = await page.locator("#cardModal").innerText();
+    assert.match(modalText, /进度中心/);
+  }
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.completeProgressMissions());
   await page.evaluate(() => window.cashflowDebug.unlockProgressSamples());
@@ -94,8 +99,26 @@ try {
   assert.ok(progressSnapshot.completedMissions >= 1);
   assert.ok(progressSnapshot.achievements >= 3);
   assert.ok(progressSnapshot.badges >= 1);
+  assert.ok(progressSnapshot.pendingNotifications >= 0);
   await page.evaluate(() => window.cashflowDebug.showProgressCenter("missions"));
   await expectText(page, "领取完成任务");
+  assert.equal(await page.locator(".mission-card").count() <= 3, true);
+  await page.locator("[data-mission-help]").first().click();
+  assert.equal(await page.locator(".mission-help:not(.hidden)").count() >= 1, true);
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.evaluate(() => window.cashflowDebug.showProgressCenter("achievements"));
+  await page.locator("[data-achievement-filter='unlocked']").click();
+  assert.equal(await page.locator(".achievement-card.unlocked").count() >= 1, true);
+  await page.evaluate(() => window.cashflowDebug.showProgressCenter("badges"));
+  assert.equal(await page.locator(".badge-card").count() >= 10, true);
+  await page.evaluate(() => window.cashflowDebug.showProgressCenter("challenges"));
+  assert.equal(await page.locator("[data-start-challenge]").count() >= 6, true);
+  await page.evaluate(() => window.cashflowDebug.showProgressCenter("reports"));
+  await page.getByText("生成当前报告").click();
+  await expectText(page, "当前结算报告");
+  await page.getByText("分享卡片").click();
+  await expectText(page, "本地分享卡片");
+  assert.equal(await page.locator(".share-card-panel img").count(), 1);
   await page.evaluate(() => window.cashflowDebug.closeModal());
 
   await page.evaluate(() => window.cashflowDebug.startTutorial(true));
@@ -409,6 +432,20 @@ try {
     assert.ok(overflow.board.height >= viewport.height * 0.45, `${viewport.width}px board too short`);
     assert.ok(overflow.hud.height <= Math.max(230, viewport.height * 0.28), `${viewport.width}px HUD too tall`);
     assert.ok(overflow.width <= overflow.clientWidth + 1, `${viewport.width}px overflow: ${overflow.width} > ${overflow.clientWidth}`);
+    await page.evaluate(() => window.cashflowDebug.showProgressCenter("freedom"));
+    const progressLayout = await page.evaluate(() => ({
+      width: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+      tabs: document.querySelectorAll(".progress-tab-rail button").length,
+      bodyLocked: document.body.classList.contains("modal-open"),
+      modalWidth: document.querySelector(".modal-card")?.getBoundingClientRect().width || 0,
+    }));
+    assert.equal(progressLayout.tabs, 6);
+    assert.equal(progressLayout.bodyLocked, true);
+    assert.ok(progressLayout.modalWidth <= viewport.width + 1, `${viewport.width}px progress modal too wide`);
+    assert.ok(progressLayout.width <= progressLayout.clientWidth + 1, `${viewport.width}px progress overflow`);
+    await page.evaluate(() => window.cashflowDebug.closeModal());
+    assert.equal(await page.evaluate(() => document.body.classList.contains("modal-open")), false);
   }
 
   for (const viewport of [
@@ -447,6 +484,10 @@ try {
         thumbs: document.querySelectorAll(".career-thumb").length,
         selected: Boolean(document.querySelector(".career-thumb.selected")),
         startVisible: Boolean(start && start.top < window.innerHeight && start.bottom <= window.innerHeight),
+        startTop: start?.top || 0,
+        startBottom: start?.bottom || 0,
+        innerHeight: window.innerHeight,
+        position: document.querySelector("#startSelectedCareer") ? getComputedStyle(document.querySelector("#startSelectedCareer")).position : "",
         stageWidth: stage?.width || 0,
         previewLeft: preview?.left || 0,
         panelLeft: panel?.left || 0,
@@ -456,7 +497,7 @@ try {
     });
     assert.equal(selectionLayout.thumbs, 4);
     assert.equal(selectionLayout.selected, true);
-    assert.equal(selectionLayout.startVisible, true);
+    assert.equal(selectionLayout.startVisible, true, `${viewport.width}px start button hidden: ${JSON.stringify(selectionLayout)}`);
     assert.ok(selectionLayout.stageWidth >= viewport.width * 0.72, `${viewport.width}px selection uses too little width`);
     if (viewport.width >= 768) {
       assert.ok(selectionLayout.panelLeft > selectionLayout.previewLeft, `${viewport.width}px selection is not two-column`);

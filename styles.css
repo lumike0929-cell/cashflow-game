@@ -1724,6 +1724,16 @@ p {
   width: 100%;
 }
 
+.selection-active .select-start-button {
+  position: fixed;
+  left: max(24px, calc((100vw - 860px) / 2));
+  right: max(24px, calc((100vw - 860px) / 2));
+  top: calc(100dvh - 82px - env(safe-area-inset-bottom));
+  bottom: auto;
+  z-index: 45;
+  width: auto;
+}
+
 .board-card {
   overflow: hidden;
   background:
@@ -2830,6 +2840,498 @@ body[data-quality="battery"] .finance-effect {
   font-weight: 850;
 }
 
+.hud-mission-tracker {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 46px;
+  border-color: rgba(255, 216, 107, 0.42);
+  border-radius: 16px;
+  padding: 8px 10px;
+  background: rgba(255, 248, 220, 0.94);
+  color: #51390e;
+  text-align: left;
+}
+
+.hud-mission-tracker span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 11px;
+  background: linear-gradient(180deg, #ffe991, #d8a21f);
+  font-weight: 950;
+}
+
+.hud-mission-tracker strong,
+.hud-mission-tracker em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-mission-tracker em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.progress-modal-card {
+  width: min(1040px, calc(100vw - 24px));
+}
+
+.report-modal-card {
+  width: min(940px, calc(100vw - 24px));
+}
+
+.progress-center-body,
+.report-body {
+  display: block;
+  grid-template-columns: none;
+  max-height: min(62vh, 620px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.progress-center-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.progress-tab-rail {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  padding: 4px 0 10px;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.progress-tab-rail button,
+.progress-filter-row button {
+  min-height: 38px;
+  border-radius: 14px;
+  padding: 6px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.progress-tab-rail button.selected,
+.progress-filter-row button.selected {
+  border-color: rgba(216, 162, 31, 0.72);
+  background: linear-gradient(180deg, #ffe991, #d8a21f);
+  color: #51390e;
+  box-shadow: 0 5px 0 #ac7912;
+}
+
+.freedom-dashboard,
+.mission-board,
+.achievement-grid,
+.badge-grid,
+.challenge-grid,
+.report-section-grid,
+.achievement-panel,
+.badge-collection,
+.challenge-select,
+.report-center,
+.game-report-layout,
+.share-card-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.freedom-dashboard {
+  grid-template-columns: 240px minmax(0, 1fr);
+  align-items: start;
+}
+
+.freedom-gauge-card,
+.freedom-dashboard-main,
+.progress-split-grid > section,
+.milestone-timeline,
+.mission-card,
+.achievement-card,
+.badge-card,
+.challenge-card,
+.report-card,
+.report-hero,
+.report-section-grid > article,
+.share-card-panel {
+  border: 1px solid rgba(31, 122, 82, 0.14);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: var(--card-shadow);
+}
+
+.freedom-gauge-card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 16px;
+}
+
+.freedom-gauge {
+  --progress: 0;
+  display: grid;
+  place-items: center;
+  width: 180px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, #ffffff 0 58%, transparent 59%),
+    conic-gradient(var(--green) calc(var(--progress) * 1%), rgba(31, 122, 82, 0.12) 0);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.9), 0 18px 28px rgba(31, 122, 82, 0.14);
+}
+
+.freedom-gauge span,
+.freedom-gauge small {
+  grid-area: 1 / 1;
+  display: block;
+  text-align: center;
+}
+
+.freedom-gauge span {
+  margin-top: -14px;
+  color: var(--green);
+  font-size: 42px;
+  font-weight: 950;
+}
+
+.freedom-gauge small {
+  margin-top: 48px;
+  color: var(--blue);
+  font-weight: 950;
+}
+
+.stage-markers {
+  display: grid;
+  grid-template-columns: repeat(5, auto);
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.progress-metric-row,
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.progress-metric-row article,
+.report-summary-grid article {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px;
+  background: var(--panel-2);
+}
+
+.progress-metric-row span,
+.report-summary-grid span,
+.report-card small,
+.mission-card small,
+.challenge-card small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.progress-metric-row strong,
+.report-summary-grid strong {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  font-size: clamp(17px, 2vw, 24px);
+}
+
+.progress-learning-note {
+  margin: 0;
+  border-radius: 16px;
+  padding: 11px 12px;
+  background: var(--blue-soft);
+  color: #244b68;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.progress-split-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.progress-split-grid h3,
+.milestone-timeline h3,
+.report-section-grid h3 {
+  margin: 0 0 10px;
+  font-size: 17px;
+}
+
+.source-list,
+.milestone-timeline {
+  display: grid;
+  gap: 8px;
+}
+
+.source-list p,
+.milestone-timeline article,
+.milestone-timeline p {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+}
+
+.source-list span,
+.milestone-timeline > article > span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-weight: 950;
+}
+
+.source-list.warning span {
+  background: var(--gold-soft);
+  color: #725315;
+}
+
+.source-list strong,
+.source-list em,
+.milestone-timeline strong,
+.milestone-timeline small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.source-list em {
+  color: var(--ink);
+  font-style: normal;
+  font-weight: 950;
+}
+
+.progress-history-card p {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 8px;
+}
+
+.mission-board,
+.achievement-grid,
+.badge-grid,
+.challenge-grid,
+.report-section-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mission-card,
+.achievement-card,
+.challenge-card {
+  padding: 14px;
+}
+
+.mission-card-head {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.mission-card-head > span,
+.achievement-card > span,
+.badge-card > span,
+.challenge-card > span {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffe991, #d8a21f);
+  color: #51390e;
+  font-weight: 950;
+}
+
+.mission-card-head em,
+.challenge-card em {
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.mission-progress {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(31, 122, 82, 0.12);
+  overflow: hidden;
+}
+
+.mission-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--green), #63bd87);
+}
+
+.mission-meta,
+.progress-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mission-meta span {
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.mission-help {
+  display: block;
+  margin-top: 8px;
+  color: var(--blue);
+  font-weight: 850;
+}
+
+.achievement-groups {
+  display: grid;
+  gap: 16px;
+}
+
+.achievement-card,
+.badge-card,
+.challenge-card {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  text-align: left;
+}
+
+.achievement-card.locked,
+.badge-card.locked {
+  opacity: 0.72;
+  background: repeating-linear-gradient(135deg, #ffffff, #ffffff 10px, #f6f8f5 10px, #f6f8f5 20px);
+}
+
+.achievement-card p,
+.challenge-card p,
+.share-card-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.recent-badge {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+  border-radius: 20px;
+  padding: 12px;
+  background: var(--gold-soft);
+}
+
+.recent-badge span {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: #ffffff;
+  color: #725315;
+  font-weight: 950;
+}
+
+.report-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+}
+
+.report-card span,
+.report-hero span {
+  color: var(--green);
+  font-size: 26px;
+  font-weight: 950;
+}
+
+.report-hero {
+  display: grid;
+  justify-items: center;
+  padding: 18px;
+  text-align: center;
+}
+
+.report-section-grid > article {
+  padding: 14px;
+}
+
+.report-section-grid p {
+  margin: 0 0 7px;
+  color: var(--muted);
+  font-weight: 850;
+}
+
+.share-card-panel {
+  justify-items: center;
+  padding: 16px;
+}
+
+.share-card-panel img {
+  display: block;
+  width: min(320px, 100%);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+}
+
+.home-progress-summary {
+  display: grid;
+  gap: 6px;
+  max-width: 420px;
+  border: 1px solid rgba(31, 122, 82, 0.18);
+  border-radius: 22px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: var(--card-shadow);
+}
+
+.home-progress-summary span,
+.home-progress-summary small,
+.home-progress-summary em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.home-progress-summary strong {
+  color: var(--green);
+  font-size: 20px;
+}
+
 .modal-card {
   border-width: 2px;
   background:
@@ -3377,6 +3879,33 @@ body[data-quality="battery"] .finance-effect {
 }
 
 @media (max-width: 1180px) {
+  .progress-center-body,
+  .report-body {
+    max-height: min(66vh, 680px);
+  }
+
+  .freedom-dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .progress-split-grid,
+  .progress-metric-row,
+  .report-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mission-board,
+  .achievement-grid,
+  .badge-grid,
+  .challenge-grid,
+  .report-section-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .progress-tab-rail {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .career-grid,
   .finance-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3391,7 +3920,8 @@ body[data-quality="battery"] .finance-effect {
     position: fixed;
     left: clamp(14px, 5vw, 44px);
     right: clamp(14px, 5vw, 44px);
-    bottom: max(12px, env(safe-area-inset-bottom));
+    top: calc(100dvh - 80px - env(safe-area-inset-bottom));
+    bottom: auto;
     z-index: 45;
     width: auto;
     max-width: 760px;
@@ -3413,6 +3943,50 @@ body[data-quality="battery"] .finance-effect {
 }
 
 @media (max-width: 760px) {
+  .progress-center-body,
+  .report-body {
+    max-height: min(68vh, 620px);
+    padding-right: 0;
+  }
+
+  .progress-tab-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .freedom-gauge {
+    width: 150px;
+  }
+
+  .freedom-gauge span {
+    font-size: 34px;
+  }
+
+  .progress-metric-row,
+  .report-summary-grid,
+  .progress-split-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mission-card-head,
+  .report-card {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .mission-card-head em,
+  .report-card > span,
+  .report-card button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .hud-mission-tracker {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .hud-mission-tracker em {
+    grid-column: 2;
+  }
+
   .topbar {
     position: static;
     display: grid;
