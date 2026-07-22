@@ -99,6 +99,7 @@ try {
   assert.ok(aiCycle.marketTitle.length > 0);
   await page.evaluate(() => window.cashflowDebug.showMarketPanel());
   await expectText(page, "市场新闻");
+  assert.equal(await page.locator(".market-dashboard .mini-chart").count() >= 1, true);
   await page.evaluate(() => window.cashflowDebug.closeModal());
   const aiAfterCycle = await page.evaluate(() => window.cashflowDebug.getExperience().ai);
   assert.equal(aiAfterCycle.leaderboard, 2);
@@ -107,6 +108,17 @@ try {
   await page.evaluate(() => window.cashflowDebug.toggleAiSpeed());
   const aiAfterSpeed = await page.evaluate(() => window.cashflowDebug.getExperience().ai.aiAnimationSpeed);
   assert.match(aiAfterSpeed, /watch|fast|skip/);
+  const multiAi = await page.evaluate(() => {
+    window.cashflowDebug.configureAiRace(3, "expert");
+    return window.cashflowDebug.runAiCycles(10, 31);
+  });
+  assert.equal(multiAi.leaderboard, 4);
+  assert.equal(multiAi.summaries, 30);
+  assert.equal(multiAi.marketNews <= 12, true);
+  assert.equal(multiAi.roundHistory <= 20, true);
+  const stressResult = await page.evaluate(() => window.cashflowDebug.runAiStressDebug(3, 10, 33));
+  assert.equal(stressResult.invalidNumbers, false);
+  assert.equal(stressResult.leaderboard.length, 4);
 
   await page.evaluate(() => window.cashflowDebug.showProgressCenter("freedom"));
   await expectText(page, "进度中心");

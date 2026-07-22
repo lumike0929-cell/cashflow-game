@@ -116,13 +116,17 @@ export function runAiTurnCycle(state, boardTiles, random = Math.random) {
   const market = advanceMarketCycle(state, random);
   const leaderboard = calculateLeaderboard(state);
   const roundSummary = {
-    id: `round-summary-${state.round}-${Date.now()}`,
+    id: nextAiId(state, "round-summary"),
     round: safeNumber(state.round, 1),
     month: safeNumber(state.month, 1),
     playerAction: state.logs?.[0] || "玩家完成本回合行动。",
     aiActions: summaries.map((item) => item.shortText),
     marketChange: market.news.title,
     ranking: leaderboard.slice(0, 4).map((item) => `${item.rank}. ${item.name} ${item.freedomPercent}%`),
+    income: summaries.filter((item) => item.amount > 0).reduce((sum, item) => sum + safeNumber(item.amount), 0),
+    expenses: summaries.filter((item) => item.amount < 0).reduce((sum, item) => sum + Math.abs(safeNumber(item.amount)), 0),
+    newAssets: summaries.filter((item) => ["buyStock", "buyProperty", "buyBusiness"].includes(item.action)).length,
+    newDebt: summaries.filter((item) => item.action === "loan").reduce((sum, item) => sum + safeNumber(item.amount), 0),
     nextTip: market.news.learningTip,
   };
   state.roundHistory = [roundSummary, ...state.roundHistory].slice(0, 20);
@@ -159,7 +163,7 @@ export function simulateAiTurn(state, aiId, boardTiles, random = Math.random) {
   ai.netWorth = calculateNetWorth(ai);
   ai.monthlyCashflow = calculateMonthlyCashflow(ai);
   const summary = {
-    id: `ai-action-${ai.id}-${state.round}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    id: nextAiId(state, `ai-action-${ai.id}`),
     aiId: ai.id,
     aiName: ai.name,
     roll,
@@ -210,6 +214,172 @@ export function resolveAiDecisionScore(ai, opportunity, category, marketCycle = 
   };
 }
 
+export function createSeededRandom(seed = 1) {
+  let value = Math.max(1, safeNumber(seed, 1)) % 2147483647;
+  return () => {
+    value = (value * 48271) % 2147483647;
+    return value / 2147483647;
+  };
+}
+
+export function buildAiAcceptanceScenarios() {
+  return [
+    { id: "cash-rich-property", title: "现金充足，正现金流房产", category: "property", opportunity: { cashRequired: 20000, monthlyCashflow: 1200, riskLevel: "低", originalMortgage: 180000 }, marketPhase: "expansion" },
+    { id: "loan-needed-property", title: "现金不足，可合理借款", category: "property", opportunity: { cashRequired: 42000, monthlyCashflow: 1500, riskLevel: "中", originalMortgage: 280000 }, marketPhase: "recovery" },
+    { id: "high-debt-repay", title: "高负债，应优先还款", category: "bank", opportunity: { cashRequired: 0, monthlyCashflow: 0, riskLevel: "低" }, marketPhase: "slowdown" },
+    { id: "expansion-stock", title: "扩张期股票机会", category: "stock", opportunity: { cashRequired: 3600, monthlyCashflow: 90, dividendPerShare: 18, riskLevel: "中" }, marketPhase: "expansion" },
+    { id: "recession-stock", title: "衰退期股票机会", category: "stock", opportunity: { cashRequired: 3600, monthlyCashflow: 90, dividendPerShare: 18, riskLevel: "高" }, marketPhase: "recession" },
+    { id: "high-return-business", title: "高回报高风险小生意", category: "business", opportunity: { cashRequired: 28000, startupCost: 28000, monthlyCashflow: 2600, monthlyProfit: 2600, riskLevel: "高" }, marketPhase: "expansion" },
+  ];
+}
+
+export function evaluateAiPersonalityTendencies(scenario = buildAiAcceptanceScenarios()[0], difficultyId = "standard") {
+  const marketCycle = { phase: scenario.marketPhase || "recovery" };
+  return aiTemplates.map((template, index) => {
+    const ai = createAiState(template, difficultyId, defaultCareer(), stockDefinitions, index);
+    ai.cash = scenario.id === "loan-needed-property" ? 18000 : 80000;
+    ai.liabilities = scenario.id === "high-debt-repay" ? [{ id: "scenario-loan", type: "personalLoan", name: "高成本贷款", balance: 18000, payment: 900 }] : [];
+    const score = scenario.category === "bank"
+      ? {
+          action: template.id === "debt-careful" || template.debtTolerance < 0.3 ? "repayDebt" : "wait",
+          score: template.id === "debt-careful" ? 86 : 58,
+          shortReason: template.id === "debt-careful" ? "优先降低高成本债务。" : "先观察现金与负债压力。",
+          learningReason: "债务谨慎型会更重视降低固定还款压力。",
+          rejectedReasons: [],
+          confidence: template.id === "debt-careful" ? "高" : "中",
+        }
+      : resolveAiDecisionScore(ai, scenario.opportunity, scenario.category, marketCycle);
+    return {
+      templateId: template.id,
+      name: template.name,
+      preferredCategory: strongestPreference(template),
+      action: score.action,
+      score: score.score,
+      shortReason: score.shortReason,
+    };
+  });
+}
+
+export function runAiStressSimulation({ aiCount = 3, rounds = 30, seed = 19, difficulty = "standard" } = {}) {
+  const random = createSeededRandom(seed);
+  const state = {
+    career: defaultCareer(),
+    month: 1,
+    round: 1,
+    position: 0,
+    cash: 50000,
+    salary: 24000,
+    activeIncome: 24000,
+    passiveIncome: 0,
+    baseExpenses: 16000,
+    monthlyExpenses: 16000,
+    monthlyCashflow: 8000,
+    netWorth: 50000,
+    assets: [],
+    liabilities: [],
+    ownedProperties: [],
+    stockMarket: stockDefinitions,
+    stockHoldings: [],
+    businessHoldings: [],
+    logs: ["压力测试开始。"],
+  };
+  configureAiMode(state, { mode: "ai-race", aiCount, difficulty });
+  const tiles = [
+    { type: "payday", title: "月结日" },
+    { type: "stockOpportunity", title: "股票机会" },
+    { type: "opportunity", title: "房产机会" },
+    { type: "businessOpportunity", title: "小生意机会" },
+    { type: "bank", title: "银行" },
+    { type: "insurance", title: "保险" },
+    { type: "doodad", title: "账单" },
+    { type: "market", title: "市场" },
+    { type: "learn", title: "学习" },
+    { type: "payday", title: "月结日" },
+  ];
+  const actionCounts = {};
+  for (let index = 0; index < rounds; index += 1) {
+    const result = runAiTurnCycle(state, tiles, random);
+    result.summaries.forEach((summary) => {
+      actionCounts[summary.action] = (actionCounts[summary.action] || 0) + 1;
+    });
+    state.round += 1;
+    state.turnManager.lastAiCycleRound = 0;
+  }
+  const leaderboard = calculateLeaderboard(state);
+  return {
+    aiCount: state.aiPlayers.length,
+    rounds,
+    actionCounts,
+    marketNews: state.marketNews.length,
+    roundHistory: state.roundHistory.length,
+    marketRecords: state.marketCycle.records.length,
+    maxAiTransactions: Math.max(0, ...state.aiPlayers.map((ai) => ai.transactionHistory.length)),
+    currentActorId: state.currentActorId,
+    leaderboard,
+    invalidNumbers: hasInvalidAiNumbers(state),
+  };
+}
+
+export function buildMarketDashboard(state) {
+  migrateAiCompetitionState(state);
+  const phase = marketPhases.find((item) => item.id === state.marketCycle.phase) || marketPhases[0];
+  const stockSeries = normalizeStockMarket(state.stockMarket).slice(0, 6).map((stock) => ({
+    id: stock.id,
+    symbol: stock.symbol,
+    name: stock.name,
+    currentPrice: stock.currentPrice,
+    previousPrice: stock.previousPrice,
+    change: stockMoney(safeNumber(stock.currentPrice) - safeNumber(stock.previousPrice)),
+    changePercent: safeNumber(stock.previousPrice) > 0 ? Math.round(((stock.currentPrice - stock.previousPrice) / stock.previousPrice) * 1000) / 10 : 0,
+    history: (stock.priceHistory || [stock.currentPrice]).slice(-24),
+    dividends: (stock.dividendHistory || []).slice(-24),
+    volatility: stock.volatility || 0,
+  }));
+  const propertySeries = [...(state.ownedProperties || []), ...(state.aiPlayers || []).flatMap((ai) => ai.ownedProperties || [])]
+    .slice(0, 6)
+    .map((property) => ({
+      id: property.id,
+      name: property.name,
+      currentValue: safeNumber(property.currentValue),
+      previousValue: safeNumber(property.previousValue || property.purchasePrice || property.currentValue),
+      equity: safeNumber(property.currentValue) - safeNumber(property.mortgageBalance),
+      rent: safeNumber(property.monthlyRent),
+      vacancyRisk: property.vacancyRisk || 0,
+      repairRisk: property.repairRisk || 0,
+      valueHistory: (property.valueHistory || [property.currentValue]).slice(-12),
+      rentHistory: (property.rentHistory || [property.monthlyRent]).slice(-12),
+    }));
+  const businessSeries = [...(state.businessHoldings || []), ...(state.aiPlayers || []).flatMap((ai) => ai.businessHoldings || [])]
+    .slice(0, 6)
+    .map((business) => ({
+      id: business.businessId || business.id,
+      name: business.name,
+      revenue: safeNumber(business.monthlyRevenue),
+      expenses: safeNumber(business.monthlyExpenses),
+      profit: safeNumber(business.monthlyProfit),
+      demandIndex: business.demandIndex || 1,
+      history: (business.businessHistory || [{ revenue: business.monthlyRevenue, expenses: business.monthlyExpenses, phase: phase.id }]).slice(-12),
+      customerTrend: business.customerTrend || "需求稳定",
+    }));
+  return {
+    phase: phase.id,
+    phaseTitle: phase.title,
+    monthInPhase: state.marketCycle.monthInPhase,
+    monthsRemaining: state.marketCycle.monthsRemaining,
+    trends: {
+      stocks: trendWord(phase.stockBias),
+      realEstate: trendWord(phase.realEstateBias),
+      business: trendWord(phase.businessBias),
+      interest: phase.interestLevel,
+    },
+    news: state.marketNews?.[0] || null,
+    records: (state.marketCycle.records || []).slice(0, 12),
+    stockSeries,
+    propertySeries,
+    businessSeries,
+  };
+}
+
 export function advanceMarketCycle(state, random = Math.random) {
   migrateAiCompetitionState(state);
   const currentIndex = marketPhases.findIndex((phase) => phase.id === state.marketCycle.phase);
@@ -238,7 +408,7 @@ export function advanceMarketCycle(state, random = Math.random) {
   state.marketNews = [news, ...state.marketNews.filter((item) => item.title !== news.title)].slice(0, 12);
   state.marketCycle.records = [
     {
-      id: `market-cycle-${state.round}-${Date.now()}`,
+      id: nextAiId(state, "market-cycle"),
       round: safeNumber(state.round, 1),
       month: safeNumber(state.month, 1),
       phase: phase.id,
@@ -257,7 +427,7 @@ export function calculateLeaderboard(state, metric = null) {
   const rows = [
     leaderboardRow("player", "玩家", state.career?.name || "玩家", state, true),
     ...state.aiPlayers.map((ai) => leaderboardRow(ai.id, ai.avatarKey, ai.name, ai, false)),
-  ];
+  ].map((item, order) => ({ ...item, order }));
   const key = metric || state.leaderboardSettings.metric || "freedom";
   return rows
     .sort((left, right) => compareLeaderboard(left, right, key))
@@ -273,6 +443,8 @@ export function buildAiPublicSummary(state, aiId) {
     id: ai.id,
     name: ai.name,
     avatarKey: ai.avatarKey,
+    personality: ai.personality,
+    creditScore: safeNumber(ai.bank?.creditScore, 650),
     cash: safeNumber(ai.cash),
     monthlyCashflow: calculateMonthlyCashflow(ai),
     passiveIncome: progress.passiveIncome,
@@ -346,6 +518,7 @@ function createAiState(template, difficultyId, playerCareer, sharedMarket, index
     financialFreedomProgress: null,
     netWorth: 0,
     status: "active",
+    aiSequence: 0,
   };
   return normalizeAiState(ai, { stockMarket: sharedMarket });
 }
@@ -403,6 +576,7 @@ function normalizeAiState(ai, parentState) {
     achievements: Array.isArray(ai.achievements) ? ai.achievements : [],
     recentDecisions: Array.isArray(ai.recentDecisions) ? ai.recentDecisions.slice(0, 10) : [],
     status: ai.status || "active",
+    aiSequence: Math.max(0, safeNumber(ai.aiSequence)),
   };
   next.position = next.currentPosition;
   ensureBusinessState(next);
@@ -501,7 +675,9 @@ function applyAiExpense(ai, title, amount) {
     const emergency = Math.abs(ai.cash);
     ai.cash = 0;
     ai.emergencyDebt = safeNumber(ai.emergencyDebt) + emergency;
-    ai.liabilities.push({ id: `ai-emergency-${ai.id}-${Date.now()}`, type: "emergency", name: `${title}紧急负债`, balance: emergency, payment: Math.ceil(emergency * 0.04) });
+    ai.aiSequence = safeNumber(ai.aiSequence);
+    ai.aiSequence += 1;
+    ai.liabilities.push({ id: `ai-emergency-${ai.id}-${ai.aiSequence}`, type: "emergency", name: `${title}紧急负债`, balance: emergency, payment: Math.ceil(emergency * 0.04) });
   }
   return decisionResult("expense", `支付了 ${title} ${moneyText(cost)}。`, -cost, "突发支出会考验现金储备。");
 }
@@ -605,7 +781,7 @@ function createMarketNews(state, phase, changes) {
   };
   const title = titles[phase.id] || "市场周期变化";
   return {
-    id: `market-news-${state.round}-${phase.id}`,
+    id: nextAiId(state, `market-news-${phase.id}`),
     title,
     summary: `${phase.title}阶段影响股票、房产、小生意和银行利率，所有角色看到相同市场。`,
     category,
@@ -653,7 +829,52 @@ function compareLeaderboard(left, right, key) {
   if (diff !== 0) return diff;
   const netWorthDiff = right.netWorth - left.netWorth;
   if (netWorthDiff !== 0) return netWorthDiff;
-  return right.monthlyCashflow - left.monthlyCashflow;
+  const cashflowDiff = right.monthlyCashflow - left.monthlyCashflow;
+  if (cashflowDiff !== 0) return cashflowDiff;
+  return left.order - right.order;
+}
+
+function nextAiId(state, prefix) {
+  state.aiSequence = Math.max(0, safeNumber(state.aiSequence));
+  state.aiSequence += 1;
+  return `${prefix}-${safeNumber(state.round, 1)}-${state.aiSequence}`;
+}
+
+function strongestPreference(template) {
+  const preferences = [
+    ["stock", template.stockPreference],
+    ["property", template.realEstatePreference],
+    ["business", template.businessPreference],
+    ["insurance", template.insurancePreference],
+  ];
+  return preferences.sort((left, right) => right[1] - left[1])[0]?.[0] || "balanced";
+}
+
+function trendWord(value) {
+  if (value > 0.01) return "上升";
+  if (value > 0) return "小幅上升";
+  if (value < -0.01) return "下降";
+  if (value < 0) return "小幅下降";
+  return "稳定";
+}
+
+function hasInvalidAiNumbers(state) {
+  const actors = [state, ...(state.aiPlayers || [])];
+  return actors.some((actor) => {
+    const values = [
+      actor.cash,
+      actor.salary,
+      actor.passiveIncome,
+      actor.monthlyExpenses,
+      actor.monthlyCashflow,
+      actor.netWorth,
+      ...(actor.liabilities || []).map((item) => item.balance),
+      ...(actor.stockHoldings || []).map((item) => item.shares),
+      ...(actor.ownedProperties || []).flatMap((item) => [item.currentValue, item.mortgageBalance, item.monthlyRent]),
+      ...(actor.businessHoldings || []).flatMap((item) => [item.monthlyRevenue, item.monthlyExpenses, item.monthlyProfit]),
+    ];
+    return values.some((value) => !Number.isFinite(Number(value)) || Object.is(Number(value), -0));
+  });
 }
 
 function decisionResult(action, shortReason, amount = 0, learningReason = "AI 使用规则引擎解释行动。", score = null) {

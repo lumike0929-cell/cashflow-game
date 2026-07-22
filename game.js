@@ -120,12 +120,15 @@ import {
 import {
   aiDifficultyModes,
   aiTemplates,
+  buildMarketDashboard,
   buildAiPublicSummary,
   calculateLeaderboard,
   configureAiMode,
+  createSeededRandom,
   gameModes,
   migrateAiCompetitionState,
   runAiTurnCycle,
+  runAiStressSimulation,
 } from "./aiCompetitionSystem.js";
 import {
   achievementDefinitions,
@@ -1744,7 +1747,9 @@ function showAiFinance(aiId) {
       ["净资产", money(summary.netWorth)],
       ["资产数量", `${summary.assetCount}`],
       ["负债", money(summary.liabilities)],
+      ["信用分", `${summary.creditScore || "—"}`],
       ["财务自由进度", `${summary.freedomPercent}%`],
+      ["决策风格", summary.personality || "公开策略摘要"],
       ["投资组合", `股票 ${money(summary.portfolio.stocks)} · 房产 ${money(summary.portfolio.realEstate)} · 生意 ${money(summary.portfolio.businesses)}`],
       ["最近决策", summary.recentDecisions.map((item) => item.shortText).join(" · ") || "等待行动"],
     ],
@@ -1756,14 +1761,18 @@ function showAiFinance(aiId) {
 }
 
 function showMarketPanel() {
-  const news = state.marketNews?.[0];
-  const phase = state.marketCycle?.phase || "recovery";
+  const dashboard = buildMarketDashboard(state);
+  const news = dashboard.news;
   openSimpleModal({
     type: "市场新闻",
-    title: news?.title || "市场等待更新",
+    title: news?.title || `${dashboard.phaseTitle}市场`,
     text: news?.summary || "AI 竞赛每轮会生成一条本地规则市场新闻。",
     metrics: [
-      ["市场阶段", phase],
+      ["市场阶段", `${dashboard.phaseTitle} · 第 ${dashboard.monthInPhase} 月`],
+      ["股票趋势", dashboard.trends.stocks],
+      ["房产趋势", dashboard.trends.realEstate],
+      ["小生意趋势", dashboard.trends.business],
+      ["利率方向", dashboard.trends.interest],
       ["影响范围", news?.affectedAssets?.join(" · ") || "尚无"],
       ["持续时间", news ? `${news.effectDuration} 月` : "等待回合"],
       ["学习提示", news?.learningTip || "这只是游戏市场规则，不是真实投资建议。"],
@@ -1773,6 +1782,8 @@ function showMarketPanel() {
       { label: "关闭", className: "primary", onClick: closeModal },
     ],
   });
+  el.dealMetrics.classList.add("market-dashboard-body");
+  el.dealMetrics.insertAdjacentHTML("beforeend", renderMarketDashboard(dashboard));
 }
 
 function showRoundSummary(summary = state.roundHistory?.[0]) {
@@ -1794,6 +1805,10 @@ function showRoundSummary(summary = state.roundHistory?.[0]) {
       ["AI 行动", summary.aiActions.join(" · ")],
       ["市场变化", summary.marketChange],
       ["排名", summary.ranking.join(" · ")],
+      ["本轮收入", money(summary.income || 0)],
+      ["本轮支出", money(summary.expenses || 0)],
+      ["新资产", `${summary.newAssets || 0} 项`],
+      ["新负债", money(summary.newDebt || 0)],
       ["下一轮提示", summary.nextTip],
     ],
     actions: [
@@ -1801,6 +1816,60 @@ function showRoundSummary(summary = state.roundHistory?.[0]) {
       { label: "关闭", className: "primary", onClick: closeModal },
     ],
   });
+}
+
+function renderMarketDashboard(dashboard) {
+  return `
+    <section class="market-dashboard" aria-label="市场仪表板">
+      <div class="market-phase-card">
+        <span>当前阶段</span>
+        <strong>${escapeHtml(dashboard.phaseTitle)}</strong>
+        <small>剩余 ${dashboard.monthsRemaining} 月 · 游戏中的简化市场规则</small>
+      </div>
+      <div class="market-trend-grid">
+        <article><span>股票</span><strong>${escapeHtml(dashboard.trends.stocks)}</strong></article>
+        <article><span>房产</span><strong>${escapeHtml(dashboard.trends.realEstate)}</strong></article>
+        <article><span>小生意</span><strong>${escapeHtml(dashboard.trends.business)}</strong></article>
+        <article><span>利率</span><strong>${escapeHtml(dashboard.trends.interest)}</strong></article>
+      </div>
+      <div class="market-chart-grid">
+        <article>
+          <h3>股票价格</h3>
+          ${dashboard.stockSeries.slice(0, 3).map((stock) => `
+            <div class="market-chart-row">
+              <span>${escapeHtml(stock.symbol || stock.name)}</span>
+              ${miniTrend(stock.history)}
+              <strong>${money(stock.currentPrice)} · ${stock.change >= 0 ? "上涨" : "下跌"} ${money(Math.abs(stock.change))} (${stock.changePercent}%)</strong>
+            </div>
+          `).join("") || "<p>暂无股票记录</p>"}
+        </article>
+        <article>
+          <h3>房产趋势</h3>
+          ${dashboard.propertySeries.slice(0, 3).map((property) => `
+            <div class="market-chart-row">
+              <span>${escapeHtml(property.name || "房产")}</span>
+              ${miniTrend(property.valueHistory)}
+              <strong>估值 ${money(property.currentValue)} · 租金 ${money(property.rent)}</strong>
+            </div>
+          `).join("") || "<p>暂无持有房产</p>"}
+        </article>
+        <article>
+          <h3>小生意趋势</h3>
+          ${dashboard.businessSeries.slice(0, 3).map((business) => `
+            <div class="market-chart-row">
+              <span>${escapeHtml(business.name || "小生意")}</span>
+              ${miniTrend(business.history.map((item) => item.revenue - item.expenses))}
+              <strong>净现金流 ${money(business.profit)} · ${escapeHtml(business.customerTrend)}</strong>
+            </div>
+          `).join("") || "<p>暂无小生意记录</p>"}
+        </article>
+      </div>
+      <div class="market-history-list">
+        <h3>最近市场记录</h3>
+        ${dashboard.records.slice(0, 6).map((record) => `<p>${escapeHtml(record.title)} · 第 ${record.round} 回合 · 股票 ${record.stockChanges} / 房产 ${record.propertyChanges} / 生意 ${record.businessChanges}</p>`).join("") || "<p>等待下一轮市场更新。</p>"}
+      </div>
+    </section>
+  `;
 }
 
 function toggleAiSpeed() {
@@ -4979,6 +5048,27 @@ window.cashflowDebug = {
       leaderboard: calculateLeaderboard(state).length,
     };
   },
+  runAiCycles: (rounds = 1, seed = 19) => {
+    if (!state) return null;
+    const random = createSeededRandom(seed);
+    const results = [];
+    for (let index = 0; index < Math.max(1, Math.min(30, rounds)); index += 1) {
+      if (state.turnManager?.lastAiCycleRound === state.round) state.round += 1;
+      const result = runAiTurnCycle(state, boardTiles, random);
+      results.push(result);
+      if (!result.skipped) state.round += 1;
+    }
+    persistQuietly();
+    render();
+    return {
+      cycles: results.length,
+      summaries: results.reduce((sum, result) => sum + (result.summaries?.length || 0), 0),
+      leaderboard: calculateLeaderboard(state).length,
+      marketNews: state.marketNews?.length || 0,
+      roundHistory: state.roundHistory?.length || 0,
+    };
+  },
+  runAiStressDebug: (aiCount = 3, rounds = 10, seed = 29) => runAiStressSimulation({ aiCount, rounds, seed }),
   showLeaderboardPanel,
   showMarketPanel,
   showAiFinance: (aiId = state?.aiPlayers?.[0]?.id) => showAiFinance(aiId),

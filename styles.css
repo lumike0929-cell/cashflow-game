@@ -3008,6 +3008,106 @@ body[data-quality="battery"] .finance-effect {
   font-weight: 850;
 }
 
+.market-dashboard {
+  display: grid;
+  gap: 12px;
+}
+
+.market-phase-card,
+.market-chart-grid article,
+.market-history-list {
+  border: 1px solid rgba(74, 105, 139, 0.14);
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.market-phase-card {
+  display: grid;
+  gap: 4px;
+}
+
+.market-phase-card span,
+.market-chart-row span,
+.market-trend-grid span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.market-phase-card strong {
+  color: var(--ink);
+  font-size: 24px;
+}
+
+.market-phase-card small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.market-trend-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.market-trend-grid article {
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgba(216, 162, 31, 0.2);
+  border-radius: 14px;
+  padding: 9px;
+  background: rgba(255, 247, 220, 0.78);
+}
+
+.market-trend-grid strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #543b0d;
+  font-size: 14px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.market-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.market-chart-grid h3,
+.market-history-list h3 {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.market-chart-row {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.market-chart-row .mini-chart {
+  width: 100%;
+  min-height: 42px;
+  color: var(--blue);
+}
+
+.market-chart-row strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.market-history-list p {
+  margin: 5px 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .progress-modal-card {
   width: min(1040px, calc(100vw - 24px));
 }
@@ -4119,6 +4219,14 @@ body[data-quality="battery"] .finance-effect {
 
   .hud-ai-tracker {
     grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .market-trend-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .market-chart-grid {
+    grid-template-columns: 1fr;
   }
 
   .topbar {

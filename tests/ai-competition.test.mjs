@@ -4,13 +4,18 @@ import {
   aiDifficultyModes,
   aiTemplates,
   advanceMarketCycle,
+  buildAiAcceptanceScenarios,
+  buildMarketDashboard,
   buildAiPublicSummary,
   calculateLeaderboard,
   configureAiMode,
   createAiPlayers,
+  createSeededRandom,
+  evaluateAiPersonalityTendencies,
   gameModes,
   migrateAiCompetitionState,
   resolveAiDecisionScore,
+  runAiStressSimulation,
   runAiTurnCycle,
   simulateAiTurn,
 } from "../aiCompetitionSystem.js";
@@ -174,4 +179,70 @@ test("旧存档迁移为单人，AI 数据损坏时安全回退", () => {
   assert.equal(legacy.aiPlayers.length, 2);
   assert.equal(legacy.turnOrder[0], "player");
   assert.equal(legacy.currentActorId, "player");
+});
+
+test("固定 seed 可重复，六个验收场景可解释", () => {
+  const scenarios = buildAiAcceptanceScenarios();
+  assert.equal(scenarios.length >= 6, true);
+  const first = scenarios.map((scenario) => evaluateAiPersonalityTendencies(scenario, "standard").map((item) => `${item.templateId}:${item.action}:${item.score}`).join("|"));
+  const second = scenarios.map((scenario) => evaluateAiPersonalityTendencies(scenario, "standard").map((item) => `${item.templateId}:${item.action}:${item.score}`).join("|"));
+  assert.deepEqual(first, second);
+
+  const randomA = createSeededRandom(19);
+  const randomB = createSeededRandom(19);
+  assert.deepEqual([randomA(), randomA(), randomA()], [randomB(), randomB(), randomB()]);
+});
+
+test("AI 性格差异来自权重，且不是所有模板都做同一决定", () => {
+  const stockScenario = buildAiAcceptanceScenarios().find((scenario) => scenario.id === "expansion-stock");
+  const businessScenario = buildAiAcceptanceScenarios().find((scenario) => scenario.id === "high-return-business");
+  const debtScenario = buildAiAcceptanceScenarios().find((scenario) => scenario.id === "high-debt-repay");
+  const stockScores = evaluateAiPersonalityTendencies(stockScenario);
+  const businessScores = evaluateAiPersonalityTendencies(businessScenario);
+  const debtScores = evaluateAiPersonalityTendencies(debtScenario);
+
+  const stockSprinter = stockScores.find((item) => item.templateId === "stock-sprinter");
+  const steadySaver = stockScores.find((item) => item.templateId === "steady-saver");
+  const businessMaker = businessScores.find((item) => item.templateId === "business-maker");
+  const propertyBuilder = businessScores.find((item) => item.templateId === "property-builder");
+  const debtCareful = debtScores.find((item) => item.templateId === "debt-careful");
+
+  assert.equal(stockSprinter.score > steadySaver.score, true);
+  assert.equal(businessMaker.score > propertyBuilder.score, true);
+  assert.equal(debtCareful.action, "repayDebt");
+  assert.ok(new Set(stockScores.map((item) => item.score)).size > 1);
+  assert.ok(stockScores.every((item) => item.shortReason.length > 0));
+});
+
+test("市场 Dashboard 使用真实历史资料，价格与趋势安全", () => {
+  const state = baseState({
+    ownedProperties: [{ id: "p1", name: "学生公寓", purchasePrice: 200000, currentValue: 210000, previousValue: 205000, mortgageBalance: 120000, monthlyRent: 1800, valueHistory: [200000, 205000, 210000], rentHistory: [1700, 1750, 1800] }],
+    businessHoldings: [{ businessId: "b1", name: "校园点心摊", monthlyRevenue: 9000, monthlyExpenses: 5400, monthlyProfit: 3600, demandIndex: 1.1, businessHistory: [{ revenue: 8000, expenses: 5000 }, { revenue: 9000, expenses: 5400 }] }],
+  });
+  configureAiMode(state, { mode: "ai-race", aiCount: 1, difficulty: "standard" });
+  advanceMarketCycle(state, createSeededRandom(7));
+  const dashboard = buildMarketDashboard(state);
+  assert.ok(dashboard.phaseTitle.length > 0);
+  assert.ok(dashboard.stockSeries.length > 0);
+  assert.ok(dashboard.stockSeries.every((stock) => stock.currentPrice > 0 && Number.isFinite(stock.changePercent)));
+  assert.equal(dashboard.propertySeries[0].equity, dashboard.propertySeries[0].currentValue - state.ownedProperties[0].mortgageBalance);
+  assert.equal(Number.isFinite(dashboard.businessSeries[0].profit), true);
+  assert.ok(dashboard.records.length <= 12);
+});
+
+test("跳过动画不跳过计算，长轮压力测试不累积历史或非法数值", () => {
+  const oneAi = runAiStressSimulation({ aiCount: 1, rounds: 30, seed: 91 });
+  const twoAi = runAiStressSimulation({ aiCount: 2, rounds: 20, seed: 92 });
+  const threeAi = runAiStressSimulation({ aiCount: 3, rounds: 10, seed: 93 });
+
+  for (const result of [oneAi, twoAi, threeAi]) {
+    assert.equal(result.invalidNumbers, false);
+    assert.equal(result.currentActorId, "player");
+    assert.equal(result.marketNews <= 12, true);
+    assert.equal(result.roundHistory <= 20, true);
+    assert.equal(result.marketRecords <= 24, true);
+    assert.equal(result.maxAiTransactions <= 60, true);
+    assert.equal(result.leaderboard.length, result.aiCount + 1);
+    assert.equal(Object.values(result.actionCounts).reduce((sum, count) => sum + count, 0), result.aiCount * result.rounds);
+  }
 });
