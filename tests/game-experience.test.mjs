@@ -3,15 +3,19 @@ import assert from "node:assert/strict";
 import {
   boardPath,
   avatarMarkup,
+  atmosphereForRound,
   cameraForTile,
   clampCamera,
   contextTipMessages,
   createCitySceneSvg,
+  createEnvironmentOverlay,
   diceMarkup,
+  effectIconForKind,
   eventIllustrationMarkup,
   indexAfter,
   loadExperienceSettings,
   mapSize,
+  miniMapPoint,
   nextIndices,
   tileVisual,
   tutorialSteps,
@@ -63,6 +67,8 @@ test("镜头可缩放、拖曳并回到玩家，偏好可恢复", () => {
       musicEnabled: false,
       hapticsEnabled: false,
       animationSpeed: "fast",
+      atmosphere: "night",
+      minimapCollapsed: true,
       tutorialComplete: true,
       seenTips: { firstStock: true },
       camera: { x: -20, y: -30, scale: 0.8, follow: false },
@@ -76,6 +82,8 @@ test("镜头可缩放、拖曳并回到玩家，偏好可恢复", () => {
   assert.equal(settings.musicEnabled, false);
   assert.equal(settings.hapticsEnabled, false);
   assert.equal(settings.animationSpeed, "fast");
+  assert.equal(settings.atmosphere, "night");
+  assert.equal(settings.minimapCollapsed, true);
   assert.equal(settings.visualQuality, "standard");
   assert.equal(settings.tutorialComplete, true);
   assert.equal(settings.seenTips.firstStock, true);
@@ -110,4 +118,28 @@ test("城市地图包含商业手机游戏级核心地标", () => {
   for (const detail of ["background-layer", "midground-layer", "building-layer", "foreground-layer", "flower-bed", "foreground-detail", "map-building", "road-directions", "现金流路"]) {
     assert.match(city, new RegExp(detail));
   }
+});
+
+test("城市生命感系统可安全降级并保持可测试状态", () => {
+  assert.equal(atmosphereForRound(1, "auto"), "day");
+  assert.equal(atmosphereForRound(5, "auto"), "evening");
+  assert.equal(atmosphereForRound(7, "auto"), "night");
+  assert.equal(atmosphereForRound(22, "day"), "day");
+  assert.equal(atmosphereForRound(22, "night"), "night");
+
+  const overlay = createEnvironmentOverlay("evening");
+  assert.match(overlay, /environment-overlay atmosphere-evening/);
+  assert.match(overlay, /aria-hidden="true"/);
+  for (const selector of ["env-cloud", "env-water-shine", "env-ticker", "env-npc", "env-vehicle", "env-bike", "env-lamp"]) {
+    assert.match(overlay, new RegExp(selector));
+  }
+
+  const center = miniMapPoint({ x: mapSize.width / 2, y: mapSize.height / 2 });
+  assert.equal(center.x, 50);
+  assert.equal(center.y, 50);
+
+  assert.deepEqual(effectIconForKind("stock-market", 200).label, "股票上涨");
+  assert.deepEqual(effectIconForKind("stock-market", -200).label, "股票下跌");
+  assert.equal(effectIconForKind("business-upgrade", 100).icon, "★");
+  assert.equal(effectIconForKind("insurance-claim", 100).label, "保险保障");
 });

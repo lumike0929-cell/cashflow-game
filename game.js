@@ -100,16 +100,21 @@ import {
   startUnemployment,
 } from "./unemploymentEngine.js";
 import {
+  atmosphereForRound,
   boardPath,
   cameraForTile,
   clampCamera,
   createCitySceneSvg,
+  createEnvironmentOverlay,
   createSoundManager,
   diceMarkup,
+  effectIconForKind,
   eventIllustrationMarkup,
   haptic,
   indexAfter,
   loadExperienceSettings,
+  mapSize,
+  miniMapPoint,
   nextIndices,
   saveExperienceSettings,
   tileVisual,
@@ -291,6 +296,8 @@ const uiState = {
   hapticsEnabled: savedExperience.hapticsEnabled,
   animationSpeed: savedExperience.animationSpeed,
   visualQuality: savedExperience.visualQuality,
+  atmosphere: savedExperience.atmosphere,
+  minimapCollapsed: savedExperience.minimapCollapsed,
   tutorialComplete: savedExperience.tutorialComplete,
   seenTips: savedExperience.seenTips,
   tutorial: {
@@ -302,6 +309,7 @@ const uiState = {
   draggingCamera: false,
   playedEffectIds: new Set(),
   avatarState: "idle",
+  liveMessage: "",
 };
 soundManager.setMuted(uiState.muted);
 soundManager.setVolume(uiState.volume);
@@ -780,10 +788,12 @@ function finishTurnSoon(delay = 220) {
 
 function renderBoard() {
   const playerPoint = boardPath[state.position % boardPath.length] || boardPath[0];
+  const atmosphere = atmosphereForRound(state.round, uiState.atmosphere);
   el.board.innerHTML = `
-    <div class="city-map-viewport" id="cityMapViewport" aria-label="可拖曳缩放的现金流城市地图">
+    <div class="city-map-viewport atmosphere-${atmosphere}" id="cityMapViewport" aria-label="可拖曳缩放的现金流城市地图">
       <div class="city-map-stage" id="cityMapStage">
         ${createCitySceneSvg()}
+        ${createEnvironmentOverlay(atmosphere)}
         <div class="board-route" aria-hidden="true"></div>
         ${renderMapAssetMarkers()}
         ${boardTiles
@@ -825,7 +835,9 @@ function renderBoard() {
       <button type="button" id="zoomOutMap" aria-label="缩小地图">−</button>
       <button type="button" id="focusPlayer" aria-label="回到玩家">回到玩家</button>
       <button type="button" id="zoomInMap" aria-label="放大地图">＋</button>
+      <button type="button" id="toggleMiniMap" aria-label="切换小地图">${uiState.minimapCollapsed ? "地图" : "收起"}</button>
     </div>
+    ${renderMiniMap()}
   `;
   setupMapControls();
   el.board.querySelectorAll("[data-tile-index]").forEach((button) => {
@@ -857,6 +869,31 @@ function renderBoard() {
     if (uiState.camera.follow) focusCameraOnPlayer(false);
     else applyCamera();
   });
+}
+
+function renderMiniMap() {
+  if (uiState.minimapCollapsed) return "";
+  const viewport = document.querySelector("#cityMapViewport");
+  const width = viewport?.clientWidth || 390;
+  const height = viewport?.clientHeight || 620;
+  const scale = uiState.camera.scale || 0.86;
+  const viewLeft = Math.max(0, Math.min(100, (-uiState.camera.x / (mapSize.width * scale)) * 100));
+  const viewTop = Math.max(0, Math.min(100, (-uiState.camera.y / (mapSize.height * scale)) * 100));
+  const viewWidth = Math.max(8, Math.min(100, (width / (mapSize.width * scale)) * 100));
+  const viewHeight = Math.max(8, Math.min(100, (height / (mapSize.height * scale)) * 100));
+  const player = miniMapPoint(boardPath[state.position % boardPath.length] || boardPath[0]);
+  const aiPoints = (state.aiPlayers || []).map((ai) => ({
+    ...miniMapPoint(boardPath[(ai.currentPosition || ai.position || 0) % boardPath.length] || boardPath[0]),
+    label: ai.avatarKey,
+  }));
+  return `
+    <button class="city-minimap" id="cityMiniMap" type="button" aria-label="小地图，点击移动视口">
+      <span class="mini-road"></span>
+      <span class="mini-viewport" style="left:${viewLeft}%; top:${viewTop}%; width:${viewWidth}%; height:${viewHeight}%"></span>
+      <span class="mini-player" style="left:${player.x}%; top:${player.y}%">你</span>
+      ${aiPoints.map((point) => `<span class="mini-ai" style="left:${point.x}%; top:${point.y}%" aria-hidden="true">${point.label}</span>`).join("")}
+    </button>
+  `;
 }
 
 function renderAiMapAvatars() {
@@ -974,6 +1011,7 @@ function setupMapControls() {
   let moved = false;
 
   viewport.addEventListener("pointerdown", (event) => {
+    if (!el.modal.classList.contains("hidden")) return;
     if (event.target.closest("[data-tile-index]")) return;
     viewport.setPointerCapture(event.pointerId);
     startX = event.clientX;
@@ -1012,6 +1050,7 @@ function setupMapControls() {
   viewport.addEventListener(
     "wheel",
     (event) => {
+      if (!el.modal.classList.contains("hidden")) return;
       event.preventDefault();
       zoomCamera(event.deltaY > 0 ? -0.08 : 0.08);
     },
@@ -1023,6 +1062,36 @@ function setupMapControls() {
     soundManager.play("tap");
     focusCameraOnPlayer(true);
   });
+  document.querySelector("#toggleMiniMap")?.addEventListener("click", () => {
+    uiState.minimapCollapsed = !uiState.minimapCollapsed;
+    saveExperience();
+    renderBoard();
+  });
+  document.querySelector("#cityMiniMap")?.addEventListener("click", moveCameraFromMiniMap);
+}
+
+function moveCameraFromMiniMap(event) {
+  if (!state || !el.modal.classList.contains("hidden")) return;
+  const target = event.currentTarget;
+  const rect = target.getBoundingClientRect();
+  const ratioX = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+  const ratioY = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+  const viewport = document.querySelector("#cityMapViewport");
+  if (!viewport) return;
+  const scale = uiState.camera.scale || 0.86;
+  uiState.camera = clampCamera(
+    {
+      x: viewport.clientWidth / 2 - mapSize.width * ratioX * scale,
+      y: viewport.clientHeight / 2 - mapSize.height * ratioY * scale,
+      scale,
+      follow: false,
+    },
+    viewport.clientWidth,
+    viewport.clientHeight,
+  );
+  saveExperience();
+  applyCamera();
+  renderBoard();
 }
 
 function zoomCamera(delta) {
@@ -1067,6 +1136,8 @@ function saveExperience() {
     hapticsEnabled: uiState.hapticsEnabled,
     animationSpeed: uiState.animationSpeed,
     visualQuality: uiState.visualQuality,
+    atmosphere: uiState.atmosphere,
+    minimapCollapsed: uiState.minimapCollapsed,
     tutorialComplete: uiState.tutorialComplete,
     seenTips: uiState.seenTips,
     camera: uiState.camera,
@@ -1076,6 +1147,7 @@ function saveExperience() {
 function applyExperienceMode() {
   document.body.dataset.quality = uiState.visualQuality;
   document.body.dataset.motion = prefersReducedMotion() ? "reduced" : "full";
+  document.body.dataset.atmosphere = atmosphereForRound(state?.round || 1, uiState.atmosphere);
 }
 
 function showTilePreview(index) {
@@ -2467,12 +2539,13 @@ function emitFinanceEffect(amount, label = "现金变化", kind = "neutral", tra
   layer.style.setProperty("--effect-offset", `${lane * 72}px`);
   layer.setAttribute("role", "status");
   layer.setAttribute("aria-live", "polite");
+  const effect = effectIconForKind(kind, number);
   const effectLabel = number >= 0 ? "现金增加" : "现金减少";
-  const icon = number >= 0 ? (kind === "payday" ? "薪" : "¥") : kind === "expense" ? "账" : "债";
+  uiState.liveMessage = `${effect.label}：${effectLabel} ${money(Math.abs(number))}`;
   layer.innerHTML = `
-    <span class="effect-icon">${icon}</span>
+    <span class="effect-icon">${effect.icon}</span>
     <strong>${number >= 0 ? "+" : "-"}${money(Math.abs(number))}</strong>
-    <small>${effectLabel} · ${label}</small>
+    <small>${effect.label} · ${effectLabel} · ${label}</small>
     <span class="effect-trail" aria-hidden="true"></span>
     <span class="effect-particle one" aria-hidden="true"></span>
     <span class="effect-particle two" aria-hidden="true"></span>
@@ -4705,6 +4778,8 @@ function showSoundSettings() {
       ["震动", uiState.hapticsEnabled && navigator?.vibrate ? "轻量开启" : uiState.hapticsEnabled ? "设备不支持" : "关闭"],
       ["动画速度", uiState.animationSpeed === "fast" ? "快速" : "标准"],
       ["画面品质", qualityLabel(uiState.visualQuality)],
+      ["城市氛围", atmosphereLabel(uiState.atmosphere)],
+      ["小地图", uiState.minimapCollapsed ? "已收起" : "显示中"],
       ["音乐状态", soundSnapshot.musicPlaying ? "正在播放" : "等待互动或已暂停"],
       ["教学", uiState.tutorialComplete ? "已完成，可重播" : "尚未完成"],
     ],
@@ -4714,6 +4789,8 @@ function showSoundSettings() {
       { label: uiState.hapticsEnabled ? "关闭震动" : "开启震动", onClick: () => { toggleHaptics(); showSoundSettings(); } },
       { label: uiState.animationSpeed === "fast" ? "标准动画" : "快速动画", onClick: () => { toggleAnimationSpeed(); showSoundSettings(); } },
       { label: `画面：${qualityLabel(nextQuality(uiState.visualQuality))}`, onClick: () => { cycleVisualQuality(); showSoundSettings(); } },
+      { label: `氛围：${atmosphereLabel(nextAtmosphere(uiState.atmosphere))}`, onClick: () => { cycleAtmosphere(); showSoundSettings(); } },
+      { label: uiState.minimapCollapsed ? "显示小地图" : "收起小地图", onClick: () => { toggleMiniMapSetting(); showSoundSettings(); } },
       { label: "音效小一点", onClick: () => { adjustEffectVolume(-0.15); showSoundSettings(); } },
       { label: "音效大一点", onClick: () => { adjustEffectVolume(0.15); showSoundSettings(); } },
       { label: "重新观看教学", onClick: () => { closeModal(); startTutorial(true); } },
@@ -4754,6 +4831,27 @@ function nextQuality(value) {
 
 function qualityLabel(value) {
   return { high: "高品质", standard: "标准", battery: "省电" }[value] || "标准";
+}
+
+function nextAtmosphere(value) {
+  return { auto: "day", day: "evening", evening: "night", night: "auto" }[value] || "auto";
+}
+
+function atmosphereLabel(value) {
+  return { auto: "自动", day: "白天", evening: "傍晚", night: "夜晚" }[value] || "自动";
+}
+
+function cycleAtmosphere() {
+  uiState.atmosphere = nextAtmosphere(uiState.atmosphere);
+  applyExperienceMode();
+  saveExperience();
+  if (state) renderBoard();
+}
+
+function toggleMiniMapSetting() {
+  uiState.minimapCollapsed = !uiState.minimapCollapsed;
+  saveExperience();
+  if (state) renderBoard();
 }
 
 function cycleVisualQuality() {
@@ -4813,6 +4911,7 @@ window.addEventListener("keydown", (event) => {
 window.addEventListener("pointerdown", unlockAudio, { once: true });
 window.addEventListener("keydown", unlockAudio, { once: true });
 document.addEventListener("visibilitychange", () => {
+  document.body.dataset.visibility = document.hidden ? "hidden" : "visible";
   soundManager.handleVisibility(document.hidden);
   if (document.hidden && uiState.turnPhase === "openingEvent") {
     setTurnPhase("paused");
@@ -4965,6 +5064,9 @@ window.cashflowDebug = {
     hapticsEnabled: uiState.hapticsEnabled,
     animationSpeed: uiState.animationSpeed,
     visualQuality: uiState.visualQuality,
+    atmosphere: uiState.atmosphere,
+    effectiveAtmosphere: atmosphereForRound(state?.round || 1, uiState.atmosphere),
+    minimapCollapsed: uiState.minimapCollapsed,
     avatarState: uiState.avatarState,
     avatarMood: uiState.avatarMood,
     avatarDirection: uiState.avatarDirection,
@@ -4974,6 +5076,9 @@ window.cashflowDebug = {
     seenTips: uiState.seenTips,
     sound: soundManager.getSnapshot(),
     boardTiles: boardTiles.length,
+    environmentNodes: document.querySelectorAll(".environment-overlay span").length,
+    minimapVisible: Boolean(document.querySelector(".city-minimap")),
+    liveMessage: uiState.liveMessage,
     financeEffects: document.querySelectorAll(".finance-effect").length,
     playedEffectIds: uiState.playedEffectIds.size,
     progress: state
@@ -5015,6 +5120,8 @@ window.cashflowDebug = {
   toggleHaptics,
   toggleAnimationSpeed,
   cycleVisualQuality,
+  cycleAtmosphere,
+  toggleMiniMap: toggleMiniMapSetting,
   startTutorial,
   nextTutorialStep,
   previousTutorialStep,

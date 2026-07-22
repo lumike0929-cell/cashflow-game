@@ -5,6 +5,8 @@ export const mapSize = {
   height: 1120,
 };
 
+export const atmosphereModes = ["auto", "day", "evening", "night"];
+
 export const boardPath = [
   { x: 170, y: 140 },
   { x: 300, y: 110 },
@@ -207,6 +209,57 @@ export function createCitySceneSvg() {
   `;
 }
 
+export function atmosphereForRound(round = 1, preference = "auto") {
+  if (["day", "evening", "night"].includes(preference)) return preference;
+  const index = Math.max(0, Math.round(Number(round) || 1) - 1) % 9;
+  if (index >= 6) return "night";
+  if (index >= 4) return "evening";
+  return "day";
+}
+
+export function createEnvironmentOverlay(atmosphere = "day") {
+  return `
+    <div class="environment-overlay atmosphere-${atmosphere}" aria-hidden="true">
+      <span class="env-cloud cloud-a"></span>
+      <span class="env-cloud cloud-b"></span>
+      <span class="env-water-shine"></span>
+      <span class="env-ticker">¥ ↗ ↘</span>
+      <span class="env-bird bird-a"></span>
+      <span class="env-bird bird-b"></span>
+      <span class="env-npc npc-a"><i></i></span>
+      <span class="env-npc npc-b"><i></i></span>
+      <span class="env-vehicle car-a"></span>
+      <span class="env-vehicle car-b"></span>
+      <span class="env-bike"></span>
+      <span class="env-lamp lamp-a"></span>
+      <span class="env-lamp lamp-b"></span>
+      <span class="env-shop-glow"></span>
+    </div>
+  `;
+}
+
+export function miniMapPoint(point) {
+  return {
+    x: Math.round((finiteNumber(point?.x, 0) / mapSize.width) * 1000) / 10,
+    y: Math.round((finiteNumber(point?.y, 0) / mapSize.height) * 1000) / 10,
+  };
+}
+
+export function effectIconForKind(kind = "neutral", amount = 0) {
+  const text = String(kind);
+  if (text.includes("stock")) return { icon: amount >= 0 ? "↗" : "↘", label: amount >= 0 ? "股票上涨" : "股票下跌" };
+  if (text.includes("property")) return { icon: "房", label: "房地产变化" };
+  if (text.includes("business") || text.includes("upgrade")) return { icon: text.includes("upgrade") ? "★" : "店", label: "小生意变化" };
+  if (text.includes("loan") || text.includes("bank")) return { icon: "贷", label: "银行贷款" };
+  if (text.includes("insurance")) return { icon: "盾", label: "保险保障" };
+  if (text.includes("tax")) return { icon: "税", label: "税务结算" };
+  if (text.includes("payday")) return { icon: "薪", label: "薪水收入" };
+  if (text.includes("expense") || amount < 0) return { icon: "账", label: "支出变化" };
+  if (text.includes("sell")) return { icon: "售", label: "出售结算" };
+  if (text.includes("refinance")) return { icon: "降", label: "月供减少" };
+  return { icon: amount >= 0 ? "¥" : "账", label: amount >= 0 ? "现金增加" : "现金减少" };
+}
+
 export function avatarMarkup(career, mood = "neutral", direction = "right") {
   const icon = career?.icon || "你";
   const id = career?.id || "teacher";
@@ -303,6 +356,8 @@ export function normalizeSettings(settings) {
     hapticsEnabled: settings?.hapticsEnabled !== false,
     animationSpeed: settings?.animationSpeed === "fast" ? "fast" : "standard",
     visualQuality: ["high", "standard", "battery"].includes(settings?.visualQuality) ? settings.visualQuality : "standard",
+    atmosphere: atmosphereModes.includes(settings?.atmosphere) ? settings.atmosphere : "auto",
+    minimapCollapsed: Boolean(settings?.minimapCollapsed),
     tutorialComplete: Boolean(settings?.tutorialComplete),
     seenTips: Object.fromEntries(Object.entries(seenTips).map(([key, value]) => [key, Boolean(value)])),
     camera: {

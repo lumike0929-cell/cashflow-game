@@ -83,6 +83,20 @@ try {
     });
   });
   assert.equal(await page.locator(".map-asset-marker").count(), 0);
+  const cityLife = await page.evaluate(() => window.cashflowDebug.getExperience());
+  assert.equal(cityLife.effectiveAtmosphere, "day");
+  assert.equal(cityLife.minimapVisible, true);
+  assert.ok(cityLife.environmentNodes >= 10);
+  assert.equal(await page.locator(".environment-overlay").count(), 1);
+  assert.equal(await page.locator(".city-minimap").count(), 1);
+  await page.evaluate(() => window.cashflowDebug.cycleAtmosphere());
+  const atmosphereAfterCycle = await page.evaluate(() => window.cashflowDebug.getExperience());
+  assert.equal(atmosphereAfterCycle.atmosphere, "day");
+  assert.equal(atmosphereAfterCycle.effectiveAtmosphere, "day");
+  await page.evaluate(() => window.cashflowDebug.toggleMiniMap());
+  assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().minimapVisible), false);
+  await page.evaluate(() => window.cashflowDebug.toggleMiniMap());
+  assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().minimapVisible), true);
 
   const aiModeSnapshot = await page.evaluate(() => window.cashflowDebug.configureAiRace(1, "standard"));
   assert.equal(aiModeSnapshot.gameMode, "ai-race");
@@ -198,6 +212,9 @@ try {
   assert.equal(typeof settingsAfterToggle.hapticsEnabled, "boolean");
   assert.equal(settingsAfterToggle.animationSpeed, "fast");
   assert.equal(settingsAfterToggle.visualQuality, "battery");
+  assert.equal(await page.locator(".env-npc").first().evaluate((item) => getComputedStyle(item).display), "none");
+  await page.evaluate(() => window.cashflowDebug.cycleVisualQuality());
+  assert.equal(await page.evaluate(() => window.cashflowDebug.getExperience().visualQuality), "high");
 
   await page.evaluate(() => window.cashflowDebug.showContextTip("firstDebt", true));
   await page.locator("#cardModal").click({ position: { x: 4, y: 4 } });

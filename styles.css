@@ -1919,6 +1919,304 @@ p {
   padding-inline: 12px;
 }
 
+.environment-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.env-cloud,
+.env-water-shine,
+.env-ticker,
+.env-bird,
+.env-npc,
+.env-vehicle,
+.env-bike,
+.env-lamp,
+.env-shop-glow {
+  position: absolute;
+  pointer-events: none;
+}
+
+.env-cloud {
+  width: 98px;
+  height: 34px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 25% 48%, #ffffff 0 24px, transparent 25px),
+    radial-gradient(circle at 58% 34%, #ffffff 0 28px, transparent 29px),
+    #ffffff;
+  opacity: 0.72;
+  animation: env-cloud-drift 42s linear infinite;
+}
+
+.env-cloud.cloud-a {
+  left: 120px;
+  top: 54px;
+}
+
+.env-cloud.cloud-b {
+  left: 1180px;
+  top: 86px;
+  width: 132px;
+  animation-duration: 56s;
+  animation-delay: -18s;
+}
+
+.env-water-shine {
+  left: 120px;
+  top: 512px;
+  width: 1320px;
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+  opacity: 0.38;
+  transform: rotate(-6deg);
+  animation: env-water-glide 9s ease-in-out infinite;
+}
+
+.env-ticker {
+  left: 1060px;
+  top: 376px;
+  border-radius: 10px;
+  padding: 4px 10px;
+  background: #253247;
+  color: #9fe0b9;
+  font-size: 13px;
+  font-weight: 950;
+  animation: env-ticker-flicker 2.8s steps(2, end) infinite;
+}
+
+.env-bird {
+  width: 32px;
+  height: 12px;
+  border-top: 4px solid #5f7770;
+  border-radius: 50%;
+  opacity: 0.6;
+  animation: env-bird-float 18s linear infinite;
+}
+
+.env-bird::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: -4px;
+  width: 28px;
+  height: 12px;
+  border-top: 4px solid #5f7770;
+  border-radius: 50%;
+}
+
+.env-bird.bird-a {
+  left: 260px;
+  top: 88px;
+}
+
+.env-bird.bird-b {
+  left: 1280px;
+  top: 130px;
+  animation-delay: -9s;
+  animation-duration: 22s;
+}
+
+.env-npc {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 34px;
+  border-radius: 999px 999px 12px 12px;
+  background: #f0bb63;
+  box-shadow: 0 6px 10px rgba(23, 32, 29, 0.12);
+  animation: env-npc-walk 13s ease-in-out infinite alternate;
+}
+
+.env-npc i {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffe4c7;
+}
+
+.env-npc.npc-a {
+  left: 680px;
+  top: 600px;
+}
+
+.env-npc.npc-b {
+  left: 1120px;
+  top: 530px;
+  background: #9ccfec;
+  animation-delay: -4s;
+}
+
+.env-vehicle,
+.env-bike {
+  border-radius: 14px;
+  background: #f0bb63;
+  box-shadow: 0 7px 10px rgba(23, 32, 29, 0.14);
+  animation: env-car-loop 20s linear infinite;
+}
+
+.env-vehicle {
+  width: 74px;
+  height: 30px;
+}
+
+.env-vehicle::before,
+.env-vehicle::after,
+.env-bike::before,
+.env-bike::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #354740;
+}
+
+.env-vehicle::before,
+.env-bike::before {
+  left: 12px;
+}
+
+.env-vehicle::after,
+.env-bike::after {
+  right: 12px;
+}
+
+.env-vehicle.car-a {
+  left: 220px;
+  top: 820px;
+}
+
+.env-vehicle.car-b {
+  left: 1320px;
+  top: 330px;
+  background: #9ccfec;
+  animation-delay: -11s;
+  animation-duration: 24s;
+}
+
+.env-bike {
+  left: 760px;
+  top: 815px;
+  width: 48px;
+  height: 18px;
+  background: #6c5aa8;
+  animation: env-bike-loop 16s linear infinite;
+}
+
+.env-lamp {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 229, 156, 0.62), transparent 68%);
+  opacity: 0;
+}
+
+.env-lamp.lamp-a {
+  left: 218px;
+  top: 120px;
+}
+
+.env-lamp.lamp-b {
+  left: 1472px;
+  top: 426px;
+}
+
+.env-shop-glow {
+  left: 514px;
+  top: 642px;
+  width: 168px;
+  height: 88px;
+  border-radius: 28px;
+  background: radial-gradient(ellipse, rgba(255, 216, 107, 0.24), transparent 68%);
+  animation: env-sign-glow 2.6s ease-in-out infinite alternate;
+}
+
+.atmosphere-evening .city-scene {
+  filter: sepia(0.12) saturate(1.08) hue-rotate(-8deg);
+}
+
+.atmosphere-night .city-scene {
+  filter: brightness(0.72) saturate(1.08) hue-rotate(8deg);
+}
+
+.atmosphere-evening .env-lamp,
+.atmosphere-night .env-lamp {
+  opacity: 1;
+}
+
+.atmosphere-night .env-cloud {
+  opacity: 0.36;
+}
+
+.atmosphere-night .env-shop-glow,
+.atmosphere-night .env-ticker {
+  filter: drop-shadow(0 0 12px rgba(255, 216, 107, 0.42));
+}
+
+.city-minimap {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 7;
+  width: 172px;
+  height: 116px;
+  min-height: 116px;
+  border: 2px solid rgba(255, 255, 255, 0.74);
+  border-radius: 22px;
+  padding: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(229, 242, 251, 0.78)),
+    rgba(255, 255, 255, 0.84);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+
+.mini-road {
+  position: absolute;
+  inset: 18px;
+  border: 8px solid rgba(83, 98, 92, 0.22);
+  border-radius: 38px;
+}
+
+.mini-viewport {
+  position: absolute;
+  border: 2px solid var(--gold);
+  border-radius: 10px;
+  background: rgba(255, 216, 107, 0.14);
+}
+
+.mini-player,
+.mini-ai {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  padding: 0;
+  background: var(--green);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 950;
+  transform: translate(-50%, -50%);
+}
+
+.mini-ai {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  background: var(--violet);
+  font-size: 9px;
+}
+
 .map-tile {
   position: absolute;
   z-index: 2;
@@ -2729,10 +3027,26 @@ body[data-quality="battery"] .background-layer,
 body[data-quality="battery"] .foreground-detail,
 body[data-quality="battery"] .flower-bed,
 body[data-quality="battery"] .hero-coin,
+body[data-quality="battery"] .env-bird,
+body[data-quality="battery"] .env-bike,
+body[data-quality="battery"] .env-npc,
+body[data-quality="battery"] .env-shop-glow,
+body[data-quality="battery"] .env-vehicle,
+body[data-quality="battery"] .env-water-shine,
 body[data-quality="battery"] .effect-particle,
 body[data-quality="battery"] .tile-particle,
 body[data-quality="battery"] .dice-flight-trail {
   display: none;
+}
+
+body[data-quality="battery"] .environment-overlay * {
+  animation: none !important;
+}
+
+body[data-visibility="hidden"] .environment-overlay *,
+body[data-visibility="hidden"] .player-avatar *,
+body[data-visibility="hidden"] .finance-effect * {
+  animation-play-state: paused !important;
 }
 
 body[data-quality="battery"] .map-tile,
@@ -3767,6 +4081,107 @@ body[data-quality="battery"] .finance-effect {
 
   to {
     box-shadow: 0 0 0 7px rgba(255, 216, 107, 0.42), 0 18px 30px rgba(24, 42, 33, 0.22);
+  }
+}
+
+@keyframes env-cloud-drift {
+  from {
+    transform: translateX(-90px);
+  }
+
+  to {
+    transform: translateX(170px);
+  }
+}
+
+@keyframes env-water-glide {
+  0%,
+  100% {
+    opacity: 0.18;
+    transform: translateX(-80px) rotate(-6deg) scaleX(0.72);
+  }
+
+  50% {
+    opacity: 0.46;
+    transform: translateX(110px) rotate(-6deg) scaleX(1.05);
+  }
+}
+
+@keyframes env-ticker-flicker {
+  0%,
+  100% {
+    opacity: 0.78;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes env-bird-float {
+  0% {
+    opacity: 0;
+    transform: translateX(-70px) translateY(0);
+  }
+
+  12%,
+  78% {
+    opacity: 0.58;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(180px) translateY(-20px);
+  }
+}
+
+@keyframes env-npc-walk {
+  from {
+    transform: translateX(-18px) translateY(0);
+  }
+
+  to {
+    transform: translateX(34px) translateY(-3px);
+  }
+}
+
+@keyframes env-car-loop {
+  0% {
+    transform: translateX(-24px);
+  }
+
+  50% {
+    transform: translateX(92px);
+  }
+
+  100% {
+    transform: translateX(-24px);
+  }
+}
+
+@keyframes env-bike-loop {
+  0% {
+    transform: translateX(-32px) translateY(0);
+  }
+
+  50% {
+    transform: translateX(84px) translateY(-4px);
+  }
+
+  100% {
+    transform: translateX(-32px) translateY(0);
+  }
+}
+
+@keyframes env-sign-glow {
+  from {
+    opacity: 0.22;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 0.48;
+    transform: scale(1.04);
   }
 }
 
@@ -5175,5 +5590,12 @@ body.in-game .map-toolbar {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
+  }
+
+  .env-bird,
+  .env-bike,
+  .env-npc,
+  .env-vehicle {
+    display: none !important;
   }
 }
