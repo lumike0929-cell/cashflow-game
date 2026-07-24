@@ -438,7 +438,7 @@ try {
   });
   await page.evaluate(() => window.cashflowDebug.closeModal());
   const cameraAfterManualMove = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
-  assert.equal(cameraAfterManualMove.follow, false);
+  assert.equal(cameraAfterManualMove.follow, true);
   await page.evaluate(() => window.cashflowDebug.focusPlayer());
   const cameraFocused = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
   assert.equal(cameraFocused.follow, true);
@@ -616,10 +616,13 @@ try {
       hud: document.querySelector(".turn-card")?.getBoundingClientRect().toJSON(),
       board: document.querySelector(".board")?.getBoundingClientRect().toJSON(),
       roll: document.querySelector("#rollDice")?.getBoundingClientRect().toJSON(),
+      diceBox: document.querySelector(".turn-card .dice-box")?.getBoundingClientRect().toJSON(),
       rollText: document.querySelector("#rollDice")?.textContent,
       writingMode: getComputedStyle(document.querySelector("#rollDice")).writingMode,
       whiteSpace: getComputedStyle(document.querySelector("#rollDice")).whiteSpace,
       wordBreak: getComputedStyle(document.querySelector("#rollDice")).wordBreak,
+      toolbar: document.querySelector(".map-toolbar")?.getBoundingClientRect().toJSON(),
+      player: document.querySelector("#avatarAnchor")?.getBoundingClientRect().toJSON(),
     }));
     assert.equal(overflow.hasMap, true);
     assert.equal(overflow.hasHud, true);
@@ -629,6 +632,14 @@ try {
     assert.ok(overflow.roll.width > overflow.roll.height, `${viewport.width}px roll button became vertical`);
     assert.ok(overflow.board.height >= viewport.height * 0.45, `${viewport.width}px board too short`);
     assert.ok(overflow.hud.height <= Math.max(230, viewport.height * 0.28), `${viewport.width}px HUD too tall`);
+    assert.ok(overflow.hud.top >= overflow.board.top + overflow.board.height * 0.58 || overflow.hud.top >= viewport.height - 180, `${viewport.width}px HUD covers board center`);
+    assert.ok(
+      overflow.roll.bottom <= viewport.height - 4,
+      `${viewport.width}px roll button too close to bottom: ${JSON.stringify({ roll: overflow.roll, diceBox: overflow.diceBox, hud: overflow.hud, viewport })}`,
+    );
+    assert.ok(overflow.toolbar.height <= (viewport.width < 761 ? 46 : 64), `${viewport.width}px map toolbar too tall`);
+    assert.ok(overflow.toolbar.width <= Math.min(viewport.width - 16, viewport.width < 761 ? 190 : 260), `${viewport.width}px map toolbar too wide`);
+    assert.ok(overflow.player.bottom < overflow.hud.top - 6 || viewport.width >= 761, `${viewport.width}px HUD covers player: ${JSON.stringify({ player: overflow.player, hud: overflow.hud, board: overflow.board })}`);
     assert.ok(overflow.width <= overflow.clientWidth + 1, `${viewport.width}px overflow: ${overflow.width} > ${overflow.clientWidth}`);
     await page.evaluate(() => window.cashflowDebug.showProgressCenter("freedom"));
     const progressLayout = await page.evaluate(() => ({
@@ -645,6 +656,91 @@ try {
     await page.evaluate(() => window.cashflowDebug.closeModal());
     assert.equal(await page.evaluate(() => document.body.classList.contains("modal-open")), false);
   }
+
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.evaluate(() => {
+      window.cashflowDebug.closeModal();
+      window.cashflowDebug.setState({
+        career: { id: "teacher", icon: "师", name: "小学老师", salary: 32000, expenses: 23000, savings: 30000 },
+        month: 1,
+        round: 1,
+        position: 0,
+        cash: 60000,
+        salary: 32000,
+        baseExpenses: 23000,
+        assets: [],
+        liabilities: [],
+        logs: [],
+      });
+      window.scrollTo(0, document.body.scrollHeight);
+      window.__rollDone = false;
+      window.cashflowDebug.rollFixed(6).then(() => {
+        window.__rollDone = true;
+      });
+    });
+    await page.waitForFunction(() => window.cashflowDebug.getExperience().turnPhase === "moving", null, { timeout: 5000 });
+    const movingLayout = await page.evaluate(() => {
+      const board = document.querySelector(".board")?.getBoundingClientRect();
+      const player = document.querySelector("#avatarAnchor")?.getBoundingClientRect();
+      const hud = document.querySelector(".turn-card")?.getBoundingClientRect();
+      const roll = document.querySelector("#rollDice")?.getBoundingClientRect();
+      return {
+        phase: window.cashflowDebug.getExperience().turnPhase,
+        camera: window.cashflowDebug.getExperience().camera,
+        stageTransform: getComputedStyle(document.querySelector("#cityMapStage")).transform,
+        stageTransforms: [...document.querySelectorAll("#cityMapStage")].map((stage) => ({
+          inline: stage.style.transform,
+          computed: getComputedStyle(stage).transform,
+          rect: stage.getBoundingClientRect().toJSON(),
+        })),
+        modalHidden: document.querySelector("#cardModal").classList.contains("hidden"),
+        scrollY: window.scrollY,
+        boardTop: board?.top || 0,
+        boardBottom: board?.bottom || 0,
+        playerTop: player?.top || 0,
+        playerBottom: player?.bottom || 0,
+        playerLeft: player?.left || 0,
+        playerRight: player?.right || 0,
+        hudTop: hud?.top || 0,
+        rollWidth: roll?.width || 0,
+        rollHeight: roll?.height || 0,
+        text: document.querySelector("#rollDice")?.textContent || "",
+        writingMode: getComputedStyle(document.querySelector("#rollDice")).writingMode,
+      };
+    });
+    assert.equal(movingLayout.phase, "moving");
+    assert.equal(movingLayout.modalHidden, true, `${viewport.width}px event opened before movement finished: ${JSON.stringify(movingLayout)}`);
+    assert.ok(movingLayout.boardTop < viewport.height * 0.45, `${viewport.width}px board not brought into view`);
+    assert.ok(movingLayout.playerTop >= 0 && movingLayout.playerBottom <= Math.min(viewport.height, movingLayout.hudTop - 4), `${viewport.width}px moving player not visible: ${JSON.stringify(movingLayout)}`);
+    assert.ok(
+      movingLayout.playerLeft >= -8 && movingLayout.playerRight <= viewport.width + 8,
+      `${viewport.width}px player outside horizontal viewport: ${JSON.stringify(movingLayout)}`,
+    );
+    assert.ok(movingLayout.rollWidth > movingLayout.rollHeight, `${viewport.width}px moving roll text became vertical`);
+    assert.equal(movingLayout.writingMode, "horizontal-tb");
+    assert.match(movingLayout.text, /前进|前進|Moving/);
+    await page.waitForFunction(() => window.__rollDone === true, null, { timeout: 8000 });
+    const afterRoll = await page.evaluate(() => ({
+      modalHidden: document.querySelector("#cardModal").classList.contains("hidden"),
+      phase: window.cashflowDebug.getExperience().turnPhase,
+      playerVisible: (() => {
+        const player = document.querySelector("#avatarAnchor")?.getBoundingClientRect();
+        const hud = document.querySelector(".turn-card")?.getBoundingClientRect();
+        return Boolean(player && hud && player.top >= 0 && player.bottom <= hud.top - 4);
+      })(),
+    }));
+    assert.equal(afterRoll.modalHidden, false, `${viewport.width}px event did not open after movement`);
+    assert.equal(afterRoll.playerVisible, true, `${viewport.width}px player hidden after arrival`);
+    await page.evaluate(() => window.cashflowDebug.closeModal());
+  }
+  await page.emulateMedia({ reducedMotion: "reduce" });
 
   for (const viewport of [
     { width: 320, height: 568 },

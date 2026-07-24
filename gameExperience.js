@@ -497,10 +497,11 @@ export function clampCamera(camera, viewportWidth, viewportHeight) {
 
 export function cameraForTile(index, viewportWidth, viewportHeight, scale = 0.86) {
   const point = boardPath[index % boardPath.length] || boardPath[0];
+  const focusY = viewportHeight * 0.43;
   return clampCamera(
     {
       x: viewportWidth / 2 - point.x * scale,
-      y: viewportHeight / 2 - point.y * scale,
+      y: focusY - point.y * scale,
       scale,
       follow: true,
     },

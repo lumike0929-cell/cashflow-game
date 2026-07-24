@@ -958,6 +958,7 @@ function setTurnPhase(phase) {
   uiState.diceRolling = phase === "rolling";
   uiState.hudStatus = phaseLabel(phase);
   uiState.turnPhaseHistory = [...uiState.turnPhaseHistory, phase].slice(-16);
+  document.body.dataset.turnPhase = phase;
 }
 
 function canRoll() {
@@ -1059,6 +1060,8 @@ function renderBoard() {
       showAiFinance(button.dataset.aiFinance || "");
     });
   });
+  if (uiState.camera.follow) focusCameraOnPlayer(false);
+  else applyCamera();
   requestAnimationFrame(() => {
     if (uiState.camera.follow) focusCameraOnPlayer(false);
     else applyCamera();
@@ -1306,19 +1309,33 @@ function zoomCamera(delta) {
 }
 
 function focusCameraOnPlayer(save = true, scale = uiState.camera.scale) {
-  const viewport = document.querySelector("#cityMapViewport");
+  const viewport = el.board?.querySelector("#cityMapViewport") || document.querySelector("#cityMapViewport");
   if (!viewport || !state) return;
   uiState.camera = cameraForTile(state.position, viewport.clientWidth, viewport.clientHeight, scale);
   if (save) saveExperience();
   applyCamera();
 }
 
+function restoreBoardViewForPlayer(save = false) {
+  if (!state) return;
+  uiState.camera.follow = true;
+  scrollBoardIntoViewForPlay();
+  focusCameraOnPlayer(save, uiState.camera.scale);
+  requestAnimationFrame(() => {
+    scrollBoardIntoViewForPlay();
+    focusCameraOnPlayer(save, uiState.camera.scale);
+  });
+}
+
 function applyCamera() {
-  const viewport = document.querySelector("#cityMapViewport");
-  const stage = document.querySelector("#cityMapStage");
-  if (!viewport || !stage) return;
+  const viewport = el.board?.querySelector("#cityMapViewport") || document.querySelector("#cityMapViewport");
+  const stages = [...(el.board || document).querySelectorAll("#cityMapStage")];
+  if (!viewport || !stages.length) return;
   uiState.camera = clampCamera(uiState.camera, viewport.clientWidth, viewport.clientHeight);
-  stage.style.transform = `translate3d(${uiState.camera.x}px, ${uiState.camera.y}px, 0) scale(${uiState.camera.scale})`;
+  const transform = `translate3d(${uiState.camera.x}px, ${uiState.camera.y}px, 0) scale(${uiState.camera.scale})`;
+  stages.forEach((stage) => {
+    stage.style.transform = transform;
+  });
 }
 
 function saveExperience() {
@@ -3091,9 +3108,7 @@ async function rollDice(forcedRoll = null) {
     render();
     await wait(animationMs(160, 90));
     setTurnPhase("preparingMove");
-    if (uiState.camera.follow) {
-      focusCameraOnPlayer(false, Math.min(1.08, uiState.camera.scale + 0.08));
-    }
+    await focusBoardBeforeMovement(Math.min(1.08, uiState.camera.scale + 0.08));
     await movePlayerStepByStep(previous, roll);
     const next = state.position;
     uiState.previewIndices = [];
@@ -3107,7 +3122,7 @@ async function rollDice(forcedRoll = null) {
     state.round += 1;
     persistQuietly();
     render();
-    if (uiState.camera.follow) focusCameraOnPlayer(false, uiState.camera.scale);
+    if (uiState.camera.follow) ensurePlayerVisible(false);
     await wait(animationMs(380, 230));
     setTurnPhase("openingEvent");
     renderActions();
@@ -3153,10 +3168,55 @@ async function movePlayerStepByStep(previous, roll) {
     soundManager.play("step");
     haptic(8, uiState.hapticsEnabled);
     render();
-    if (uiState.camera.follow) focusCameraOnPlayer(false, uiState.camera.scale);
-    await wait(animationMs(240, 150));
+    if (uiState.camera.follow) ensurePlayerVisible(false);
+    await wait(prefersReducedMotion() ? 70 : animationMs(240, 150));
   }
   setAvatarState("idle");
+}
+
+async function focusBoardBeforeMovement(scale = uiState.camera.scale) {
+  uiState.camera.follow = true;
+  document.body.classList.add("camera-snapping");
+  scrollBoardIntoViewForPlay();
+  await wait(animationMs(120, 40));
+  focusCameraOnPlayer(false, scale);
+  await wait(animationMs(80, 20));
+  document.body.classList.remove("camera-snapping");
+}
+
+function scrollBoardIntoViewForPlay() {
+  const boardCard = document.querySelector(".board-card");
+  if (!boardCard) return;
+  const rect = boardCard.getBoundingClientRect();
+  const topbar = document.querySelector(".topbar")?.getBoundingClientRect();
+  const safeTop = Math.max(8, (topbar?.height || 0) + 8);
+  const targetTop = Math.max(0, window.scrollY + rect.top - safeTop);
+  const distance = Math.abs(window.scrollY - targetTop);
+  if (distance < 8) return;
+  const shouldSnap = document.body.classList.contains("camera-snapping") || ["preparingMove", "moving"].includes(uiState.turnPhase);
+  window.scrollTo({
+    top: targetTop,
+    behavior: prefersReducedMotion() || shouldSnap ? "auto" : "smooth",
+  });
+}
+
+function ensurePlayerVisible(save = false) {
+  const viewport = document.querySelector("#cityMapViewport");
+  const player = document.querySelector("#avatarAnchor");
+  if (!viewport || !player || !state) return;
+  const viewportRect = viewport.getBoundingClientRect();
+  const playerRect = player.getBoundingClientRect();
+  const hudRect = document.querySelector(".turn-card")?.getBoundingClientRect();
+  const hiddenByHud = Boolean(hudRect && playerRect.bottom > hudRect.top - 18);
+  const margin = 34;
+  const outside =
+    playerRect.left < viewportRect.left + margin ||
+    playerRect.right > viewportRect.right - margin ||
+    playerRect.top < viewportRect.top + margin ||
+    playerRect.bottom > viewportRect.bottom - margin ||
+    hiddenByHud;
+  if (!outside) return;
+  focusCameraOnPlayer(save, uiState.camera.scale);
 }
 
 function wait(ms) {
@@ -5152,9 +5212,21 @@ function closeModal() {
     setTimeout(() => el.rollDice.focus({ preventScroll: true }), 30);
   }
   const nextTip = uiState.pendingTips.shift();
-  if (nextTip) setTimeout(() => showContextTip(nextTip, true), prefersReducedMotion() ? 20 : 120);
+  if (nextTip) {
+    setTimeout(() => {
+      if (state && !state.gameOver && !uiState.isRolling && !uiState.isMoving && el.modal.classList.contains("hidden")) {
+        showContextTip(nextTip, true);
+      } else {
+        uiState.pendingTips.unshift(nextTip);
+      }
+    }, prefersReducedMotion() ? 20 : 120);
+  }
   if (!nextTip && state && !state.gameOver && uiState.turnPhase === "idle" && uiState.tutorialSettings.tutorialHints && state.round <= 10) {
-    window.setTimeout(() => showRoundTeachingTip(), prefersReducedMotion() ? 20 : 120);
+    window.setTimeout(() => {
+      if (state && !state.gameOver && uiState.turnPhase === "idle" && !uiState.isRolling && !uiState.isMoving && el.modal.classList.contains("hidden")) {
+        showRoundTeachingTip();
+      }
+    }, prefersReducedMotion() ? 20 : 120);
   }
   if (state && !state.gameOver && !nextTip && uiState.turnPhase === "idle") {
     window.setTimeout(() => {
@@ -5202,6 +5274,7 @@ function loadGame() {
   recordFeedbackTrace(localStorage, "GAME_LOADED", { screen: currentScreenName() });
   persistQuietly();
   render();
+  restoreBoardViewForPlayer(true);
 }
 
 function resetGame() {

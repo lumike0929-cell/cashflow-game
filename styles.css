@@ -1881,6 +1881,13 @@ p {
   will-change: transform;
 }
 
+body.camera-snapping .city-map-stage,
+body[data-turn-phase="preparingMove"] .city-map-stage,
+body[data-turn-phase="moving"] .city-map-stage,
+body[data-motion="reduced"] .city-map-stage {
+  transition: none !important;
+}
+
 .city-scene {
   position: absolute;
   inset: 0;
@@ -5458,8 +5465,11 @@ body.in-game .turn-card {
   right: max(14px, env(safe-area-inset-right));
   bottom: max(10px, env(safe-area-inset-bottom));
   z-index: 40;
+  display: flex;
   grid-template-columns: minmax(152px, 190px) minmax(0, 1fr);
   align-items: center;
+  gap: 10px;
+  overflow: hidden;
   min-height: 108px;
   max-height: 128px;
   padding: 10px 14px;
@@ -5467,6 +5477,7 @@ body.in-game .turn-card {
 }
 
 body.in-game .turn-card .dice-box {
+  flex: 0 0 190px;
   grid-template-columns: 76px minmax(0, 1fr);
   grid-template-areas:
     "dice label"
@@ -5503,6 +5514,8 @@ body.in-game #rollDice {
 }
 
 body.in-game .action-stack {
+  flex: 1 1 auto;
+  min-width: 0;
   grid-template-columns: minmax(120px, 170px) minmax(220px, 310px) minmax(0, 1fr);
   align-items: center;
   gap: 10px;
@@ -5582,8 +5595,26 @@ body.in-game .map-toolbar {
   bottom: auto;
   left: auto;
   transform: none;
+  gap: 6px;
+  max-width: min(260px, calc(100% - 28px));
+  padding: 6px;
   background: rgba(255, 255, 255, 0.86);
   box-shadow: var(--card-shadow);
+}
+
+body.in-game .map-toolbar button {
+  min-width: 36px;
+  min-height: 36px;
+  height: 36px;
+  padding-inline: 9px;
+  font-size: 12px;
+}
+
+body.in-game .map-toolbar #focusPlayer {
+  max-width: 104px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .modal-card {
@@ -5748,6 +5779,290 @@ body.in-game .map-toolbar {
     right: 10px;
     bottom: auto;
     left: auto;
+  }
+}
+
+@media (max-width: 1180px) {
+  body.in-game .layout {
+    padding-bottom: calc(168px + env(safe-area-inset-bottom));
+  }
+
+  body.in-game .turn-card {
+    display: flex;
+    align-items: center;
+    bottom: max(18px, calc(env(safe-area-inset-bottom) + 14px));
+    overflow: hidden;
+    pointer-events: auto;
+  }
+
+  body.in-game .turn-card .dice-box {
+    flex: 0 0 min(178px, 30vw);
+    max-height: 100%;
+  }
+
+  body.in-game .action-stack {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  body.in-game .map-toolbar {
+    z-index: 32;
+    gap: 5px;
+    padding: 5px;
+    border-radius: 16px;
+  }
+
+  body.in-game .map-toolbar button {
+    min-width: 34px;
+    min-height: 34px;
+    height: 34px;
+    padding: 0 8px;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+
+  body.in-game .map-toolbar #focusPlayer {
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 760px) {
+  body.in-game .layout {
+    padding-bottom: calc(152px + env(safe-area-inset-bottom));
+  }
+
+  body.in-game .board-card {
+    min-height: max(404px, calc(100dvh - 250px));
+  }
+
+  body.in-game .board {
+    min-height: max(358px, calc(100dvh - 334px));
+    height: max(358px, calc(100dvh - 334px));
+  }
+
+  body.in-game .turn-card {
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(14px, calc(env(safe-area-inset-bottom) + 12px));
+    min-height: 112px;
+    max-height: 142px;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 20px;
+  }
+
+  body.in-game .turn-card .dice-box {
+    flex-basis: min(132px, 43vw);
+    grid-template-columns: 50px minmax(0, 1fr);
+    grid-template-areas:
+      "dice label"
+      "dice button";
+    gap: 4px 7px;
+    min-height: 92px;
+    padding: 7px;
+    border-radius: 16px;
+  }
+
+  body.in-game .dice-box > span {
+    overflow: hidden;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    writing-mode: horizontal-tb;
+  }
+
+  body.in-game .dice-box > strong {
+    min-height: 52px;
+  }
+
+  body.in-game .dice3d {
+    width: 46px;
+    height: 46px;
+  }
+
+  body.in-game .dice-face {
+    width: 44px;
+    height: 44px;
+    padding: 6px;
+    border-radius: 12px;
+  }
+
+  body.in-game .dice-face span {
+    width: 6px;
+    height: 6px;
+  }
+
+  body.in-game #rollDice {
+    min-width: 0;
+    min-height: 40px;
+    max-height: 44px;
+    padding-inline: 8px;
+    border-radius: 13px;
+    font-size: clamp(11px, 3.2vw, 13px);
+    line-height: 1.15;
+    white-space: nowrap;
+    word-break: keep-all;
+    writing-mode: horizontal-tb;
+  }
+
+  body.in-game .action-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    max-height: 104px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 1px;
+  }
+
+  body.in-game .game-hud-status {
+    min-height: 42px;
+    padding: 6px 8px;
+    border-radius: 14px;
+  }
+
+  body.in-game .game-hud-status span,
+  body.in-game .game-hud-status strong,
+  body.in-game .game-hud-status em {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    writing-mode: horizontal-tb;
+  }
+
+  body.in-game .hud-summary-grid {
+    gap: 5px;
+  }
+
+  body.in-game .hud-chip {
+    min-height: 42px;
+    padding: 6px 8px;
+    border-radius: 12px;
+  }
+
+  body.in-game .hud-chip span {
+    font-size: 10px;
+  }
+
+  body.in-game .hud-chip strong {
+    font-size: clamp(12px, 3.1vw, 14px);
+  }
+
+  body.in-game .hud-shortcuts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  body.in-game .hud-shortcuts button {
+    min-height: 40px;
+    padding: 4px 2px;
+    border-radius: 11px;
+  }
+
+  body.in-game .hud-shortcuts button span {
+    width: 20px;
+    height: 20px;
+    border-radius: 8px;
+    font-size: 10px;
+  }
+
+  body.in-game .hud-shortcuts button strong {
+    font-size: 9px;
+    line-height: 1.1;
+  }
+
+  body.in-game .hud-mission-tracker,
+  body.in-game .hud-beginner-tracker,
+  body.in-game .hud-ai-tracker {
+    min-height: 40px;
+    padding: 6px 8px;
+    border-radius: 13px;
+  }
+
+  body.in-game .map-toolbar {
+    top: 8px;
+    right: 8px;
+    left: auto;
+    bottom: auto;
+    gap: 3px;
+    padding: 3px;
+    border-radius: 14px;
+    opacity: 0.88;
+  }
+
+  body.in-game .map-toolbar button {
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 6px;
+    border-radius: 11px;
+    font-size: 12px;
+  }
+
+  body.in-game .map-toolbar #focusPlayer {
+    min-width: 62px;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  body.in-game .layout {
+    padding-bottom: calc(188px + env(safe-area-inset-bottom));
+  }
+
+  body.in-game .board-card {
+    min-height: calc(100dvh - 206px);
+  }
+
+  body.in-game .board {
+    min-height: calc(100dvh - 300px);
+    height: calc(100dvh - 300px);
+  }
+
+  body.in-game .turn-card {
+    bottom: max(30px, calc(env(safe-area-inset-bottom) + 26px));
+    min-height: 96px;
+    max-height: 116px;
+    padding: 9px 12px;
+  }
+
+  body.in-game .turn-card .dice-box {
+    flex-basis: 178px;
+    grid-template-columns: 64px minmax(0, 1fr);
+    min-height: 78px;
+    padding: 7px 9px;
+  }
+
+  body.in-game .dice-box > strong {
+    min-height: 64px;
+  }
+
+  body.in-game #rollDice {
+    min-height: 38px;
+    font-size: 14px;
+  }
+
+  body.in-game .action-stack {
+    grid-template-columns: minmax(104px, 140px) minmax(176px, 230px) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  body.in-game .game-hud-status {
+    min-height: 66px;
+  }
+
+  body.in-game .hud-chip {
+    min-height: 62px;
+  }
+
+  body.in-game .hud-shortcuts button {
+    min-height: 54px;
   }
 }
 
