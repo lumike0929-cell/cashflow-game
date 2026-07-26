@@ -966,6 +966,38 @@ function canRoll() {
   return Boolean(state && !state.gameOver && el.modal.classList.contains("hidden") && uiState.turnPhase === "idle" && !uiState.isRolling && !uiState.isMoving);
 }
 
+function turnLockSnapshot(reason = "snapshot") {
+  return {
+    reason,
+    round: state?.round || 0,
+    position: state?.position || 0,
+    phase: uiState.turnPhase,
+    isRolling: uiState.isRolling,
+    isMoving: uiState.isMoving,
+    diceRolling: uiState.diceRolling,
+    modalHidden: el.modal.classList.contains("hidden"),
+    rollDisabled: Boolean(el.rollDice?.disabled),
+    canRoll: canRoll(),
+  };
+}
+
+function assertTurnUnlockedSoon(reason = "turn") {
+  window.setTimeout(() => {
+    if (!state || state.gameOver || !el.modal.classList.contains("hidden") || uiState.isRolling || uiState.isMoving) return;
+    const stuck = uiState.turnPhase !== "idle" || Boolean(el.rollDice?.disabled) || !canRoll();
+    if (!stuck) return;
+    const snapshot = turnLockSnapshot(reason);
+    try {
+      recordFeedbackError(localStorage, "TURN_LOCK_TIMEOUT", `${reason}:${snapshot.phase}:disabled=${snapshot.rollDisabled}`);
+    } catch {
+      // Diagnostic logging must never block the turn from recovering.
+    }
+    if (["localhost", "127.0.0.1"].includes(location.hostname)) {
+      console.warn("TURN_STUCK_AFTER_ACTION", snapshot);
+    }
+  }, 120);
+}
+
 function clearTurnWatchdog() {
   if (!uiState.turnWatchdog) return;
   window.clearTimeout(uiState.turnWatchdog);
@@ -979,13 +1011,17 @@ function startTurnWatchdog(reason = "turn", timeout = 12000) {
     const modalHidden = el.modal.classList.contains("hidden");
     const activePhase = uiState.turnPhase;
     if (modalHidden || ["rolling", "diceResult", "preparingMove", "moving", "arriving", "paused"].includes(activePhase)) {
-      recordFeedbackError(localStorage, "TURN_LOCK_TIMEOUT", `${reason}:${activePhase}`);
+      try {
+        recordFeedbackError(localStorage, "TURN_LOCK_TIMEOUT", `${reason}:${activePhase}`);
+      } catch {
+        // Diagnostics are best-effort only.
+      }
       releaseTurnLock({ reason: "watchdog", force: modalHidden || activePhase === "paused" });
     }
   }, timeout);
 }
 
-function releaseTurnLock({ reason = "release", force = false, renderNow = true, save = true } = {}) {
+function finalizePlayerTurnAction({ reason = "release", force = false, renderNow = true, save = true } = {}) {
   const modalHidden = el.modal.classList.contains("hidden");
   const eventStillVisible = !modalHidden && ["openingEvent", "resolvingEvent", "showingResult"].includes(uiState.turnPhase);
   document.body.classList.remove("camera-snapping");
@@ -1006,9 +1042,28 @@ function releaseTurnLock({ reason = "release", force = false, renderNow = true, 
     uiState.isMoving = false;
     uiState.hudStatus = t("hud.openingEvent");
   }
-  recordFeedbackTrace(localStorage, "EVENT_RESOLVED", { screen: currentScreenName() });
-  if (renderNow && state) render();
+  try {
+    recordFeedbackTrace(localStorage, "EVENT_RESOLVED", { screen: currentScreenName() });
+  } catch {
+    // Feedback diagnostics must not keep the roll button locked.
+  }
+  if (renderNow && state) {
+    try {
+      render();
+    } catch (error) {
+      try {
+        recordFeedbackError(localStorage, "UI_TARGET_MISSING", error?.message || "render failed during turn release");
+      } catch {
+        // Rendering diagnostics are best-effort only.
+      }
+    }
+  }
+  if (state && modalHidden) assertTurnUnlockedSoon(reason);
   if (reason && state && modalHidden) window.setTimeout(() => el.rollDice.focus({ preventScroll: true }), 30);
+}
+
+function releaseTurnLock(options = {}) {
+  finalizePlayerTurnAction(options);
 }
 
 function setAvatarState(nextState, duration = 0) {

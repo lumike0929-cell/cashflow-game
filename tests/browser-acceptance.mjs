@@ -833,6 +833,37 @@ try {
     }
   }
 
+  const iphoneRealTurns = await playRealRollSequence(page, {
+    viewport: { width: 390, height: 844 },
+    label: "iPhone 390",
+    rolls: Array.from({ length: 15 }, () => 1),
+    actionMode: "mixed",
+  });
+  assert.equal(iphoneRealTurns.turns.length, 15);
+  assert.equal(iphoneRealTurns.rejectedOpportunity, true, "iPhone flow did not cover reject / keep-cash path");
+  assert.equal(iphoneRealTurns.purchaseCompleted, true, "iPhone flow did not cover a normal purchase path");
+  assert.equal(iphoneRealTurns.maxDiceNodes <= 1, true, "iPhone flow accumulated dice DOM");
+
+  const ipadRealTurns = await playRealRollSequence(page, {
+    viewport: { width: 768, height: 1024 },
+    label: "iPad 768",
+    rolls: Array.from({ length: 15 }, () => 1),
+    actionMode: "mixed",
+  });
+  assert.equal(ipadRealTurns.turns.length, 15);
+  assert.equal(ipadRealTurns.rejectedOpportunity, true, "iPad flow did not cover reject / keep-cash path");
+  assert.equal(ipadRealTurns.purchaseCompleted, true, "iPad flow did not cover a normal purchase path");
+  assert.equal(ipadRealTurns.maxDiceNodes <= 1, true, "iPad flow accumulated dice DOM");
+
+  const desktopRealTurns = await playRealRollSequence(page, {
+    viewport: { width: 1440, height: 900 },
+    label: "Desktop 1440",
+    rolls: Array.from({ length: 15 }, () => 1),
+    actionMode: "mixed",
+  });
+  assert.equal(desktopRealTurns.turns.length, 15);
+  assert.equal(desktopRealTurns.maxDiceNodes <= 1, true, "Desktop flow accumulated dice DOM");
+
   for (const viewport of [
     { width: 320, height: 568 },
     { width: 375, height: 667 },
@@ -904,4 +935,206 @@ try {
 
 async function expectText(page, text) {
   await page.getByText(text).first().waitFor({ state: "visible" });
+}
+
+async function playRealRollSequence(page, { viewport, label, rolls, actionMode = "reject" }) {
+  await page.setViewportSize(viewport);
+  await page.evaluate(() => {
+    localStorage.clear();
+    window.cashflowDebug.closeModal();
+    window.cashflowDebug.setState({
+      career: { id: "teacher", icon: "师", name: "小学老师", salary: 32000, expenses: 23000, savings: 30000 },
+      month: 1,
+      round: 1,
+      position: 0,
+      cash: 180000,
+      salary: 32000,
+      baseExpenses: 23000,
+      assets: [],
+      liabilities: [],
+      logs: [],
+    });
+    window.scrollTo(0, 0);
+  });
+
+  const result = {
+    turns: [],
+    rejectedOpportunity: false,
+    purchaseCompleted: false,
+    maxDiceNodes: 0,
+  };
+
+  try {
+    for (const [index, roll] of rolls.entries()) {
+      await waitForRollReady(page, `${label} turn ${index + 1} before click`);
+      await installDeterministicRoll(page, roll);
+      const before = await rollButtonSnapshot(page);
+      assert.equal(before.disabled, false, `${label} turn ${index + 1} disabled before click: ${JSON.stringify(before)}`);
+      assert.equal(before.pointerEvents, "auto", `${label} turn ${index + 1} pointer-events blocked: ${JSON.stringify(before)}`);
+      assert.equal(before.writingMode, "horizontal-tb", `${label} turn ${index + 1} writing mode: ${JSON.stringify(before)}`);
+      assert.ok(before.width > before.height, `${label} turn ${index + 1} roll button became vertical: ${JSON.stringify(before)}`);
+      assert.equal(before.buttonAtPoint, true, `${label} turn ${index + 1} roll button blocked by ${before.blockedBy}`);
+
+      const clickPoint = before.center;
+      await page.mouse.click(clickPoint.x, clickPoint.y);
+      if (index === 0) {
+        await page.mouse.click(clickPoint.x, clickPoint.y);
+      }
+
+      await page.waitForFunction(() => {
+        const experience = window.cashflowDebug.getExperience();
+        return !experience.isRolling && !experience.isMoving && !["rolling", "diceResult", "preparingMove", "moving", "arriving"].includes(experience.turnPhase);
+      }, null, { timeout: 12000 });
+
+      const modalActions = await resolveModalUntilReady(page, actionMode);
+      result.rejectedOpportunity = result.rejectedOpportunity || modalActions.some((action) => /放弃|放棄|保留|先不买|先不買|Pass|Keep/i.test(action));
+      result.purchaseCompleted = result.purchaseCompleted || modalActions.some((action) => /买入|買入|投资|投資|购买|購買|Purchase|Invest|Buy/i.test(action));
+
+      await waitForRollReady(page, `${label} turn ${index + 1} after modal`);
+      const after = await turnRecoverySnapshot(page);
+      result.maxDiceNodes = Math.max(result.maxDiceNodes, after.diceNodes);
+      assert.equal(after.disabled, false, `${label} turn ${index + 1} did not recover: ${JSON.stringify(after)}`);
+      assert.equal(after.experience.canRoll, true, `${label} turn ${index + 1} canRoll stayed false: ${JSON.stringify(after)}`);
+      assert.equal(after.experience.turnPhase, "idle", `${label} turn ${index + 1} phase stuck: ${JSON.stringify(after)}`);
+      assert.equal(after.experience.isRolling, false, `${label} turn ${index + 1} rolling flag stuck`);
+      assert.equal(after.experience.isMoving, false, `${label} turn ${index + 1} moving flag stuck`);
+      assert.equal(after.modalHidden, true, `${label} turn ${index + 1} modal still visible`);
+      assert.ok(after.diceNodes <= 1, `${label} turn ${index + 1} dice DOM accumulated: ${JSON.stringify(after)}`);
+      assert.equal(after.overlayBlockers.length, 0, `${label} turn ${index + 1} overlay blocked interaction: ${JSON.stringify(after.overlayBlockers)}`);
+      assert.ok(after.playerVisible, `${label} turn ${index + 1} player not visible after roll: ${JSON.stringify(after)}`);
+      result.turns.push(after);
+    }
+  } finally {
+    await restoreRandom(page);
+  }
+  return result;
+}
+
+async function installDeterministicRoll(page, roll) {
+  await page.evaluate((rollValue) => {
+    const normalizedRoll = Math.max(0.01, Math.min(0.98, (Math.max(1, Math.min(6, rollValue)) - 1) / 6 + 0.01));
+    if (!window.__cashflowOriginalRandom) window.__cashflowOriginalRandom = Math.random;
+    window.__cashflowRandomQueue = [normalizedRoll, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14];
+    Math.random = () => (window.__cashflowRandomQueue.length ? window.__cashflowRandomQueue.shift() : 0.02);
+  }, roll);
+}
+
+async function restoreRandom(page) {
+  await page.evaluate(() => {
+    if (window.__cashflowOriginalRandom) {
+      Math.random = window.__cashflowOriginalRandom;
+      delete window.__cashflowOriginalRandom;
+    }
+    delete window.__cashflowRandomQueue;
+  });
+}
+
+async function waitForRollReady(page, label) {
+  await page.waitForFunction(() => {
+    const experience = window.cashflowDebug.getExperience();
+    return experience.canRoll && !experience.rollDisabled && experience.turnPhase === "idle" && experience.modalHidden;
+  }, null, { timeout: 8000 }).catch(async (error) => {
+    const snapshot = await turnRecoverySnapshot(page);
+    throw new Error(`${label} did not become ready: ${error.message}; ${JSON.stringify(snapshot)}`);
+  });
+}
+
+async function rollButtonSnapshot(page) {
+  return page.evaluate(() => {
+    const button = document.querySelector("#rollDice");
+    const rect = button.getBoundingClientRect();
+    const center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    const blocker = document.elementFromPoint(center.x, center.y);
+    return {
+      disabled: button.disabled,
+      text: button.textContent,
+      pointerEvents: getComputedStyle(button).pointerEvents,
+      writingMode: getComputedStyle(button).writingMode,
+      width: rect.width,
+      height: rect.height,
+      center,
+      blockedBy: blocker?.id || blocker?.className || blocker?.tagName || "",
+      buttonAtPoint: Boolean(blocker?.closest?.("#rollDice")),
+      experience: window.cashflowDebug.getExperience(),
+    };
+  });
+}
+
+async function turnRecoverySnapshot(page) {
+  return page.evaluate(() => {
+    const button = document.querySelector("#rollDice");
+    const player = document.querySelector("#avatarAnchor")?.getBoundingClientRect();
+    const hud = document.querySelector(".turn-card")?.getBoundingClientRect();
+    const blockers = [...document.querySelectorAll(".modal, .tutorial-overlay, .finance-effect, .dice-flight-trail")]
+      .filter((node) => {
+        const style = getComputedStyle(node);
+        return style.pointerEvents !== "none" && style.display !== "none" && style.visibility !== "hidden" && !node.classList.contains("hidden");
+      })
+      .map((node) => node.id || node.className || node.tagName);
+    return {
+      experience: window.cashflowDebug.getExperience(),
+      disabled: button.disabled,
+      text: button.textContent,
+      modalHidden: document.querySelector("#cardModal").classList.contains("hidden"),
+      diceNodes: document.querySelectorAll(".dice3d").length,
+      overlayBlockers: blockers,
+      playerVisible: Boolean(player && player.top >= -8 && player.left >= -8 && player.right <= window.innerWidth + 8 && (!hud || player.bottom <= hud.top + 8 || player.bottom <= window.innerHeight)),
+      scroll: { x: window.scrollX, y: window.scrollY },
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+    };
+  });
+}
+
+async function resolveModalUntilReady(page, actionMode) {
+  const actionsTaken = [];
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const modal = await page.evaluate(() => {
+      const root = document.querySelector("#cardModal");
+      const hidden = root.classList.contains("hidden");
+      return {
+        hidden,
+        title: document.querySelector("#modalTitle")?.textContent || "",
+        type: document.querySelector("#modalType")?.textContent || "",
+        text: document.querySelector("#modalText")?.textContent || "",
+        buttons: [...document.querySelectorAll("#modalActions button")].map((button, index) => ({
+          index,
+          text: button.textContent || "",
+          disabled: button.disabled,
+        })),
+      };
+    });
+    if (modal.hidden) break;
+
+    const choice = chooseModalAction(modal, actionMode);
+    if (choice?.index >= 0) {
+      actionsTaken.push(choice.text);
+      await page.locator("#modalActions button").nth(choice.index).click({ timeout: 2500 });
+    } else {
+      actionsTaken.push("close");
+      await page.locator("#closeModal").click({ timeout: 2500 });
+    }
+    await page.waitForTimeout(120);
+    const ready = await page.evaluate(() => {
+      const experience = window.cashflowDebug.getExperience();
+      return experience.canRoll && !experience.rollDisabled && experience.modalHidden;
+    });
+    if (ready) break;
+  }
+  return actionsTaken;
+}
+
+function chooseModalAction(modal, actionMode) {
+  const enabled = modal.buttons.filter((button) => !button.disabled);
+  const avoid = /为什么|為什麼|why|提示|hint|词典|詞典|查看|詳情|详情|打开|開啟|Open/i;
+  const safeEnabled = enabled.filter((button) => !avoid.test(button.text));
+  if (actionMode === "mixed") {
+    const buy = safeEnabled.find((button) => /买入|買入|投资|投資|购买|購買|Purchase|Invest|Buy/i.test(button.text));
+    if (buy && /股票|股|Stock/i.test(`${modal.type} ${modal.title} ${modal.text} ${buy.text}`)) return buy;
+  }
+  return (
+    safeEnabled.find((button) => /放弃|放棄|保留|先不买|先不買|不买|不買|Pass|Keep/i.test(button.text)) ||
+    safeEnabled.find((button) => /支付|完成|知道了|太好了|关闭|關閉|确认|確認|继续|繼續|Done|Close|OK|Continue/i.test(button.text)) ||
+    safeEnabled[0] ||
+    null
+  );
 }
