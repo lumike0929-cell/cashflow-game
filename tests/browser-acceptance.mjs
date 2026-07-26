@@ -864,6 +864,11 @@ try {
   assert.equal(desktopRealTurns.turns.length, 15);
   assert.equal(desktopRealTurns.maxDiceNodes <= 1, true, "Desktop flow accumulated dice DOM");
 
+  const saveFailureRecovery = await playSingleTurnWithSaveFailure(page, { width: 390, height: 844 });
+  assert.equal(saveFailureRecovery.disabled, false, `Save failure left roll disabled: ${JSON.stringify(saveFailureRecovery)}`);
+  assert.equal(saveFailureRecovery.experience.canRoll, true, `Save failure left canRoll false: ${JSON.stringify(saveFailureRecovery)}`);
+  assert.equal(saveFailureRecovery.experience.turnPhase, "idle", `Save failure left phase stuck: ${JSON.stringify(saveFailureRecovery)}`);
+
   for (const viewport of [
     { width: 320, height: 568 },
     { width: 375, height: 667 },
@@ -1027,6 +1032,56 @@ async function restoreRandom(page) {
     }
     delete window.__cashflowRandomQueue;
   });
+}
+
+async function playSingleTurnWithSaveFailure(page, viewport) {
+  await page.setViewportSize(viewport);
+  await page.evaluate(() => {
+    localStorage.clear();
+    window.cashflowDebug.closeModal();
+    window.cashflowDebug.setState({
+      career: { id: "teacher", icon: "师", name: "小学老师", salary: 32000, expenses: 23000, savings: 30000 },
+      month: 1,
+      round: 1,
+      position: 0,
+      cash: 180000,
+      salary: 32000,
+      baseExpenses: 23000,
+      assets: [],
+      liabilities: [],
+      logs: [],
+    });
+    if (!window.__cashflowOriginalSetItem) window.__cashflowOriginalSetItem = Storage.prototype.setItem;
+    let shouldFail = true;
+    Storage.prototype.setItem = function setItemWithOneFailure(key, value) {
+      if (shouldFail && String(key).includes("cashflow-game-save")) {
+        shouldFail = false;
+        throw new Error("simulated quota failure");
+      }
+      return window.__cashflowOriginalSetItem.call(this, key, value);
+    };
+  });
+  try {
+    await waitForRollReady(page, "save failure before click");
+    await installDeterministicRoll(page, 1);
+    const before = await rollButtonSnapshot(page);
+    await page.mouse.click(before.center.x, before.center.y);
+    await page.waitForFunction(() => {
+      const experience = window.cashflowDebug.getExperience();
+      return !experience.isRolling && !experience.isMoving && !["rolling", "diceResult", "preparingMove", "moving", "arriving"].includes(experience.turnPhase);
+    }, null, { timeout: 12000 });
+    await resolveModalUntilReady(page, "reject");
+    await waitForRollReady(page, "save failure after modal");
+    return await turnRecoverySnapshot(page);
+  } finally {
+    await restoreRandom(page);
+    await page.evaluate(() => {
+      if (window.__cashflowOriginalSetItem) {
+        Storage.prototype.setItem = window.__cashflowOriginalSetItem;
+        delete window.__cashflowOriginalSetItem;
+      }
+    });
+  }
 }
 
 async function waitForRollReady(page, label) {

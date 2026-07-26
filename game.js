@@ -1036,7 +1036,17 @@ function finalizePlayerTurnAction({ reason = "release", force = false, renderNow
     uiState.isMoving = false;
     uiState.hudStatus = phaseLabel("idle");
     setAvatarState("idle");
-    if (save && state) persistQuietly();
+    if (save && state) {
+      try {
+        persistQuietly();
+      } catch (error) {
+        try {
+          recordFeedbackError(localStorage, "SAVE_WRITE_FAILED", error?.message || "turn release save failed");
+        } catch {
+          // Save diagnostics are best-effort only.
+        }
+      }
+    }
   } else {
     uiState.isRolling = false;
     uiState.isMoving = false;
