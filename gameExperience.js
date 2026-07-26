@@ -228,9 +228,10 @@ export function nextIndices(position, count, total) {
   return Array.from({ length: Math.max(0, count) }, (_, index) => indexAfter(position, index + 1, total));
 }
 
-export function createCitySceneSvg() {
+export function createCitySceneSvg(locale = "zh-CN") {
+  const text = citySceneLabels(locale);
   return `
-    <svg class="city-scene" viewBox="0 0 ${mapSize.width} ${mapSize.height}" role="img" aria-label="现金流城市地图">
+    <svg class="city-scene" viewBox="0 0 ${mapSize.width} ${mapSize.height}" role="img" aria-label="${text.mapAria}">
       <defs>
         <linearGradient id="water" x1="0" x2="1">
           <stop offset="0" stop-color="#9bd8f0" />
@@ -258,37 +259,37 @@ export function createCitySceneSvg() {
         <path d="M0 910 C220 820 380 900 560 835 C780 755 950 850 1160 785 C1370 720 1500 790 1680 720 V1120 H0 Z" fill="#bfe4bd" opacity="0.42" />
       </g>
       <g class="scene-layer midground-layer">
-      ${district(372, 360, 270, 225, "#e7f6ea", "住宅区", "花园小路")}
-      ${district(690, 340, 260, 210, "#fff4cf", "金融区", "银行与行情")}
-      ${district(1010, 365, 285, 225, "#e9f3ff", "商业区", "商店与办公")}
-      ${district(405, 625, 285, 225, "#fff1ce", "创业区", "小店实验街")}
-      ${district(735, 660, 255, 205, "#efe9ff", "教育区", "学校与课程")}
-      ${district(1060, 645, 260, 205, "#ffe5e0", "医疗区", "医院与诊所")}
-      ${district(730, 500, 230, 205, "#ccebd2", "公园休闲区", "喷泉与小桥")}
-      ${district(520, 500, 170, 115, "#e9f3ff", "公共服务区", "邮局与路灯")}
+      ${district(372, 360, 270, 225, "#e7f6ea", text.residential, text.gardenLane)}
+      ${district(690, 340, 260, 210, "#fff4cf", text.finance, text.bankTicker)}
+      ${district(1010, 365, 285, 225, "#e9f3ff", text.commercial, text.shopOffice)}
+      ${district(405, 625, 285, 225, "#fff1ce", text.startup, text.shopLab)}
+      ${district(735, 660, 255, 205, "#efe9ff", text.education, text.schoolCourse)}
+      ${district(1060, 645, 260, 205, "#ffe5e0", text.health, text.clinic)}
+      ${district(730, 500, 230, 205, "#ccebd2", text.park, text.fountainBridge)}
+      ${district(520, 500, 170, 115, "#e9f3ff", text.publicService, text.postLamp)}
       <path d="M80 600 C300 510 390 680 560 610 C750 530 890 590 1040 520 C1230 430 1370 520 1600 430" fill="none" stroke="url(#water)" stroke-width="92" stroke-linecap="round" opacity="0.9" />
       <path d="M80 600 C300 510 390 680 560 610 C750 530 890 590 1040 520 C1230 430 1370 520 1600 430" fill="none" stroke="#e8fbff" stroke-width="12" stroke-linecap="round" opacity="0.85" />
       <path d="M170 140 L1480 170 L1545 740 L1360 930 L230 890 L125 420 Z" fill="none" stroke="url(#road)" stroke-width="118" stroke-linejoin="round" stroke-linecap="round" opacity="0.78" />
       <path d="M170 140 L1480 170 L1545 740 L1360 930 L230 890 L125 420 Z" fill="none" stroke="#f8faf4" stroke-width="14" stroke-dasharray="32 28" stroke-linejoin="round" stroke-linecap="round" opacity="0.86" />
-      ${roadDirections()}
+      ${roadDirections(text)}
       <path d="M450 330 L1240 330 M450 820 L1240 820 M620 330 L620 840 M1020 330 L1020 840" stroke="#f8faf4" stroke-width="34" stroke-linecap="round" opacity="0.42" />
       <path d="M450 330 L1240 330 M450 820 L1240 820 M620 330 L620 840 M1020 330 L1020 840" stroke="#becac4" stroke-width="4" stroke-dasharray="18 18" opacity="0.36" />
       ${flowerbeds()}
       </g>
       <g class="scene-layer building-layer">
-      ${homeCluster(420, 420)}
-      ${apartmentBlock(520, 360)}
-      ${building(700, 390, "银行", "#ffe8a6", "#d8a21f", "¥")}
-      ${building(875, 390, "股票", "#efe9ff", "#6c5aa8", "↗")}
-      ${marketBoard(1045, 390)}
-      ${building(595, 500, "房产中心", "#e7f8ee", "#1f7a52", "房")}
-      ${building(1188, 602, "保险中心", "#e5f2fb", "#246b9f", "盾")}
-      ${building(1325, 620, "税务中心", "#f2f5f4", "#53625c", "税")}
-      ${building(1145, 440, "医院", "#ffe5e0", "#c84d42", "+")}
+      ${homeCluster(420, 420, text)}
+      ${apartmentBlock(520, 360, text)}
+      ${building(700, 390, text.bank, "#ffe8a6", "#d8a21f", "¥")}
+      ${building(875, 390, text.stocks, "#efe9ff", "#6c5aa8", "↗")}
+      ${marketBoard(1045, 390, text)}
+      ${building(595, 500, text.propertyCenter, "#e7f8ee", "#1f7a52", text.homeIcon)}
+      ${building(1188, 602, text.insuranceCenter, "#e5f2fb", "#246b9f", text.shieldIcon)}
+      ${building(1325, 620, text.taxCenter, "#f2f5f4", "#53625c", text.taxIcon)}
+      ${building(1145, 440, text.hospital, "#ffe5e0", "#c84d42", "+")}
       ${ambulance(1260, 540)}
-      ${building(515, 675, "创业街", "#fff1ce", "#b47718", "店")}
-      ${building(765, 705, "学校", "#dff3ff", "#246b9f", "书")}
-      ${building(1110, 700, "商业区", "#e9f3ff", "#3573a4", "商")}
+      ${building(515, 675, text.startupStreet, "#fff1ce", "#b47718", text.shopIcon)}
+      ${building(765, 705, text.school, "#dff3ff", "#246b9f", text.bookIcon)}
+      ${building(1110, 700, text.commercial, "#e9f3ff", "#3573a4", text.bizIcon)}
       ${officeRow(1135, 610)}
       ${bridge(930, 535)}
       ${bench(730, 590)}
@@ -300,7 +301,7 @@ export function createCitySceneSvg() {
       <circle cx="835" cy="555" r="72" fill="#ccebd2" filter="url(#softShadow)" />
       <circle cx="835" cy="555" r="36" fill="#8ed0eb" />
       <circle cx="835" cy="555" r="16" fill="#ffffff" opacity="0.85" />
-      <text x="835" y="655" text-anchor="middle" class="city-label">公园喷泉</text>
+      <text x="835" y="655" text-anchor="middle" class="city-label">${text.parkFountain}</text>
       ${trees()}
       ${lamps()}
       ${coinsAndClouds()}
@@ -308,6 +309,32 @@ export function createCitySceneSvg() {
       </g>
     </svg>
   `;
+}
+
+function citySceneLabels(locale = "zh-CN") {
+  const en = {
+    mapAria: "Cashflow city map",
+    residential: "Residential", gardenLane: "Garden Lane", finance: "Finance", bankTicker: "Bank & Ticker",
+    commercial: "Business", shopOffice: "Shops & Offices", startup: "Startup", shopLab: "Shop Lab Street",
+    education: "Education", schoolCourse: "School & Courses", health: "Health", clinic: "Hospital & Clinics",
+    park: "Park", fountainBridge: "Fountain & Bridge", publicService: "Public Services", postLamp: "Post & Lamps",
+    gardenHomes: "Garden Homes", bank: "Bank", stocks: "Stocks", tickerBoard: "Ticker Board", propertyCenter: "Property Center",
+    insuranceCenter: "Insurance Center", taxCenter: "Tax Center", hospital: "Hospital", startupStreet: "Startup Street",
+    school: "School", apartments: "Apartments", parkFountain: "Park Fountain", start: "Start", cashflowRoad: "Cashflow Road",
+    homeIcon: "Home", shieldIcon: "Shield", taxIcon: "Tax", shopIcon: "Shop", bookIcon: "Book", bizIcon: "Biz",
+  };
+  if (locale === "en") return en;
+  return {
+    mapAria: "现金流城市地图",
+    residential: "住宅区", gardenLane: "花园小路", finance: "金融区", bankTicker: "银行与行情",
+    commercial: "商业区", shopOffice: "商店与办公", startup: "创业区", shopLab: "小店实验街",
+    education: "教育区", schoolCourse: "学校与课程", health: "医疗区", clinic: "医院与诊所",
+    park: "公园休闲区", fountainBridge: "喷泉与小桥", publicService: "公共服务区", postLamp: "邮局与路灯",
+    gardenHomes: "住宅花园", bank: "银行", stocks: "股票", tickerBoard: "行情板", propertyCenter: "房产中心",
+    insuranceCenter: "保险中心", taxCenter: "税务中心", hospital: "医院", startupStreet: "创业街",
+    school: "学校", apartments: "公寓", parkFountain: "公园喷泉", start: "起点", cashflowRoad: "现金流路",
+    homeIcon: "房", shieldIcon: "盾", taxIcon: "税", shopIcon: "店", bookIcon: "书", bizIcon: "商",
+  };
 }
 
 export function atmosphereForRound(round = 1, preference = "auto") {
@@ -393,7 +420,7 @@ export function avatarMarkup(career, mood = "neutral", direction = "right") {
   `;
 }
 
-export function diceMarkup(value = 1, rolling = false) {
+export function diceMarkup(value = 1, rolling = false, locale = "zh-CN") {
   const dots = Array.from({ length: 9 }, (_, index) => `<span class="${dotActive(index, value) ? "active" : ""}"></span>`).join("");
   const sideFaces = Array.from({ length: 6 }, (_, index) => {
     const faceValue = index + 1;
@@ -401,7 +428,7 @@ export function diceMarkup(value = 1, rolling = false) {
     return `<div class="dice-side dice-side-${faceValue}" aria-hidden="true">${faceDots}</div>`;
   }).join("");
   return `
-    <div class="dice3d ${rolling ? "rolling" : ""}" aria-label="骰子 ${value}">
+    <div class="dice3d ${rolling ? "rolling" : ""}" aria-label="${locale === "en" ? `Die ${value}` : `骰子 ${value}`}">
       <span class="dice-flight-trail" aria-hidden="true"></span>
       <span class="dice-corner top"></span>
       <div class="dice-cube" data-result="${value}" aria-hidden="true">
@@ -410,7 +437,7 @@ export function diceMarkup(value = 1, rolling = false) {
       <div class="dice-face">${dots}</div>
       <span class="dice-shadow"></span>
       <span class="dice-pop" aria-hidden="true">${value}</span>
-      <strong class="dice-result-text">前进 ${value} 格</strong>
+      <strong class="dice-result-text">${locale === "en" ? `Move ${value} ${value === 1 ? "space" : "spaces"}` : `前进 ${value} 格`}</strong>
     </div>
   `;
 }
@@ -688,26 +715,26 @@ function building(x, y, label, fill, stroke, sign = "") {
   `;
 }
 
-function apartmentBlock(x, y) {
+function apartmentBlock(x, y, text = citySceneLabels()) {
   return `
     <g filter="url(#tinyShadow)">
       <rect x="${x}" y="${y}" width="88" height="150" rx="14" fill="#dff3ff" stroke="#246b9f" stroke-width="4" />
       <rect x="${x + 100}" y="${y + 30}" width="70" height="120" rx="14" fill="#e7f6ea" stroke="#1f7a52" stroke-width="4" />
       ${windowGrid(x + 18, y + 24)}
       ${windowGrid(x + 116, y + 52)}
-      <text x="${x + 84}" y="${y + 180}" text-anchor="middle" class="city-label">公寓</text>
+      <text x="${x + 84}" y="${y + 180}" text-anchor="middle" class="city-label">${text.apartments}</text>
     </g>
   `;
 }
 
-function homeCluster(x, y) {
+function homeCluster(x, y, text = citySceneLabels()) {
   return `
     <g filter="url(#softShadow)">
       ${smallHome(x, y, "#e7f6ea", "#1f7a52")}
       ${smallHome(x + 92, y + 32, "#fff4cf", "#d8a21f")}
       ${smallHome(x + 22, y + 96, "#e9f3ff", "#246b9f")}
       <rect x="${x + 126}" y="${y + 114}" width="36" height="22" rx="8" fill="#ffffff" stroke="#1f7a52" stroke-width="4" />
-      <text x="${x + 86}" y="${y + 190}" text-anchor="middle" class="city-label">住宅花园</text>
+      <text x="${x + 86}" y="${y + 190}" text-anchor="middle" class="city-label">${text.gardenHomes}</text>
     </g>
   `;
 }
@@ -722,12 +749,12 @@ function smallHome(x, y, fill, stroke) {
   `;
 }
 
-function marketBoard(x, y) {
+function marketBoard(x, y, text = citySceneLabels()) {
   return `
     <g filter="url(#softShadow)">
       <rect x="${x}" y="${y}" width="150" height="92" rx="16" fill="#253247" />
       <path d="M${x + 18} ${y + 58} L${x + 48} ${y + 42} L${x + 76} ${y + 50} L${x + 116} ${y + 22}" fill="none" stroke="#9fe0b9" stroke-width="8" stroke-linecap="round" />
-      <text x="${x + 75}" y="${y + 122}" text-anchor="middle" class="city-label">行情板</text>
+      <text x="${x + 75}" y="${y + 122}" text-anchor="middle" class="city-label">${text.tickerBoard}</text>
     </g>
   `;
 }
@@ -893,7 +920,7 @@ function foregroundDecor() {
   `;
 }
 
-function roadDirections() {
+function roadDirections(text = citySceneLabels()) {
   const arrows = [
     [370, 128, 0],
     [835, 122, 0],
@@ -917,11 +944,11 @@ function roadDirections() {
         .join("")}
       <g transform="translate(250 214)">
         <rect x="-48" y="-20" width="96" height="40" rx="14" fill="#ffffff" stroke="#1f7a52" stroke-width="5" />
-        <text x="0" y="8" text-anchor="middle" class="road-sign">起点</text>
+        <text x="0" y="8" text-anchor="middle" class="road-sign">${text.start}</text>
       </g>
       <g transform="translate(1375 826)">
         <rect x="-56" y="-20" width="112" height="40" rx="14" fill="#ffffff" stroke="#d8a21f" stroke-width="5" />
-        <text x="0" y="8" text-anchor="middle" class="road-sign">现金流路</text>
+        <text x="0" y="8" text-anchor="middle" class="road-sign">${text.cashflowRoad}</text>
       </g>
     </g>
   `;

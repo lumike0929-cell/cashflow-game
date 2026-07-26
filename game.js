@@ -626,6 +626,7 @@ function renderSetup() {
   const selected = localizeCareer(selectedBase);
   const adjusted = createDifficultyAdjustedCareer(selected, selectedDifficultyId);
   const difficulty = difficultyModes.find((item) => item.id === selectedDifficultyId) || difficultyModes[1];
+  const mode = gameModes.find((item) => item.id === selectedGameMode) || gameModes[0];
   const monthlyBalance = adjusted.salary - adjusted.expenses;
   const savedState = parseSavedState(localStorage.getItem(STORAGE_KEY));
   const homeProgress = savedState ? calculateFinancialFreedomProgress(savedState) : null;
@@ -659,7 +660,7 @@ function renderSetup() {
         <h2>${selected.name}</h2>
         <strong class="career-role">${careerPersonality(selected.id)}</strong>
         <p>${careerShortNote(selected.id)}</p>
-        <p class="career-guidance">${careerGuidance[selected.id] || "适合想自由探索现金流的人。"}</p>
+        <p class="career-guidance">${selected.guidance || careerGuidance[selected.id] || translateText("适合想自由探索现金流的人。")}</p>
         <div class="career-stat-pills">
           <span>${t("finance.salary")} <strong>${money(adjusted.salary)}</strong></span>
           <span>${t("finance.expenses")} <strong>${money(adjusted.expenses)}</strong></span>
@@ -667,47 +668,47 @@ function renderSetup() {
           <span>${t("finance.monthlyCashflow")} <strong>${money(monthlyBalance)}</strong></span>
         </div>
         <div class="difficulty-picker" aria-label="${translateText("选择难度")}">
-          <span>${translateText("难度")}：${translateText(difficulty.title)}</span>
+          <span>${t("setup.difficultyLabel", { difficulty: difficultyLabel(difficulty.id) })}</span>
           <div>
             ${difficultyModes
               .map(
                 (mode) => `
                   <button type="button" class="${mode.id === selectedDifficultyId ? "selected" : ""}" data-difficulty="${mode.id}" aria-pressed="${mode.id === selectedDifficultyId}">
-                    ${translateText(mode.title)}
+                    ${difficultyLabel(mode.id)}
                   </button>
                 `,
               )
               .join("")}
           </div>
-          <small>${translateText(difficulty.description)}</small>
+          <small>${difficultyDescription(difficulty.id)}</small>
         </div>
         <div class="mode-picker" aria-label="${translateText("选择游戏模式")}">
-          <span>${translateText("模式")}：${translateText(gameModes.find((item) => item.id === selectedGameMode)?.title || "单人学习")}</span>
+          <span>${t("setup.modeLabel", { mode: gameModeLabel(mode.id) })}</span>
           <div>
             ${gameModes
               .map(
                 (mode) => `
                   <button type="button" class="${mode.id === selectedGameMode ? "selected" : ""}" data-game-mode="${mode.id}" aria-pressed="${mode.id === selectedGameMode}">
-                    ${translateText(mode.title)}
+                    ${gameModeLabel(mode.id)}
                   </button>
                 `,
               )
               .join("")}
           </div>
-          <small>${translateText(gameModes.find((item) => item.id === selectedGameMode)?.description || "保持目前体验。")}</small>
+          <small>${gameModeDescription(mode.id)}</small>
           ${
             selectedGameMode === "solo"
               ? ""
               : `
                 <div class="ai-mode-options">
-                  <label>AI ${translateText("数量")}
+                  <label>${t("setup.aiCountLabel")}
                     <select id="aiCountSelect">
-                      ${[1, 2, 3].map((count) => `<option value="${count}" ${count === selectedAiCount ? "selected" : ""}>${count} ${getLocale() === "en" ? "AI" : "名"}</option>`).join("")}
+                      ${[1, 2, 3].map((count) => `<option value="${count}" ${count === selectedAiCount ? "selected" : ""}>${t("setup.aiCountOption", { count })}</option>`).join("")}
                     </select>
                   </label>
-                  <label>AI ${translateText("难度")}
+                  <label>${t("setup.aiDifficultyLabel")}
                     <select id="aiDifficultySelect">
-                      ${aiDifficultyModes.map((mode) => `<option value="${mode.id}" ${mode.id === selectedAiDifficulty ? "selected" : ""}>${translateText(mode.title)}</option>`).join("")}
+                      ${aiDifficultyModes.map((mode) => `<option value="${mode.id}" ${mode.id === selectedAiDifficulty ? "selected" : ""}>${aiDifficultyLabel(mode.id)}</option>`).join("")}
                     </select>
                   </label>
                 </div>
@@ -793,6 +794,33 @@ function careerShortNote(id) {
   return localizeCareer({ id }).shortNote || translateText("在城市中学习现金流选择。");
 }
 
+function difficultyLabel(id = "standard") {
+  return t(`setup.difficulty.${id}`, {}, { fallback: translateText(difficultyModes.find((item) => item.id === id)?.title || "标准") });
+}
+
+function difficultyDescription(id = "standard") {
+  return t(`setup.difficultyDescription.${id}`, {}, { fallback: translateText(difficultyModes.find((item) => item.id === id)?.description || "使用目前平衡，适合一般挑战。") });
+}
+
+function gameModeKey(id = "solo") {
+  return id === "ai-race" ? "aiRace" : id === "quick-race" ? "quickRace" : "solo";
+}
+
+function gameModeLabel(id = "solo") {
+  const mode = gameModes.find((item) => item.id === id) || gameModes[0];
+  return t(`setup.mode.${gameModeKey(id)}`, {}, { fallback: translateText(mode.title) });
+}
+
+function gameModeDescription(id = "solo") {
+  const mode = gameModes.find((item) => item.id === id) || gameModes[0];
+  return t(`setup.modeDescription.${gameModeKey(id)}`, {}, { fallback: translateText(mode.description) });
+}
+
+function aiDifficultyLabel(id = "standard") {
+  const mode = aiDifficultyModes.find((item) => item.id === id) || aiDifficultyModes[1];
+  return t(`setup.aiDifficulty.${id}`, {}, { fallback: translateText(mode.title) });
+}
+
 function startSelectedCareer() {
   const careerBase = careers.find((item) => item.id === selectedCareerId) || careers[0];
   const career = localizeCareer(careerBase);
@@ -802,14 +830,27 @@ function startSelectedCareer() {
   state.localeVersion = localeVersion;
   state.translationSchemaVersion = translationSchemaVersion;
   completeBeginnerMission("choose-character");
-  const mode = gameModes.find((item) => item.id === state.gameMode) || gameModes[0];
   showGame();
   render();
+  showStartSummaryModal();
+}
+
+function showStartSummaryModal() {
+  if (!state) return;
+  const careerBase = careers.find((item) => item.id === state.career?.id) || state.career || careers[0];
+  const career = localizeCareer(careerBase);
+  const difficultyId = state.gameDifficulty || selectedDifficultyId || "standard";
+  const modeId = state.gameMode || selectedGameMode || "solo";
   openSimpleModal({
-    type: translateText("开始"),
+    type: t("ui.startAdventure"),
     title: translateText("现金流挑战开始"),
-    text: translateText(`你现在是${career.name}，难度为${difficultyModes.find((item) => item.id === selectedDifficultyId)?.title || "标准"}，模式为${mode.title}。你的目标是把现金逐步转成能带来收入的资产，同时保留足够安全垫。`),
+    text: t("setup.startSummary", {
+      profession: career.name,
+      difficulty: difficultyLabel(difficultyId),
+      mode: gameModeLabel(modeId),
+    }),
     actions: [{ label: translateText("开始掷骰"), className: "primary", onClick: () => { closeModal(); maybeStartTutorial(); } }],
+    panel: "start-summary",
   });
 }
 
@@ -837,7 +878,7 @@ function showOnboarding(index = uiState.onboardingIndex || 0) {
     metrics: [
       [translateText("第几步"), `${safeIndex + 1} / ${pages.length}`],
       [translateText("小提醒"), safeIndex === 0 ? translateText("财务自由是游戏里的简化目标，不是人生唯一答案。") : translateText("每一步都可以跳过，之后也能重播。")],
-      [translateText("图示"), page.icon],
+      [translateText("图示"), onboardingDisplayIcon(safeIndex)],
     ],
     actions: [
       { label: t("ui.previous"), disabled: safeIndex === 0, onClick: () => showOnboarding(safeIndex - 1) },
@@ -861,7 +902,13 @@ function showOnboarding(index = uiState.onboardingIndex || 0) {
       { label: t("ui.parentGuide"), onClick: showParentGuide },
     ],
     outcome: "success",
+    panel: "onboarding",
+    data: { onboardingIndex: String(safeIndex) },
   });
+}
+
+function onboardingDisplayIcon(index = 0) {
+  return ["🏙️", "💧", "🏦", "🎲"][index] || "✨";
 }
 
 function showGame() {
@@ -916,10 +963,8 @@ function render() {
   el.freedomPercent.textContent = formatPercent(freedom);
   el.freedomBar.style.width = `${Math.min(100, freedom)}%`;
   el.roundLabel.textContent = formatMonth(state.month);
-  el.diceValue.innerHTML = diceMarkup(state.lastRoll || 1, uiState.diceRolling);
-  el.rollDice.disabled = !canRoll();
-  el.rollDice.textContent = uiState.turnPhase === "moving" ? t("hud.movingProgress", { current: uiState.movingStep, total: uiState.movingTotal }) : uiState.turnPhase === "rolling" ? t("hud.rolling") : uiState.turnPhase === "diceResult" ? t("hud.moveSpaces", { count: state.lastRoll || 1 }) : t("hud.rollDice");
-  el.rollDice.setAttribute("aria-label", el.rollDice.textContent);
+  el.diceValue.innerHTML = diceMarkup(state.lastRoll || 1, uiState.diceRolling, getLocale());
+  syncRollButton();
   renderBoard();
   renderActions();
   renderStatements();
@@ -964,6 +1009,13 @@ function setTurnPhase(phase) {
 
 function canRoll() {
   return Boolean(state && !state.gameOver && el.modal.classList.contains("hidden") && uiState.turnPhase === "idle" && !uiState.isRolling && !uiState.isMoving);
+}
+
+function syncRollButton() {
+  if (!el.rollDice) return;
+  el.rollDice.disabled = !canRoll();
+  el.rollDice.textContent = uiState.turnPhase === "moving" ? t("hud.movingProgress", { current: uiState.movingStep, total: uiState.movingTotal }) : uiState.turnPhase === "rolling" ? t("hud.rolling") : uiState.turnPhase === "diceResult" ? t("hud.moveSpaces", { count: state?.lastRoll || 1 }) : t("hud.rollDice");
+  el.rollDice.setAttribute("aria-label", el.rollDice.textContent);
 }
 
 function turnLockSnapshot(reason = "snapshot") {
@@ -1096,7 +1148,7 @@ function renderBoard() {
   el.board.innerHTML = `
     <div class="city-map-viewport atmosphere-${atmosphere}" id="cityMapViewport" aria-label="${translateText("可拖曳缩放的现金流城市地图")}">
       <div class="city-map-stage" id="cityMapStage">
-        ${createCitySceneSvg()}
+        ${createCitySceneSvg(getLocale())}
         ${createEnvironmentOverlay(atmosphere)}
         <div class="board-route" aria-hidden="true"></div>
         ${renderMapAssetMarkers()}
@@ -1219,6 +1271,7 @@ function renderAiMapAvatars() {
 }
 
 function shortTileTitle(tile) {
+  if (getLocale() === "en") return tile.title;
   const mapped = {
     payday: "月结",
     opportunity: "房产",
@@ -1482,6 +1535,9 @@ function changeLocale(locale) {
   uiState.locale = setLocale(locale);
   saveLocale(localStorage, uiState.locale);
   recordFeedbackTrace(localStorage, "LOCALE_CHANGED", { screen: currentScreenName() });
+  const modalCard = el.modal.querySelector(".modal-card");
+  const activePanel = el.modal.classList.contains("hidden") ? "" : modalCard?.dataset.panel || "";
+  const glossaryTerm = modalCard?.dataset.glossaryTerm || "";
   if (state) {
     state.locale = uiState.locale;
     state.localeVersion = localeVersion;
@@ -1493,7 +1549,12 @@ function changeLocale(locale) {
   syncLocaleSelectors();
   if (state) render();
   else renderSetup();
-  if (!el.modal.classList.contains("hidden") && el.modal.querySelector(".modal-card")?.dataset.panel === "feedback") showFeedbackPanel();
+  if (!el.modal.classList.contains("hidden")) {
+    if (activePanel === "feedback") showFeedbackPanel();
+    if (activePanel === "glossary") showGlossary(glossaryTerm || null);
+    if (activePanel === "start-summary") showStartSummaryModal();
+    if (activePanel === "onboarding") showOnboarding(Number(modalCard?.dataset.onboardingIndex || uiState.onboardingIndex || 0));
+  }
 }
 
 function syncLocaleSelectors() {
@@ -1551,7 +1612,7 @@ function renderActions() {
   const beginnerTracker = beginnerMission
     ? `
       <button class="hud-beginner-tracker" type="button" id="hudBeginnerTracker" aria-label="${translateText("打开新手任务")}">
-        <span>${beginnerMission.iconKey}</span>
+        <span>${displayBeginnerMissionIcon(beginnerMission.iconKey)}</span>
         <strong>${translateText(beginnerMission.title)}</strong>
         <em>${translateText("新手")} ${beginnerMissionCards().filter((mission) => mission.completed).length} / ${beginnerMissionTemplates.length}</em>
       </button>
@@ -1649,10 +1710,13 @@ function showUnlockToast(item) {
   const toast = document.createElement("button");
   toast.type = "button";
   toast.className = "unlock-toast";
+  const typeLabel = translateText(item.type || "解锁");
+  const titleLabel = translateText(item.title || "新的进度");
+  const description = translateText(item.description || item.learningTip || "新的进度已记录。");
   toast.innerHTML = `
-    <span>${item.iconKey || "奖"}</span>
-    <strong>${item.type || "解锁"}：${item.title}</strong>
-    <small>${item.description || item.learningTip || "新的进度已记录。"}</small>
+    <span>${displayProgressIcon(item.iconKey || item.type)}</span>
+    <strong>${typeLabel}: ${titleLabel}</strong>
+    <small>${description}</small>
   `;
   toast.addEventListener("click", () => {
     toast.remove();
@@ -1662,6 +1726,27 @@ function showUnlockToast(item) {
   document.body.append(toast);
   soundManager.play("happy");
   window.setTimeout(() => toast.remove(), prefersReducedMotion() ? 500 : 2400);
+}
+
+function displayProgressIcon(iconKey = "") {
+  if (getLocale() !== "en") return iconKey || "奖";
+  const map = {
+    流: "Flow",
+    第: "1st",
+    负: "Debt",
+    負: "Debt",
+    金: "Cash",
+    房: "Home",
+    股: "Stock",
+    店: "Biz",
+    盾: "Safe",
+    奖: "Goal",
+    獎: "Goal",
+    徽章: "Badge",
+    成就: "Star",
+    里程碑: "Flag",
+  };
+  return map[iconKey] || "Star";
 }
 
 function showProgressCenter(tab = "freedom") {
@@ -2482,6 +2567,21 @@ function beginnerMissionCards() {
   });
 }
 
+function displayBeginnerMissionIcon(iconKey = "") {
+  if (getLocale() !== "en") return iconKey;
+  const map = {
+    角色: "Role",
+    骰: "Roll",
+    流: "Flow",
+    事: "Event",
+    问: "?",
+    急: "Fund",
+    资: "Asset",
+    奖: "Goal",
+  };
+  return map[iconKey] || iconKey;
+}
+
 function nextBeginnerMission() {
   return beginnerMissionCards().find((mission) => !mission.completed) || null;
 }
@@ -2543,12 +2643,14 @@ function showGlossary(termId = null) {
           [translateText("相关词"), selectedTerm.relatedTerms.join(getLocale() === "en" ? ", " : "、") || translateText("无")],
           [translateText("提醒"), t("modal.localModelNotice")],
         ]
-      : allTerms.map((term) => [`${term.iconKey} ${term.term}`, term.shortDefinition]).slice(0, 24),
+      : allTerms.map((term) => [term.term, term.shortDefinition]).slice(0, 24),
     actions: [
       ...(termId ? [{ label: translateText("查看全部词典"), onClick: () => showGlossary() }] : []),
       { label: t("ui.parentGuide"), onClick: showParentGuide },
       { label: t("ui.close"), className: "primary", onClick: closeModal },
     ],
+    panel: "glossary",
+    data: { glossaryTerm: termId || "" },
   });
 }
 
@@ -2703,10 +2805,10 @@ function renderStatements() {
         <div class="stat-row hud-metric ${Number(value) < 0 ? "negative-line" : "positive-line"}">
           <span class="hud-metric-icon" aria-hidden="true">${statementIcon(label)}</span>
           <div>
-            <strong>${label}</strong>
-            <small>${help}</small>
+            <strong>${translateText(label)}</strong>
+            <small>${translateText(help)}</small>
           </div>
-          <b>${label === "信用分" ? `${value}` : label === "当前利率" ? bankSummary.interestLevel : label === "景气状态" ? economy.label : money(value)}</b>
+          <b>${label === "信用分" ? `${value}` : label === "当前利率" ? translateText(bankSummary.interestLevel) : label === "景气状态" ? translateText(economy.label) : money(value)}</b>
         </div>
       `,
     )
@@ -2720,14 +2822,14 @@ function renderStatements() {
             <div class="asset-row positive">
               <div>
                 <strong>${asset.name}</strong>
-                <small>${assetLabel(asset.type)}，价值 ${money(asset.value)}</small>
+              <small>${translateText(assetLabel(asset.type))} · ${translateText("价值")} ${money(asset.value)}</small>
               </div>
               <b>+${money(asset.cashflow)}</b>
             </div>
           `,
         )
         .join("")
-    : '<div class="asset-row"><strong>暂无其他资产</strong><small>本轮重点资产在房地产中心。</small></div>';
+    : `<div class="asset-row"><strong>${translateText("暂无其他资产")}</strong><small>${translateText("本轮重点资产在房地产中心。")}</small></div>`;
 
   el.liabilityList.innerHTML = state.liabilities.length
     ? state.liabilities
@@ -2736,14 +2838,14 @@ function renderStatements() {
             <div class="asset-row negative">
               <div>
                 <strong>${item.name}</strong>
-                <small>${liabilityLabel(item.type)}余额 ${money(item.balance)} · 月供 ${money(item.payment)}</small>
+                <small>${translateText(liabilityLabel(item.type))} ${translateText("余额")} ${money(item.balance)} · ${translateText("月供")} ${money(item.payment)}</small>
               </div>
               <b>-${money(item.payment)}</b>
             </div>
           `,
         )
         .join("")
-    : '<div class="asset-row"><strong>暂无负债</strong><small>借款或买入房产后会增加月供。</small></div>';
+    : `<div class="asset-row"><strong>${translateText("暂无负债")}</strong><small>${translateText("借款或买入房产后会增加月供。")}</small></div>`;
 }
 
 function renderBankPanel() {
@@ -2755,13 +2857,13 @@ function renderBankPanel() {
         .map(
           (tx) => `
             <div class="history-row">
-              <strong>${tx.type}</strong>
-              <span>第 ${tx.month} 月 · ${tx.description}</span>
+              <strong>${translateText(tx.type)}</strong>
+              <span>${formatMonth(tx.month)} · ${translateText(tx.description)}</span>
             </div>
           `,
         )
         .join("")
-    : '<div class="history-row"><strong>暂无记录</strong><span>贷款、利率变化、再融资和破产保护会记录在这里。</span></div>';
+    : `<div class="history-row"><strong>${translateText("暂无记录")}</strong><span>${translateText("贷款、利率变化、再融资和破产保护会记录在这里。")}</span></div>`;
 
   el.bankPanel.innerHTML = `
     <div class="portfolio-summary bank-summary-grid">
@@ -2775,12 +2877,12 @@ function renderBankPanel() {
       ${summaryMetric("房贷余额", money(debt.mortgageDebt))}
     </div>
     <div class="bank-actions">
-      <button class="primary" type="button" id="bankPanelOpen">打开银行中心</button>
-      <button type="button" id="bankPanelLoan">个人贷款</button>
-      <button type="button" id="bankPanelRefinance">再融资</button>
+      <button class="primary" type="button" id="bankPanelOpen">${translateText("打开银行中心")}</button>
+      <button type="button" id="bankPanelLoan">${translateText("个人贷款")}</button>
+      <button type="button" id="bankPanelRefinance">${translateText("再融资")}</button>
     </div>
     <div class="transaction-history">
-      <h3>银行记录</h3>
+      <h3>${translateText("银行记录")}</h3>
       ${latestHtml}
     </div>
   `;
@@ -2802,42 +2904,42 @@ function renderLifePanel() {
         .map(
           (record) => `
             <div class="history-row">
-              <strong>${record.category}</strong>
-              <span>第 ${record.month} 月 · ${record.title} · ${record.choice} · 现金 ${signedMoney(record.cashChange)}</span>
+              <strong>${translateText(record.category)}</strong>
+              <span>${formatMonth(record.month)} · ${translateText(record.title)} · ${translateText(record.choice)} · ${t("finance.cash")} ${signedMoney(record.cashChange)}</span>
             </div>
           `,
         )
         .join("")
-    : '<div class="history-row"><strong>暂无记录</strong><span>医疗、工作、家庭、税务、保险和法律事件会记录在这里。</span></div>';
+    : `<div class="history-row"><strong>${translateText("暂无记录")}</strong><span>${translateText("医疗、工作、家庭、税务、保险和法律事件会记录在这里。")}</span></div>`;
   const unemploymentText = state.unemployment.unemployed
-    ? `失业中 · 剩余 ${state.unemployment.unemploymentMonthsRemaining} 月 · 找工作 ${state.unemployment.jobSearchProgress}%`
-    : "目前有工作";
+    ? `${translateText("失业中")} · ${translateText("剩余")} ${state.unemployment.unemploymentMonthsRemaining} ${translateText("月")} · ${translateText("寻找工作")} ${state.unemployment.jobSearchProgress}%`
+    : translateText("目前有工作");
 
   el.lifePanel.innerHTML = `
     <div class="portfolio-summary life-summary-grid">
       ${summaryMetric("每月保费", money(premiums))}
-      ${summaryMetric("已购保单", `${activePolicies.length} 张`)}
+      ${summaryMetric("已购保单", `${activePolicies.length} ${translateText("张")}`)}
       ${summaryMetric("失业状态", unemploymentText)}
       ${summaryMetric("税务预估", money(taxSummary.estimatedTax))}
       ${summaryMetric("税务余额", money(taxSummary.taxBalance))}
-      ${summaryMetric("预备金月数", `${emergency.months} 月 · ${emergency.status}`)}
+      ${summaryMetric("预备金月数", `${emergency.months} ${translateText("月")} · ${translateText(emergency.status)}`)}
       ${summaryMetric("建议预备金", money(emergency.suggestedReserve))}
-      ${summaryMetric("景气循环", `${economy.label} · ${state.economy.monthsRemaining} 月`)}
+      ${summaryMetric("景气循环", `${translateText(economy.label)} · ${state.economy.monthsRemaining} ${translateText("月")}`)}
     </div>
     <div class="risk-panel">
-      <div class="risk-note">${emergency.note}</div>
-      <div class="risk-note">游戏中的税务、保险、医疗和法律规则都是简化学习规则，不是真实建议。</div>
+      <div class="risk-note">${translateText(emergency.note)}</div>
+      <div class="risk-note">${translateText("游戏中的税务、保险、医疗和法律规则都是简化学习规则，不是真实建议。")}</div>
     </div>
     <div class="bank-actions">
-      <button class="primary" type="button" id="lifeEventButton">抽人生事件</button>
-      <button type="button" id="insuranceButton">保险中心</button>
-      <button type="button" id="jobSearchButton">寻找工作</button>
-      <button type="button" id="taxButton">税务摘要</button>
+      <button class="primary" type="button" id="lifeEventButton">${translateText("抽人生事件")}</button>
+      <button type="button" id="insuranceButton">${translateText("保险中心")}</button>
+      <button type="button" id="jobSearchButton">${translateText("寻找工作")}</button>
+      <button type="button" id="taxButton">${translateText("税务摘要")}</button>
     </div>
     <div class="transaction-history">
-      <h3>人生事件记录</h3>
+      <h3>${translateText("人生事件记录")}</h3>
       <div class="filter-row">
-        ${["全部", "医疗", "工作", "家庭", "税务", "保险", "法律", "奖励"].map((filter) => `<span>${filter}</span>`).join("")}
+        ${["全部", "医疗", "工作", "家庭", "税务", "保险", "法律", "奖励"].map((filter) => `<span>${translateText(filter)}</span>`).join("")}
       </div>
       ${historyHtml}
     </div>
@@ -2859,17 +2961,17 @@ function renderRealEstatePortfolio() {
               <span class="property-icon">${propertyIcon(property.category)}</span>
               <span>
                 <strong>${property.name}</strong>
-                <small>${property.category} · 持有 ${Math.max(0, state.month - property.purchasedMonth)} 个月 · ${property.lastMarketChange || "市场未变化"}</small>
+                <small>${translateText(property.category)} · ${translateText("持有")} ${Math.max(0, state.month - property.purchasedMonth)} ${translateText("个月")} · ${translateText(property.lastMarketChange || "市场未变化")}</small>
               </span>
               <span class="property-numbers">
                 <b>${money(property.monthlyCashflow)}</b>
-                <small>净值 ${money(property.equity)}</small>
+                <small>${translateText("净值")} ${money(property.equity)}</small>
               </span>
             </button>
           `,
         )
         .join("")
-    : '<div class="asset-row"><strong>还没有房地产</strong><small>遇到房地产机会时，可以从首付、房贷和租金开始判断。</small></div>';
+    : `<div class="asset-row"><strong>${translateText("还没有房地产")}</strong><small>${translateText("遇到房地产机会时，可以从首付、房贷和租金开始判断。")}</small></div>`;
 
   const historyHtml = state.propertyTransactions.length
     ? state.propertyTransactions
@@ -2877,17 +2979,17 @@ function renderRealEstatePortfolio() {
         .map(
           (tx) => `
             <div class="history-row">
-              <strong>${tx.type}</strong>
-              <span>第 ${tx.month} 月 · ${tx.description}</span>
+              <strong>${translateText(tx.type)}</strong>
+              <span>${formatMonth(tx.month)} · ${translateText(tx.description)}</span>
             </div>
           `,
         )
         .join("")
-    : '<div class="history-row"><strong>暂无记录</strong><span>购买、出售、维修和市场变化会记录在这里。</span></div>';
+    : `<div class="history-row"><strong>${translateText("暂无记录")}</strong><span>${translateText("购买、出售、维修和市场变化会记录在这里。")}</span></div>`;
 
   el.realEstatePortfolio.innerHTML = `
     <div class="portfolio-summary">
-      ${summaryMetric("持有数量", `${summary.count} 项`)}
+      ${summaryMetric("持有数量", `${summary.count} ${translateText("项")}`)}
       ${summaryMetric("总市值", money(summary.totalValue))}
       ${summaryMetric("房贷总额", money(summary.totalMortgage))}
       ${summaryMetric("房产净值", money(summary.totalEquity))}
@@ -2897,7 +2999,7 @@ function renderRealEstatePortfolio() {
     </div>
     <div class="property-list">${propertiesHtml}</div>
     <div class="transaction-history">
-      <h3>房地产交易记录</h3>
+      <h3>${translateText("房地产交易记录")}</h3>
       ${historyHtml}
     </div>
   `;
@@ -2920,21 +3022,21 @@ function renderStockPortfolio() {
               <span class="stock-icon">${stockIcon(stock?.sector)}</span>
               <span>
                 <strong>${stock?.name || holding.symbol} <em>${holding.symbol}</em></strong>
-                <small>${stock?.sector || "产业"} · ${holding.shares} 股 · 组合占比 ${ratio}%</small>
+                <small>${translateText(stock?.sector || "产业")} · ${holding.shares} ${translateText("股")} · ${translateText("组合占比")} ${ratio}%</small>
               </span>
               <span class="stock-numbers ${holding.unrealizedGain >= 0 ? "gain" : "loss"}">
-                <b>${direction} ${signedMoney(holding.unrealizedGain)}</b>
-                <small>市值 ${money(holding.currentValue)} · ${signedPercent(holding.unrealizedGainPercent)}</small>
+                <b>${translateText(direction)} ${signedMoney(holding.unrealizedGain)}</b>
+                <small>${translateText("市值")} ${money(holding.currentValue)} · ${signedPercent(holding.unrealizedGainPercent)}</small>
               </span>
             </button>
           `;
         })
         .join("")
-    : '<div class="asset-row"><strong>还没有股票</strong><small>落到股票机会格后，可以从价格、风险和分散开始判断。</small></div>';
+    : `<div class="asset-row"><strong>${translateText("还没有股票")}</strong><small>${translateText("落到股票机会格后，可以从价格、风险和分散开始判断。")}</small></div>`;
 
   const warningHtml = summary.warnings.length
-    ? summary.warnings.map((warning) => `<div class="risk-note">${warning}</div>`).join("")
-    : '<div class="risk-note">目前没有明显集中提醒。分散可以减少一次事件带来的影响，但不能消除所有风险。</div>';
+    ? summary.warnings.map((warning) => `<div class="risk-note">${translateText(warning)}</div>`).join("")
+    : `<div class="risk-note">${translateText("目前没有明显集中提醒。分散可以减少一次事件带来的影响，但不能消除所有风险。")}</div>`;
 
   const historyHtml = state.stockTransactions.length
     ? state.stockTransactions
@@ -2942,29 +3044,29 @@ function renderStockPortfolio() {
         .map(
           (tx) => `
             <div class="history-row">
-              <strong>${tx.type}</strong>
-              <span>第 ${tx.month} 月 · ${tx.description}</span>
+              <strong>${translateText(tx.type)}</strong>
+              <span>${formatMonth(tx.month)} · ${translateText(tx.description)}</span>
             </div>
           `,
         )
         .join("")
-    : '<div class="history-row"><strong>暂无记录</strong><span>买入、卖出、股息和迁移会记录在这里。</span></div>';
+    : `<div class="history-row"><strong>${translateText("暂无记录")}</strong><span>${translateText("买入、卖出、股息和迁移会记录在这里。")}</span></div>`;
 
   el.stockPortfolio.innerHTML = `
     <div class="portfolio-summary stock-summary-grid">
       ${summaryMetric("股票总市值", money(summary.totalValue))}
       ${summaryMetric("总投入成本", money(summary.totalCost))}
-      ${summaryMetric("未实现损益", `${summary.unrealizedGain >= 0 ? "上涨" : "下跌"} ${signedMoney(summary.unrealizedGain)}`)}
+      ${summaryMetric("未实现损益", `${translateText(summary.unrealizedGain >= 0 ? "上涨" : "下跌")} ${signedMoney(summary.unrealizedGain)}`)}
       ${summaryMetric("已实现损益", signedMoney(summary.realizedGain))}
       ${summaryMetric("累计股息", money(summary.dividendsReceived))}
-      ${summaryMetric("持有股票", `${summary.holdingCount} 支`)}
+      ${summaryMetric("持有股票", `${summary.holdingCount} ${translateText("支")}`)}
       ${summaryMetric("组合风险", summary.riskLevel)}
       ${summaryMetric("最大单一占比", `${summary.maxSingleHoldingRatio}%`)}
     </div>
     <div class="risk-panel">${warningHtml}</div>
     <div class="stock-list">${holdingsHtml}</div>
     <div class="transaction-history">
-      <h3>股票交易记录</h3>
+      <h3>${translateText("股票交易记录")}</h3>
       ${historyHtml}
     </div>
   `;
@@ -2984,21 +3086,21 @@ function renderBusinessPortfolio() {
               <span class="business-icon">${businessIcon(business.category)}</span>
               <span>
                 <strong>${business.name}</strong>
-                <small>等級 ${business.level} · ${business.condition} · 需求 ${Math.round(business.demandModifier * 100)}%</small>
+                <small>${translateText("等級")} ${business.level} · ${translateText(business.condition)} · ${translateText("需求")} ${Math.round(business.demandModifier * 100)}%</small>
               </span>
               <span class="business-numbers ${business.monthlyProfit >= 0 ? "gain" : "loss"}">
-                <b>${business.monthlyProfit >= 0 ? "淨利" : "虧損"} ${signedMoney(business.monthlyProfit)}</b>
-                <small>價值 ${money(business.currentValue)} · 被動 ${Math.round(business.passiveRatio * 100)}%</small>
+                <b>${translateText(business.monthlyProfit >= 0 ? "淨利" : "虧損")} ${signedMoney(business.monthlyProfit)}</b>
+                <small>${translateText("價值")} ${money(business.currentValue)} · ${translateText("被動")} ${Math.round(business.passiveRatio * 100)}%</small>
               </span>
             </button>
           `,
         )
         .join("")
-    : '<div class="asset-row"><strong>還沒有小生意</strong><small>落到小生意機會格後，可以從營收、成本和淨利開始判斷。</small></div>';
+    : `<div class="asset-row"><strong>${translateText("還沒有小生意")}</strong><small>${translateText("落到小生意機會格後，可以從營收、成本和淨利開始判斷。")}</small></div>`;
 
   const warningsHtml = summary.warnings.length
-    ? summary.warnings.map((warning) => `<div class="risk-note">${warning}</div>`).join("")
-    : '<div class="risk-note">目前沒有明顯集中提醒。分散可以降低一次事件的影響，但不能消除所有風險。</div>';
+    ? summary.warnings.map((warning) => `<div class="risk-note">${translateText(warning)}</div>`).join("")
+    : `<div class="risk-note">${translateText("目前沒有明顯集中提醒。分散可以降低一次事件的影響，但不能消除所有風險。")}</div>`;
 
   const historyHtml = state.businessTransactions.length
     ? state.businessTransactions
@@ -3006,17 +3108,17 @@ function renderBusinessPortfolio() {
         .map(
           (tx) => `
             <div class="history-row">
-              <strong>${tx.type}</strong>
-              <span>第 ${tx.month} 月 · ${tx.description}</span>
+              <strong>${translateText(tx.type)}</strong>
+              <span>${formatMonth(tx.month)} · ${translateText(tx.description)}</span>
             </div>
           `,
         )
         .join("")
-    : '<div class="history-row"><strong>暂无记录</strong><span>投資、升級、收入、事件和出售會記錄在這裡。</span></div>';
+    : `<div class="history-row"><strong>${translateText("暂无记录")}</strong><span>${translateText("投資、升級、收入、事件和出售會記錄在這裡。")}</span></div>`;
 
   el.businessPortfolio.innerHTML = `
     <div class="portfolio-summary business-summary-grid">
-      ${summaryMetric("持有數量", `${summary.count} 個`)}
+      ${summaryMetric("持有數量", `${summary.count} ${translateText("個")}`)}
       ${summaryMetric("總市值", money(summary.totalValue))}
       ${summaryMetric("每月營收", money(summary.monthlyRevenue))}
       ${summaryMetric("每月成本", money(summary.monthlyExpenses))}
@@ -3028,9 +3130,9 @@ function renderBusinessPortfolio() {
     <div class="risk-panel">${warningsHtml}</div>
     <div class="business-list">${holdingsHtml}</div>
     <div class="transaction-history">
-      <h3>小生意交易記錄</h3>
+      <h3>${translateText("小生意交易記錄")}</h3>
       <div class="filter-row">
-        ${["全部", "投資", "升級", "收入", "支出", "市場變化", "出售"].map((filter) => `<span>${filter}</span>`).join("")}
+        ${["全部", "投資", "升級", "收入", "支出", "市場變化", "出售"].map((filter) => `<span>${translateText(filter)}</span>`).join("")}
       </div>
       ${historyHtml}
     </div>
@@ -3042,7 +3144,8 @@ function renderBusinessPortfolio() {
 }
 
 function summaryMetric(label, value) {
-  return `<div class="summary-metric"><span>${label}</span><strong>${value}</strong></div>`;
+  const safeValue = typeof value === "string" && !/<[a-z][\s\S]*>/i.test(value) ? translateText(value) : value;
+  return `<div class="summary-metric"><span>${translateText(label)}</span><strong>${safeValue}</strong></div>`;
 }
 
 function renderLogs() {
@@ -3186,7 +3289,7 @@ function creditGauge(score) {
 }
 
 function ratePulse(label) {
-  return `<span class="rate-pulse">${label}</span>`;
+  return `<span class="rate-pulse">${translateText(label)}</span>`;
 }
 
 async function rollDice(forcedRoll = null) {
@@ -5208,7 +5311,7 @@ function checkWin() {
   return Boolean(result?.victory.triggered);
 }
 
-function openSimpleModal({ type, title, text, metrics = [], actions = [], outcome = "neutral" }) {
+function openSimpleModal({ type, title, text, metrics = [], actions = [], outcome = "neutral", panel = "", data = {} }) {
   if (uiState.turnPhase === "openingEvent") setTurnPhase("resolvingEvent");
   const displayType = translateText(type);
   const displayTitle = translateText(title);
@@ -5220,7 +5323,14 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [], outcom
   modalCard?.setAttribute("data-event-type", displayType);
   modalCard?.setAttribute("aria-label", displayTitle);
   modalCard?.setAttribute("data-outcome", outcome);
-  delete modalCard?.dataset.panel;
+  if (modalCard) {
+    delete modalCard.dataset.panel;
+    delete modalCard.dataset.glossaryTerm;
+    if (panel) modalCard.dataset.panel = panel;
+    Object.entries(data || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) modalCard.dataset[key] = String(value);
+    });
+  }
   modalCard?.classList.remove("progress-modal-card", "report-modal-card");
   el.dealMetrics.classList.remove("progress-center-body", "report-body");
   modalCard?.querySelector(".event-illustration")?.remove();
@@ -5312,7 +5422,7 @@ function glossaryChipsHtml(content = "") {
   return `
     <section class="glossary-chip-row" aria-label="${translateText("财务名词提示")}">
       <strong>${translateText("词典")}</strong>
-      ${matches.map((term) => `<button type="button" data-glossary-term="${term.id}">${term.iconKey} ${term.term}</button>`).join("")}
+      ${matches.map((term) => `<button type="button" data-glossary-term="${term.id}" aria-label="${escapeHtml(`${term.term}: ${term.shortDefinition}`)}">${escapeHtml(term.term)}</button>`).join("")}
     </section>
   `;
 }
@@ -5332,6 +5442,9 @@ function closeModal() {
   document.body.classList.remove("modal-open");
   if (["openingEvent", "resolvingEvent", "showingResult", "turnComplete", "paused"].includes(phaseBeforeClose)) {
     releaseTurnLock({ reason: "modal-close", force: true, renderNow: true });
+  } else if (state && !state.gameOver) {
+    syncRollButton();
+    renderActions();
   }
   soundManager.setScene(state ? "board" : "home");
   if (state && !state.gameOver && !uiState.isRolling && !uiState.isMoving) {
@@ -6343,38 +6456,38 @@ function resetTutorialProgress() {
 function showSoundSettings() {
   const soundSnapshot = soundManager.getSnapshot();
   openSimpleModal({
-    type: "音效设置",
-    title: uiState.muted ? "声音已关闭" : "声音已开启",
-    text: "音效和背景音乐使用浏览器即时生成；首次互动后才会播放，不支持时会安静降级。",
+    type: t("settings.soundType"),
+    title: uiState.muted ? t("settings.soundOffTitle") : t("settings.soundOnTitle"),
+    text: t("settings.soundText"),
     metrics: [
-      ["总声音", uiState.muted ? "静音" : "开启"],
-      ["音效音量", `${Math.round(uiState.effectVolume * 100)}%`],
-      ["背景音乐", `${uiState.musicEnabled ? "开启" : "关闭"} · ${Math.round(uiState.musicVolume * 100)}%`],
-      ["震动", uiState.hapticsEnabled && navigator?.vibrate ? "轻量开启" : uiState.hapticsEnabled ? "设备不支持" : "关闭"],
-      ["动画速度", uiState.animationSpeed === "fast" ? "快速" : "标准"],
-      ["画面品质", qualityLabel(uiState.visualQuality)],
-      ["城市氛围", atmosphereLabel(uiState.atmosphere)],
-      ["小地图", uiState.minimapCollapsed ? "已收起" : "显示中"],
-      ["音乐状态", soundSnapshot.musicPlaying ? "正在播放" : "等待互动或已暂停"],
-      ["教学", uiState.tutorialComplete ? "已完成，可重播" : "尚未完成"],
+      [t("settings.totalSound"), uiState.muted ? t("settings.muted") : t("settings.on")],
+      [t("settings.effectVolume"), `${Math.round(uiState.effectVolume * 100)}%`],
+      [t("settings.backgroundMusic"), `${uiState.musicEnabled ? t("settings.on") : t("settings.off")} · ${Math.round(uiState.musicVolume * 100)}%`],
+      [t("settings.vibration"), uiState.hapticsEnabled && navigator?.vibrate ? t("settings.lightOn") : uiState.hapticsEnabled ? t("settings.unsupported") : t("settings.off")],
+      [t("settings.animationSpeed"), uiState.animationSpeed === "fast" ? t("settings.fast") : t("settings.standardAnimation")],
+      [t("settings.visualQuality"), qualityLabel(uiState.visualQuality)],
+      [t("settings.cityAtmosphere"), atmosphereLabel(uiState.atmosphere)],
+      [t("settings.minimap"), uiState.minimapCollapsed ? t("settings.minimapCollapsed") : t("settings.minimapVisible")],
+      [t("settings.musicStatus"), soundSnapshot.musicPlaying ? t("settings.musicPlaying") : t("settings.musicWaiting")],
+      [t("settings.tutorial"), uiState.tutorialComplete ? t("settings.tutorialComplete") : t("settings.tutorialIncomplete")],
     ],
     actions: [
-      { label: uiState.muted ? "开启声音" : "关闭声音", className: "primary", onClick: () => { toggleSound(); showSoundSettings(); } },
-      { label: uiState.musicEnabled ? "关闭音乐" : "开启音乐", onClick: () => { toggleMusic(); showSoundSettings(); } },
-      { label: uiState.hapticsEnabled ? "关闭震动" : "开启震动", onClick: () => { toggleHaptics(); showSoundSettings(); } },
-      { label: uiState.animationSpeed === "fast" ? "标准动画" : "快速动画", onClick: () => { toggleAnimationSpeed(); showSoundSettings(); } },
-      { label: `画面：${qualityLabel(nextQuality(uiState.visualQuality))}`, onClick: () => { cycleVisualQuality(); showSoundSettings(); } },
-      { label: `氛围：${atmosphereLabel(nextAtmosphere(uiState.atmosphere))}`, onClick: () => { cycleAtmosphere(); showSoundSettings(); } },
-      { label: uiState.minimapCollapsed ? "显示小地图" : "收起小地图", onClick: () => { toggleMiniMapSetting(); showSoundSettings(); } },
-      { label: "音效小一点", onClick: () => { adjustEffectVolume(-0.15); showSoundSettings(); } },
-      { label: "音效大一点", onClick: () => { adjustEffectVolume(0.15); showSoundSettings(); } },
-      { label: "重新观看教学", onClick: () => { closeModal(); startTutorial(true); } },
-      { label: "教学设置", onClick: showTutorialSettings },
+      { label: uiState.muted ? t("settings.turnSoundOn") : t("settings.turnSoundOff"), className: "primary", onClick: () => { toggleSound(); showSoundSettings(); } },
+      { label: uiState.musicEnabled ? t("settings.turnMusicOff") : t("settings.turnMusicOn"), onClick: () => { toggleMusic(); showSoundSettings(); } },
+      { label: uiState.hapticsEnabled ? t("settings.turnHapticsOff") : t("settings.turnHapticsOn"), onClick: () => { toggleHaptics(); showSoundSettings(); } },
+      { label: uiState.animationSpeed === "fast" ? t("settings.useStandardAnimation") : t("settings.useFastAnimation"), onClick: () => { toggleAnimationSpeed(); showSoundSettings(); } },
+      { label: t("settings.nextQuality", { quality: qualityLabel(nextQuality(uiState.visualQuality)) }), onClick: () => { cycleVisualQuality(); showSoundSettings(); } },
+      { label: t("settings.nextAtmosphere", { atmosphere: atmosphereLabel(nextAtmosphere(uiState.atmosphere)) }), onClick: () => { cycleAtmosphere(); showSoundSettings(); } },
+      { label: uiState.minimapCollapsed ? t("settings.showMinimap") : t("settings.collapseMinimap"), onClick: () => { toggleMiniMapSetting(); showSoundSettings(); } },
+      { label: t("settings.effectSofter"), onClick: () => { adjustEffectVolume(-0.15); showSoundSettings(); } },
+      { label: t("settings.effectLouder"), onClick: () => { adjustEffectVolume(0.15); showSoundSettings(); } },
+      { label: t("settings.replayTutorial"), onClick: () => { closeModal(); startTutorial(true); } },
+      { label: t("settings.tutorialSettings"), onClick: showTutorialSettings },
       { label: t("feedback.reportIssue"), onClick: showFeedbackPanel },
       { label: t("feedback.privacyNotice"), onClick: showPrivacyNotice },
-      { label: "家长／老师说明", onClick: showParentGuide },
-      { label: "查看提示", onClick: showRules },
-      { label: "关闭", onClick: closeModal },
+      { label: t("ui.parentGuide"), onClick: showParentGuide },
+      { label: t("settings.viewTips"), onClick: showRules },
+      { label: t("ui.close"), onClick: closeModal },
     ],
   });
 }
@@ -6409,7 +6522,7 @@ function nextQuality(value) {
 }
 
 function qualityLabel(value) {
-  return { high: "高品质", standard: "标准", battery: "省电" }[value] || "标准";
+  return t(`settings.quality.${value}`, {}, { fallback: t("settings.quality.standard") });
 }
 
 function nextAtmosphere(value) {
@@ -6417,7 +6530,7 @@ function nextAtmosphere(value) {
 }
 
 function atmosphereLabel(value) {
-  return { auto: "自动", day: "白天", evening: "傍晚", night: "夜晚" }[value] || "自动";
+  return t(`settings.atmosphere.${value}`, {}, { fallback: t("settings.atmosphere.auto") });
 }
 
 function cycleAtmosphere() {
@@ -6754,6 +6867,7 @@ window.cashflowDebug = {
   showCharacterSelection,
   showGlossary,
   showParentGuide,
+  showSoundSettings,
   showTutorialSettings,
   resetTutorialProgress,
   showBeginnerMissions,

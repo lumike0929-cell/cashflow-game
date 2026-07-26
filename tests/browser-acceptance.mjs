@@ -43,6 +43,9 @@ try {
   await page.selectOption("#topLocaleSelect", "en");
   await expectText(page, "Cashflow Adventure City");
   await expectText(page, "Build assets until passive income is higher than monthly expenses.");
+  await runEnglishI18nSmoke(page);
+  await page.evaluate(() => localStorage.clear());
+  await page.reload({ waitUntil: "networkidle" });
   await page.selectOption("#topLocaleSelect", "zh-TW");
   await expectText(page, "現金流冒險城");
   await page.selectOption("#topLocaleSelect", "zh-CN");
@@ -942,6 +945,138 @@ async function expectText(page, text) {
   await page.getByText(text).first().waitFor({ state: "visible" });
 }
 
+async function expectModalText(page, text) {
+  await page.locator("#cardModal").getByText(text).first().waitFor({ state: "visible" });
+}
+
+async function runEnglishI18nSmoke(page) {
+  await assertEnglishUiClean(page, "English home");
+  await expectText(page, "Welcome to Cashflow Adventure City");
+  await assertEnglishUiClean(page, "English onboarding modal");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.locator("#startAdventure").click();
+  await expectText(page, "Start Directly");
+  await assertEnglishUiClean(page, "English onboarding from start");
+  await page.getByText("Start Directly").click();
+  await page.locator('[data-career="designer"]').click();
+  await expectText(page, "Freelance Designer");
+  await expectText(page, "Difficulty: Standard");
+  await expectText(page, "Mode: Single Player Learning");
+  await assertEnglishUiClean(page, "English character selection");
+
+  await page.locator("#startSelectedCareer").click();
+  await expectText(page, "You are playing as a Freelance Designer on Standard difficulty in Single Player Learning mode.");
+  await assertEnglishUiClean(page, "English start modal");
+  await page.selectOption("#topLocaleSelect", "zh-CN");
+  await page.selectOption("#topLocaleSelect", "en");
+  await expectText(page, "You are playing as a Freelance Designer on Standard difficulty in Single Player Learning mode.");
+  await assertEnglishUiClean(page, "English start modal after locale switch");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+
+  await page.evaluate(() => window.cashflowDebug.showGlossary());
+  await expectModalText(page, "Monthly Cash Flow");
+  await assertEnglishUiClean(page, "English glossary list");
+  await assertNoInternalGlossaryTokens(page, "English glossary list");
+  await page.evaluate(() => window.cashflowDebug.showGlossary("passiveIncome"));
+  await expectModalText(page, "Income that may continue without constant work.");
+  await assertEnglishUiClean(page, "English glossary detail");
+  await assertNoInternalGlossaryTokens(page, "English glossary detail");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+
+  await page.evaluate(() => window.cashflowDebug.showSoundSettings());
+  await expectText(page, "Sound Settings");
+  await assertEnglishUiClean(page, "English sound settings");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+
+  await page.evaluate(() => window.cashflowDebug.showFeedbackPanel());
+  await expectText(page, "Report a Cashflow Issue");
+  await assertEnglishUiClean(page, "English bug report");
+  await page.locator("#feedbackSummary").fill("The roll button stayed disabled.");
+  await page.selectOption("#topLocaleSelect", "zh-TW");
+  await page.selectOption("#topLocaleSelect", "en");
+  await assert.equal(await page.locator("#feedbackSummary").inputValue(), "The roll button stayed disabled.");
+  await assertEnglishUiClean(page, "English bug report after locale switch");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+
+  await page.evaluate(() => window.cashflowDebug.showReleaseNotes());
+  await expectText(page, "Public Beta Notes");
+  await assertEnglishUiClean(page, "English release notes");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+
+  await page.evaluate(() => window.cashflowDebug.showParentGuide());
+  await expectText(page, "Parent / Teacher Guide");
+  await assertEnglishUiClean(page, "English parent guide");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
+
+  await page.waitForTimeout(360);
+  await assertEnglishUiClean(page, "English pre-roll tutorial");
+  await resolveModalUntilReady(page, "reject");
+  await installDeterministicRoll(page, 1);
+  await waitForRollReady(page, "English smoke before roll");
+  const before = await rollButtonSnapshot(page);
+  await page.mouse.click(before.center.x, before.center.y);
+  await page.waitForFunction(() => {
+    const experience = window.cashflowDebug.getExperience();
+    return !experience.isRolling && !experience.isMoving && !["rolling", "diceResult", "preparingMove", "moving", "arriving"].includes(experience.turnPhase);
+  }, null, { timeout: 12000 });
+  await assertEnglishUiClean(page, "English event card");
+  await resolveModalUntilReady(page, "reject");
+  await waitForRollReady(page, "English smoke after event");
+  await restoreRandom(page);
+}
+
+async function assertEnglishUiClean(page, label) {
+  const scan = await page.evaluate(() => {
+    const isVisible = (node) => {
+      if (!node?.parentElement) return false;
+      const parent = node.parentElement;
+      if (parent.closest("script, style, select, option, template")) return false;
+      if (parent.closest("[aria-hidden='true']")) return false;
+      const style = getComputedStyle(parent);
+      if (style.display === "none" || style.visibility === "hidden") return false;
+      const rect = parent.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    };
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const describe = (element) => {
+      const parts = [];
+      let node = element;
+      while (node && node !== document.body && parts.length < 4) {
+        const id = node.id ? `#${node.id}` : "";
+        const classes = typeof node.className === "string" && node.className.trim()
+          ? `.${node.className.trim().split(/\s+/).slice(0, 3).join(".")}`
+          : "";
+        parts.unshift(`${node.tagName.toLowerCase()}${id}${classes}`);
+        node = node.parentElement;
+      }
+      return parts.join(" > ");
+    };
+    const snippets = [];
+    let current;
+    while ((current = walker.nextNode())) {
+      const text = current.textContent.replace(/\s+/g, " ").trim();
+      if (!text || !isVisible(current)) continue;
+      if (/[\u3400-\u9fff]/.test(text) || /(?:undefined|\[object Object\]|Translation unavailable)/i.test(text) || /\b(?:ui|home|hud|finance|setup|glossary|settings|feedback|release|pwa|modal)\.[a-z0-9_.-]+/i.test(text)) {
+        snippets.push(`${describe(current.parentElement)} :: ${text.slice(0, 180)}`);
+      }
+    }
+    return {
+      snippets,
+      missingEnglish: window.__cashflowMissingEnglishText || [],
+      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+      width: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    };
+  });
+  assert.deepEqual(scan.snippets, [], `${label} has untranslated or mixed text: ${JSON.stringify(scan.snippets.slice(0, 12))}; missing=${JSON.stringify(scan.missingEnglish.slice(-20))}`);
+  assert.equal(scan.overflow, false, `${label} horizontal overflow: ${scan.width} > ${scan.clientWidth}`);
+}
+
+async function assertNoInternalGlossaryTokens(page, label) {
+  const text = await page.locator("#cardModal").innerText();
+  assert.doesNotMatch(text, /(?:^|\n|\s)(?:¥ Cash|In Income|Ex Expenses|Flow Monthly Cash Flow)(?:\n|\s|$)/, `${label} exposes glossary internals: ${text}`);
+}
+
 async function playRealRollSequence(page, { viewport, label, rolls, actionMode = "reject" }) {
   await page.setViewportSize(viewport);
   await page.evaluate(() => {
@@ -1131,6 +1266,9 @@ async function turnRecoverySnapshot(page) {
       disabled: button.disabled,
       text: button.textContent,
       modalHidden: document.querySelector("#cardModal").classList.contains("hidden"),
+      modalTitle: document.querySelector("#modalTitle")?.textContent || "",
+      modalType: document.querySelector("#modalType")?.textContent || "",
+      modalActions: [...document.querySelectorAll("#modalActions button")].map((button) => button.textContent || ""),
       diceNodes: document.querySelectorAll(".dice3d").length,
       overlayBlockers: blockers,
       playerVisible: Boolean(player && player.top >= -8 && player.left >= -8 && player.right <= window.innerWidth + 8 && (!hud || player.bottom <= hud.top + 8 || player.bottom <= window.innerHeight)),
@@ -1168,7 +1306,7 @@ async function resolveModalUntilReady(page, actionMode) {
       actionsTaken.push("close");
       await page.locator("#closeModal").click({ timeout: 2500 });
     }
-    await page.waitForTimeout(120);
+    await page.waitForTimeout(260);
     const ready = await page.evaluate(() => {
       const experience = window.cashflowDebug.getExperience();
       return experience.canRoll && !experience.rollDisabled && experience.modalHidden;

@@ -61,6 +61,32 @@ test("core UI, finance glossary, and fallback translations are available in thre
   setLocale(defaultLocale);
 });
 
+test("English setup sentences and glossary terms do not mix Chinese or internal icon tokens", () => {
+  setLocale("en");
+  const startText = t("setup.startSummary", {
+    profession: "Freelance Designer",
+    difficulty: t("setup.difficulty.standard"),
+    mode: t("setup.mode.solo"),
+  });
+  assert.equal(/[\u3400-\u9fff]/.test(startText), false);
+  assert.match(startText, /You are playing as a Freelance Designer/);
+  assert.match(startText, /income-producing assets/);
+  assert.equal(/你现在是|难度为|模式为|现金逐步|安全垫/.test(startText), false);
+
+  const unknownChineseSentence = translateText("你现在是自由设计师，难度为标准，模式为单人学习。");
+  assert.equal(/[\u3400-\u9fff]/.test(unknownChineseSentence), false);
+  assert.equal(/Freelance Designer|Difficulty|Mode/.test(unknownChineseSentence), false);
+
+  const terms = localizedGlossary();
+  for (const id of ["cash", "income", "expense", "monthlyCashflow"]) {
+    const term = terms.find((item) => item.id === id);
+    assert.ok(term, `missing term ${id}`);
+    assert.equal(/[\u3400-\u9fff]/.test(term.term), false);
+    assert.equal(/^(¥|In|Ex|Flow)\s/.test(term.term), false);
+  }
+  setLocale(defaultLocale);
+});
+
 test("formats currency, percent, and month without invalid numeric output", () => {
   for (const locale of supportedLocales) {
     setLocale(locale);
