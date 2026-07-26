@@ -749,6 +749,97 @@ try {
     { width: 430, height: 932 },
     { width: 768, height: 1024 },
     { width: 1024, height: 768 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.evaluate(() => {
+      window.cashflowDebug.closeModal();
+      window.cashflowDebug.setState({
+        career: { id: "teacher", icon: "师", name: "小学老师", salary: 32000, expenses: 23000, savings: 30000 },
+        month: 2,
+        round: 11,
+        position: 0,
+        cash: 120000,
+        salary: 32000,
+        baseExpenses: 23000,
+        assets: [],
+        liabilities: [],
+        logs: [],
+      });
+    });
+    const rolls = [1, 2, 3, 4, 5, 6, 1, 2, 3, 4];
+    for (const [index, roll] of rolls.entries()) {
+      await page.waitForFunction(() => {
+        const experience = window.cashflowDebug.getExperience();
+        return experience.canRoll && !experience.rollDisabled && experience.modalHidden;
+      }, null, { timeout: 5000 });
+      const beforeClick = await page.evaluate(() => {
+        const button = document.querySelector("#rollDice");
+        const rect = button.getBoundingClientRect();
+        const blocker = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return {
+          disabled: button.disabled,
+          pointerEvents: getComputedStyle(button).pointerEvents,
+          writingMode: getComputedStyle(button).writingMode,
+          width: rect.width,
+          height: rect.height,
+          blockedBy: blocker?.id || blocker?.className || blocker?.tagName || "",
+          buttonAtPoint: Boolean(blocker?.closest?.("#rollDice")),
+          diceNodes: document.querySelectorAll(".dice3d").length,
+          modalOpen: !document.querySelector("#cardModal").classList.contains("hidden"),
+        };
+      });
+      assert.equal(beforeClick.disabled, false, `${viewport.width}px roll ${index + 1} disabled before click`);
+      assert.equal(beforeClick.pointerEvents, "auto", `${viewport.width}px roll ${index + 1} pointer-events blocked`);
+      assert.equal(beforeClick.writingMode, "horizontal-tb", `${viewport.width}px roll ${index + 1} writing mode`);
+      assert.ok(beforeClick.width > beforeClick.height, `${viewport.width}px roll ${index + 1} became vertical`);
+      assert.equal(beforeClick.buttonAtPoint, true, `${viewport.width}px roll ${index + 1} blocked by ${beforeClick.blockedBy}`);
+      assert.ok(beforeClick.diceNodes <= 1, `${viewport.width}px dice DOM accumulated before roll ${index + 1}`);
+      assert.equal(beforeClick.modalOpen, false, `${viewport.width}px modal still open before roll ${index + 1}`);
+
+      await page.evaluate((nextRoll) => {
+        window.__rollDone = false;
+        window.cashflowDebug.rollFixed(nextRoll).then(() => {
+          window.__rollDone = true;
+        });
+        window.cashflowDebug.rollFixed(nextRoll);
+      }, roll);
+      await page.waitForFunction(() => window.__rollDone === true, null, { timeout: 8000 });
+      const afterMovement = await page.evaluate(() => window.cashflowDebug.getExperience());
+      assert.equal(afterMovement.isRolling, false, `${viewport.width}px roll ${index + 1} still rolling`);
+      assert.equal(afterMovement.isMoving, false, `${viewport.width}px roll ${index + 1} still moving`);
+      await page.evaluate(() => {
+        if (!document.querySelector("#cardModal").classList.contains("hidden")) window.cashflowDebug.closeModal();
+      });
+      await page.waitForFunction(() => {
+        const experience = window.cashflowDebug.getExperience();
+        return experience.canRoll && !experience.rollDisabled && experience.turnPhase === "idle" && experience.modalHidden;
+      }, null, { timeout: 5000 });
+      const afterClose = await page.evaluate(() => {
+        const button = document.querySelector("#rollDice");
+        return {
+          experience: window.cashflowDebug.getExperience(),
+          disabled: button.disabled,
+          text: button.textContent,
+          diceNodes: document.querySelectorAll(".dice3d").length,
+          overlays: [...document.querySelectorAll(".modal, .tutorial-overlay, .finance-effect")]
+            .filter((node) => getComputedStyle(node).pointerEvents !== "none" && !node.classList.contains("hidden")).length,
+        };
+      });
+      assert.equal(afterClose.disabled, false, `${viewport.width}px roll ${index + 1} did not recover`);
+      assert.equal(afterClose.experience.canRoll, true, `${viewport.width}px state did not recover after roll ${index + 1}`);
+      assert.match(afterClose.text, /掷骰|擲骰|Roll/i, `${viewport.width}px roll ${index + 1} text not ready`);
+      assert.ok(afterClose.diceNodes <= 1, `${viewport.width}px dice DOM accumulated after roll ${index + 1}`);
+      assert.equal(afterClose.overlays, 0, `${viewport.width}px transparent overlay remained after roll ${index + 1}`);
+    }
+  }
+
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 375, height: 667 },
+    { width: 390, height: 844 },
+    { width: 430, height: 932 },
+    { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
     { width: 1280, height: 720 },
     { width: 1440, height: 900 },
   ]) {

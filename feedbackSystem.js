@@ -36,6 +36,7 @@ export const feedbackErrorCodes = [
   "AUDIO_INIT_FAILED",
   "CANVAS_EXPORT_FAILED",
   "UI_TARGET_MISSING",
+  "TURN_LOCK_TIMEOUT",
 ];
 
 export const rc2IssuePriorities = ["P0", "P1", "P2", "P3", "P4"];

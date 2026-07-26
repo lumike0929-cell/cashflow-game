@@ -2882,6 +2882,7 @@ body[data-motion="reduced"] .city-map-stage {
   height: 82px;
   transform-style: preserve-3d;
   filter: drop-shadow(0 18px 16px rgba(23, 32, 29, 0.18));
+  pointer-events: none;
 }
 
 .dice-flight-trail {
@@ -2894,6 +2895,7 @@ body[data-motion="reduced"] .city-map-stage {
   background: radial-gradient(ellipse, rgba(255, 216, 107, 0.32), transparent 68%);
   opacity: 0;
   transform: rotate(-18deg);
+  pointer-events: none;
 }
 
 .dice-corner {
@@ -2905,6 +2907,7 @@ body[data-motion="reduced"] .city-map-stage {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.76);
   transform: rotate(-24deg);
+  pointer-events: none;
 }
 
 .dice3d.rolling {

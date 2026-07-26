@@ -396,6 +396,7 @@ const uiState = {
   deferredInstallPrompt: null,
   importPreview: null,
   feedbackDraft: {},
+  turnWatchdog: null,
 };
 soundManager.setMuted(uiState.muted);
 soundManager.setVolume(uiState.volume);
@@ -962,7 +963,52 @@ function setTurnPhase(phase) {
 }
 
 function canRoll() {
-  return Boolean(state && !state.gameOver && uiState.turnPhase === "idle" && !uiState.isRolling && !uiState.isMoving);
+  return Boolean(state && !state.gameOver && el.modal.classList.contains("hidden") && uiState.turnPhase === "idle" && !uiState.isRolling && !uiState.isMoving);
+}
+
+function clearTurnWatchdog() {
+  if (!uiState.turnWatchdog) return;
+  window.clearTimeout(uiState.turnWatchdog);
+  uiState.turnWatchdog = null;
+}
+
+function startTurnWatchdog(reason = "turn", timeout = 12000) {
+  clearTurnWatchdog();
+  uiState.turnWatchdog = window.setTimeout(() => {
+    uiState.turnWatchdog = null;
+    const modalHidden = el.modal.classList.contains("hidden");
+    const activePhase = uiState.turnPhase;
+    if (modalHidden || ["rolling", "diceResult", "preparingMove", "moving", "arriving", "paused"].includes(activePhase)) {
+      recordFeedbackError(localStorage, "TURN_LOCK_TIMEOUT", `${reason}:${activePhase}`);
+      releaseTurnLock({ reason: "watchdog", force: modalHidden || activePhase === "paused" });
+    }
+  }, timeout);
+}
+
+function releaseTurnLock({ reason = "release", force = false, renderNow = true, save = true } = {}) {
+  const modalHidden = el.modal.classList.contains("hidden");
+  const eventStillVisible = !modalHidden && ["openingEvent", "resolvingEvent", "showingResult"].includes(uiState.turnPhase);
+  document.body.classList.remove("camera-snapping");
+  uiState.previewIndices = [];
+  uiState.movingStep = 0;
+  uiState.movingTotal = 0;
+  uiState.diceRolling = false;
+  if (force || modalHidden || !eventStillVisible) {
+    clearTurnWatchdog();
+    setTurnPhase("idle");
+    uiState.isRolling = false;
+    uiState.isMoving = false;
+    uiState.hudStatus = phaseLabel("idle");
+    setAvatarState("idle");
+    if (save && state) persistQuietly();
+  } else {
+    uiState.isRolling = false;
+    uiState.isMoving = false;
+    uiState.hudStatus = t("hud.openingEvent");
+  }
+  recordFeedbackTrace(localStorage, "EVENT_RESOLVED", { screen: currentScreenName() });
+  if (renderNow && state) render();
+  if (reason && state && modalHidden) window.setTimeout(() => el.rollDice.focus({ preventScroll: true }), 30);
 }
 
 function setAvatarState(nextState, duration = 0) {
@@ -973,8 +1019,7 @@ function setAvatarState(nextState, duration = 0) {
 function finishTurnSoon(delay = 220) {
   window.setTimeout(() => {
     if (["turnComplete", "showingResult", "openingEvent"].includes(uiState.turnPhase)) {
-      setTurnPhase("idle");
-      render();
+      releaseTurnLock({ reason: "turn-complete", force: true });
       maybeRunAiTurns();
     }
   }, animationMs(delay, Math.min(delay, 120)));
@@ -3081,10 +3126,15 @@ function ratePulse(label) {
 
 async function rollDice(forcedRoll = null) {
   if (!canRoll()) {
-    showRecoverableTip("现在还不能掷骰", uiState.isMoving ? "角色正在前进，请等到到达格子并处理完事件。" : "当前事件还没处理完，完成或关闭事件卡后就能继续。", "看状态");
+    const text = uiState.isMoving ? "角色正在前进，请等到到达格子并处理完事件。" : "当前事件还没处理完，完成或关闭事件卡后就能继续。";
+    uiState.liveMessage = `现在还不能掷骰：${text}`;
+    if (!uiState.isRolling && !uiState.isMoving && el.modal.classList.contains("hidden")) {
+      showRecoverableTip("现在还不能掷骰", text, "看状态");
+    }
     return;
   }
   try {
+    startTurnWatchdog("roll");
     setTurnPhase("rolling");
     soundManager.play("dice");
     haptic(12, uiState.hapticsEnabled);
@@ -3129,11 +3179,14 @@ async function rollDice(forcedRoll = null) {
     completeBeginnerMission("reserve-check");
     recordFeedbackTrace(localStorage, "EVENT_OPENED", { screen: currentScreenName() });
     triggerTile(boardTiles[next]);
+    if (el.modal.classList.contains("hidden") && ["openingEvent", "resolvingEvent"].includes(uiState.turnPhase)) {
+      releaseTurnLock({ reason: "no-event", force: true });
+    } else {
+      clearTurnWatchdog();
+    }
   } catch (error) {
     recordFeedbackError(localStorage, "EVENT_RESOLUTION_FAILED", error?.message || "roll flow failed");
-    setTurnPhase("idle");
-    uiState.previewIndices = [];
-    render();
+    releaseTurnLock({ reason: "roll-error", force: true });
   }
 }
 
@@ -5132,9 +5185,16 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [], outcom
     button.addEventListener("click", () => {
       if (button.disabled) return;
       button.disabled = true;
-      if (uiState.turnPhase === "resolvingEvent") setTurnPhase("showingResult");
-      soundManager.play(action.className === "danger" ? "warning" : "tap");
-      action.onClick();
+      try {
+        if (uiState.turnPhase === "resolvingEvent") setTurnPhase("showingResult");
+        soundManager.play(action.className === "danger" ? "warning" : "tap");
+        action.onClick();
+      } catch (error) {
+        recordFeedbackError(localStorage, "EVENT_RESOLUTION_FAILED", error?.message || "modal action failed");
+        button.disabled = false;
+        releaseTurnLock({ reason: "modal-action-error", force: true });
+        showRecoverableTip("操作没有完成", "刚才的事件处理发生问题，游戏资料仍保留，你可以继续下一回合。");
+      }
     });
     el.modalActions.append(button);
   });
@@ -5202,10 +5262,11 @@ function revealDecisionHint(button) {
 }
 
 function closeModal() {
+  const phaseBeforeClose = uiState.turnPhase;
   el.modal.classList.add("hidden");
   document.body.classList.remove("modal-open");
-  if (["openingEvent", "resolvingEvent", "showingResult", "turnComplete"].includes(uiState.turnPhase)) {
-    setTurnPhase("idle");
+  if (["openingEvent", "resolvingEvent", "showingResult", "turnComplete", "paused"].includes(phaseBeforeClose)) {
+    releaseTurnLock({ reason: "modal-close", force: true, renderNow: true });
   }
   soundManager.setScene(state ? "board" : "home");
   if (state && !state.gameOver && !uiState.isRolling && !uiState.isMoving) {
@@ -6392,8 +6453,12 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden && uiState.turnPhase === "openingEvent") {
     setTurnPhase("paused");
   } else if (!document.hidden && uiState.turnPhase === "paused") {
-    setTurnPhase("idle");
-    render();
+    if (el.modal.classList.contains("hidden")) {
+      releaseTurnLock({ reason: "visibility-restore", force: true });
+    } else {
+      setTurnPhase("resolvingEvent");
+      render();
+    }
   }
 });
 window.addEventListener("resize", () => {
@@ -6534,6 +6599,9 @@ window.cashflowDebug = {
     diceRolling: uiState.diceRolling,
     isRolling: uiState.isRolling,
     isMoving: uiState.isMoving,
+    canRoll: canRoll(),
+    rollDisabled: Boolean(el.rollDice?.disabled),
+    modalHidden: el.modal.classList.contains("hidden"),
     movingStep: uiState.movingStep,
     movingTotal: uiState.movingTotal,
     camera: uiState.camera,
