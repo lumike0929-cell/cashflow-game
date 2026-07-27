@@ -1,4 +1,4 @@
-const CACHE_VERSION = "cashflow-game-shell-rc1";
+const CACHE_VERSION = "cashflow-game-shell-rc1-i18n2";
 const APP_SHELL = [
   "./",
   "./index.html",

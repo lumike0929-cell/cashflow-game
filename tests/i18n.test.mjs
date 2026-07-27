@@ -87,6 +87,41 @@ test("English setup sentences and glossary terms do not mix Chinese or internal 
   setLocale(defaultLocale);
 });
 
+test("English finance HUD and panel labels translate from both simplified and traditional sources", () => {
+  setLocale("en");
+  const labels = [
+    "準備中",
+    "准备中",
+    "保險保費",
+    "保险保费",
+    "人生持續支出",
+    "人生持续支出",
+    "房貸月供",
+    "房贷月供",
+    "房產支出",
+    "房产支出",
+    "其他貸款月供",
+    "其他贷款月供",
+    "貸款總額",
+    "贷款总额",
+    "信用分",
+    "當前利率",
+    "当前利率",
+    "已購保單每月固定支出",
+    "已购保单每月固定支出",
+    "醫療、家庭或工作壓力持續影響",
+    "医疗、家庭或工作压力持续影响",
+    "銀行、個人貸款與房貸餘額",
+    "银行、个人贷款与房贷余额",
+  ];
+  for (const label of labels) {
+    const translated = translateText(label);
+    assert.equal(/[\u3400-\u9fff]/.test(translated), false, `${label} -> ${translated}`);
+    assert.notEqual(translated, "Translation unavailable", label);
+  }
+  setLocale(defaultLocale);
+});
+
 test("formats currency, percent, and month without invalid numeric output", () => {
   for (const locale of supportedLocales) {
     setLocale(locale);

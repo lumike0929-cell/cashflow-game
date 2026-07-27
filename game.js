@@ -2755,6 +2755,17 @@ function queueContextTip(tipId) {
 }
 
 function statementIcon(label = "") {
+  if (getLocale() === "en") {
+    if (label.includes("现金")) return "$";
+    if (label.includes("收入") || label.includes("租金") || label.includes("股息")) return "↑";
+    if (label.includes("支出") || label.includes("月供") || label.includes("保费") || label.includes("税")) return "↓";
+    if (label.includes("资产")) return "A";
+    if (label.includes("贷款") || label.includes("负债")) return "D";
+    if (label.includes("信用")) return "CS";
+    if (label.includes("利率")) return "%";
+    if (label.includes("景气")) return "Eco";
+    return "•";
+  }
   if (label.includes("现金")) return "¥";
   if (label.includes("收入") || label.includes("租金") || label.includes("股息")) return "↑";
   if (label.includes("支出") || label.includes("月供") || label.includes("保费") || label.includes("税")) return "↓";

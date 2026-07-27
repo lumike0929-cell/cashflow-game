@@ -148,7 +148,7 @@ try {
   assert.ok(pwaSnapshot.storageBytes > 0);
   await page.evaluate(() => window.cashflowDebug.showReleaseNotes());
   await expectText(page, "公开测试版说明");
-  await expectText(page, "1.24.0-rc.1");
+  await expectText(page, "1.24.1-rc.1");
   assert.match(await page.locator("#cardModal").innerText(), /Public Beta/);
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.showFeedbackPanel());
@@ -1013,6 +1013,7 @@ async function runEnglishI18nSmoke(page) {
   await resolveModalUntilReady(page, "reject");
   await installDeterministicRoll(page, 1);
   await waitForRollReady(page, "English smoke before roll");
+  await assertEnglishFinancialSurfaces(page);
   const before = await rollButtonSnapshot(page);
   await page.mouse.click(before.center.x, before.center.y);
   await page.waitForFunction(() => {
@@ -1023,6 +1024,25 @@ async function runEnglishI18nSmoke(page) {
   await resolveModalUntilReady(page, "reject");
   await waitForRollReady(page, "English smoke after event");
   await restoreRandom(page);
+}
+
+async function assertEnglishFinancialSurfaces(page) {
+  for (const [selector, label] of [
+    [".turn-card", "English HUD"],
+    [".finance-grid", "English finance grid"],
+    ["#bankSection", "English bank panel"],
+    ["#lifeSection", "English life and insurance panel"],
+    ["#realEstateSection", "English real estate panel"],
+    ["#stockSection", "English stock panel"],
+    ["#businessSection", "English business panel"],
+  ]) {
+    await page.locator(selector).scrollIntoViewIfNeeded();
+    await assertEnglishUiClean(page, label);
+  }
+  await page.locator("#openBankCenter").click();
+  await expectModalText(page, "Banking & Loans");
+  await assertEnglishUiClean(page, "English bank center modal");
+  await page.evaluate(() => window.cashflowDebug.closeModal());
 }
 
 async function assertEnglishUiClean(page, label) {

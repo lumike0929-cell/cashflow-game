@@ -1,13 +1,13 @@
 export const releaseInfo = {
-  appVersion: "1.24.0-rc.1",
+  appVersion: "1.24.1-rc.1",
   releaseChannel: "Public Beta",
   releaseLabel: "RC1 Public Beta",
   nextFixTarget: "RC2",
   saveSchemaVersion: 4,
   backupSchemaVersion: 1,
   translationSchemaVersion: 1,
-  serviceWorkerVersion: "cashflow-game-shell-rc1",
-  buildDate: "2026-07-22",
+  serviceWorkerVersion: "cashflow-game-shell-rc1-i18n2",
+  buildDate: "2026-07-26",
   releaseNotes: {
     "zh-TW": [
       "整合單人財商遊戲、AI 競賽、動態市場、任務成就與報告。",
