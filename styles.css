@@ -1858,12 +1858,37 @@ p {
   box-shadow: inset 0 0 0 1px rgba(31, 122, 82, 0.18);
 }
 
+.board::before,
+.board::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.board::before {
+  background:
+    linear-gradient(90deg, rgba(20, 48, 36, 0.16), transparent 9%, transparent 91%, rgba(20, 48, 36, 0.16)),
+    linear-gradient(180deg, rgba(20, 48, 36, 0.14), transparent 10%, transparent 90%, rgba(20, 48, 36, 0.18));
+}
+
+.board::after {
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.52),
+    inset 0 22px 42px rgba(255, 255, 255, 0.18),
+    inset 0 -34px 56px rgba(20, 48, 36, 0.18);
+}
+
 .city-map-viewport {
   position: absolute;
   inset: 0;
   overflow: hidden;
   cursor: grab;
   touch-action: none;
+  user-select: none;
+  overscroll-behavior: contain;
 }
 
 .city-map-viewport:active {
@@ -1901,6 +1926,49 @@ body[data-motion="reduced"] .city-map-stage {
   font-size: 30px;
   font-weight: 950;
   letter-spacing: 0;
+}
+
+.board-route-svg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 1680px;
+  height: 1120px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.board-route-shadow,
+.board-route-road,
+.board-route-centerline,
+.board-route-direction {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.board-route-shadow {
+  stroke: rgba(24, 42, 33, 0.18);
+  stroke-width: 118;
+  transform: translateY(12px);
+}
+
+.board-route-road {
+  stroke: rgba(248, 250, 244, 0.56);
+  stroke-width: 102;
+}
+
+.board-route-centerline {
+  stroke: rgba(36, 51, 45, 0.2);
+  stroke-width: 8;
+  stroke-dasharray: 28 24;
+}
+
+.board-route-direction {
+  stroke: rgba(216, 162, 31, 0.72);
+  stroke-width: 7;
+  stroke-dasharray: 2 96;
+  animation: route-dash-flow 9s linear infinite;
 }
 
 .scene-layer {
@@ -2274,9 +2342,9 @@ body[data-motion="reduced"] .city-map-stage {
   gap: 4px;
   justify-items: center;
   align-items: center;
-  width: 92px;
-  min-height: 86px;
-  padding: 8px 7px 12px;
+  width: 100px;
+  min-height: 94px;
+  padding: 9px 8px 13px;
   border: 3px solid rgba(255, 255, 255, 0.78);
   border-bottom-color: rgba(23, 32, 29, 0.22);
   border-radius: 26px 26px 22px 22px;
@@ -2315,8 +2383,8 @@ body[data-motion="reduced"] .city-map-stage {
 .map-tile .tile-icon {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   border: 2px solid rgba(255, 255, 255, 0.78);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.82);
@@ -2328,13 +2396,13 @@ body[data-motion="reduced"] .city-map-stage {
 .tile-copy strong {
   display: block;
   margin: 0;
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.05;
 }
 
 .tile-copy small {
   display: block;
-  font-size: 10px;
+  font-size: 10.5px;
   line-height: 1.2;
   font-weight: 900;
 }
@@ -3092,6 +3160,10 @@ body[data-quality="battery"] .dice-flight-trail {
 }
 
 body[data-quality="battery"] .environment-overlay * {
+  animation: none !important;
+}
+
+body[data-motion="reduced"] .board-route-direction {
   animation: none !important;
 }
 
@@ -4236,6 +4308,16 @@ body[data-quality="battery"] .finance-effect {
 
   to {
     box-shadow: 0 0 0 7px rgba(255, 216, 107, 0.42), 0 18px 30px rgba(24, 42, 33, 0.22);
+  }
+}
+
+@keyframes route-dash-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+
+  to {
+    stroke-dashoffset: -196;
   }
 }
 

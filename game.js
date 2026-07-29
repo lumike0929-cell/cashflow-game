@@ -1150,7 +1150,7 @@ function renderBoard() {
       <div class="city-map-stage" id="cityMapStage">
         ${createCitySceneSvg(getLocale())}
         ${createEnvironmentOverlay(atmosphere)}
-        <div class="board-route" aria-hidden="true"></div>
+        ${renderBoardRoute()}
         ${renderMapAssetMarkers()}
         ${boardTiles
           .map((tile, index) => {
@@ -1228,6 +1228,20 @@ function renderBoard() {
     if (uiState.camera.follow) focusCameraOnPlayer(false);
     else applyCamera();
   });
+}
+
+function renderBoardRoute() {
+  const route = boardPath
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+    .join(" ");
+  return `
+    <svg class="board-route-svg" viewBox="0 0 ${mapSize.width} ${mapSize.height}" aria-hidden="true">
+      <path class="board-route-shadow" d="${route} Z"></path>
+      <path class="board-route-road" d="${route} Z"></path>
+      <path class="board-route-centerline" d="${route} Z"></path>
+      <path class="board-route-direction" d="${route} Z"></path>
+    </svg>
+  `;
 }
 
 function renderMiniMap() {
@@ -1366,27 +1380,110 @@ function setupMapControls() {
   const zoomIn = document.querySelector("#zoomInMap");
   const focus = document.querySelector("#focusPlayer");
   if (!viewport) return;
-  let startX = 0;
-  let startY = 0;
+  const pointers = new Map();
+  let mode = "idle";
+  let dragStart = { x: 0, y: 0 };
   let cameraStart = { ...uiState.camera };
+  let pinchStartDistance = 1;
+  let pinchStartMapPoint = { x: 0, y: 0 };
+  let pinchStartCamera = { ...uiState.camera };
   let moved = false;
+  let shouldSaveCamera = false;
+
+  const activePointerList = () => [...pointers.values()];
+  const distanceBetween = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) || 1;
+  const midpointBetween = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+  const beginDrag = (point) => {
+    mode = "drag";
+    dragStart = { ...point };
+    cameraStart = { ...uiState.camera };
+  };
+
+  const beginPinch = () => {
+    const [first, second] = activePointerList();
+    if (!first || !second) return;
+    const center = midpointBetween(first, second);
+    const rect = viewport.getBoundingClientRect();
+    pinchStartCamera = { ...uiState.camera };
+    pinchStartDistance = distanceBetween(first, second);
+    pinchStartMapPoint = {
+      x: (center.x - rect.left - pinchStartCamera.x) / pinchStartCamera.scale,
+      y: (center.y - rect.top - pinchStartCamera.y) / pinchStartCamera.scale,
+    };
+    mode = "pinch";
+    moved = true;
+    uiState.draggingCamera = true;
+  };
+
+  const saveCameraAfterGesture = () => {
+    if (!shouldSaveCamera) return;
+    shouldSaveCamera = false;
+    saveExperience();
+  };
+
+  const endPointer = (event) => {
+    if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+    pointers.delete(event.pointerId);
+    if (pointers.size === 1) {
+      beginDrag(activePointerList()[0]);
+      return;
+    }
+    if (pointers.size > 1) {
+      beginPinch();
+      return;
+    }
+    mode = "idle";
+    saveCameraAfterGesture();
+    setTimeout(() => {
+      uiState.draggingCamera = false;
+      moved = false;
+    }, 140);
+  };
 
   viewport.addEventListener("pointerdown", (event) => {
     if (!el.modal.classList.contains("hidden")) return;
-    if (event.target.closest("[data-tile-index]")) return;
     viewport.setPointerCapture(event.pointerId);
-    startX = event.clientX;
-    startY = event.clientY;
-    cameraStart = { ...uiState.camera };
-    moved = false;
+    const point = { x: event.clientX, y: event.clientY };
+    pointers.set(event.pointerId, point);
+    if (pointers.size === 1) {
+      beginDrag(point);
+      moved = false;
+    }
+    if (pointers.size === 2) beginPinch();
   });
 
   viewport.addEventListener("pointermove", (event) => {
-    if (!viewport.hasPointerCapture(event.pointerId)) return;
-    const dx = event.clientX - startX;
-    const dy = event.clientY - startY;
-    if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
+    if (!pointers.has(event.pointerId)) return;
+    event.preventDefault();
+    const point = { x: event.clientX, y: event.clientY };
+    pointers.set(event.pointerId, point);
+    const activePointers = activePointerList();
+    if (mode === "pinch" && activePointers.length >= 2) {
+      const [first, second] = activePointers;
+      const center = midpointBetween(first, second);
+      const rect = viewport.getBoundingClientRect();
+      const nextScale = Math.max(0.58, Math.min(1.45, pinchStartCamera.scale * (distanceBetween(first, second) / pinchStartDistance)));
+      uiState.camera = clampCamera(
+        {
+          x: center.x - rect.left - pinchStartMapPoint.x * nextScale,
+          y: center.y - rect.top - pinchStartMapPoint.y * nextScale,
+          scale: nextScale,
+          follow: false,
+        },
+        viewport.clientWidth,
+        viewport.clientHeight,
+      );
+      shouldSaveCamera = true;
+      applyCamera();
+      return;
+    }
+    if (mode !== "drag") return;
+    const dx = point.x - dragStart.x;
+    const dy = point.y - dragStart.y;
+    if (Math.abs(dx) + Math.abs(dy) > 5) moved = true;
     uiState.draggingCamera = moved;
+    if (!moved) return;
     uiState.camera = clampCamera(
       {
         ...cameraStart,
@@ -1397,16 +1494,12 @@ function setupMapControls() {
       viewport.clientWidth,
       viewport.clientHeight,
     );
-    saveExperience();
+    shouldSaveCamera = true;
     applyCamera();
   });
 
-  viewport.addEventListener("pointerup", (event) => {
-    if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
-    setTimeout(() => {
-      uiState.draggingCamera = false;
-    }, 120);
-  });
+  viewport.addEventListener("pointerup", endPointer);
+  viewport.addEventListener("pointercancel", endPointer);
 
   viewport.addEventListener(
     "wheel",

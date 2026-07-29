@@ -434,6 +434,30 @@ try {
   const cameraZoomed = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
   assert.ok(cameraZoomed.scale > cameraBefore.scale);
   assert.equal(cameraZoomed.follow, false);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => {
+    window.cashflowDebug.closeModal();
+    window.cashflowDebug.focusPlayer();
+  });
+  const gestureBefore = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
+  const viewportRect = await page.locator("#cityMapViewport").boundingBox();
+  assert.ok(viewportRect, "city map viewport missing before gesture test");
+  await page.mouse.move(viewportRect.x + viewportRect.width * 0.5, viewportRect.y + viewportRect.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(viewportRect.x + viewportRect.width * 0.34, viewportRect.y + viewportRect.height * 0.62, { steps: 8 });
+  await page.mouse.up();
+  const gestureDragged = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
+  assert.equal(gestureDragged.follow, false, "manual board drag should pause camera follow");
+  assert.ok(
+    Math.abs(gestureDragged.x - gestureBefore.x) + Math.abs(gestureDragged.y - gestureBefore.y) > 18,
+    `manual board drag did not move camera: ${JSON.stringify({ gestureBefore, gestureDragged })}`,
+  );
+  await page.mouse.wheel(0, -320);
+  const gestureZoomed = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
+  assert.ok(gestureZoomed.scale > gestureDragged.scale, `wheel zoom did not increase scale: ${JSON.stringify({ gestureDragged, gestureZoomed })}`);
+  await page.locator("#focusPlayer").click();
+  const gestureFocused = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
+  assert.equal(gestureFocused.follow, true, "Find Player should restore camera follow");
   await page.evaluate(() => window.cashflowDebug.rollFixed(1));
   await page.waitForFunction(() => {
     const experience = window.cashflowDebug.getExperience();
