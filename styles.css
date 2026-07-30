@@ -2550,6 +2550,12 @@ body[data-motion="reduced"] .city-map-stage {
   box-shadow: 0 0 0 5px rgba(36, 107, 159, 0.13), 0 8px 0 rgba(23, 32, 29, 0.12), 0 12px 18px rgba(24, 42, 33, 0.14);
 }
 
+.map-asset-marker.status-fun {
+  background: linear-gradient(180deg, #fff7c2, #f5b642);
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 6px rgba(255, 217, 92, 0.28), 0 8px 0 rgba(96, 60, 9, 0.16), 0 14px 22px rgba(127, 86, 17, 0.2);
+}
+
 .map-asset-marker span {
   font-size: 18px;
   font-weight: 950;
@@ -3400,6 +3406,47 @@ body[data-quality="battery"] .finance-effect {
 }
 
 .hud-mission-tracker em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.hud-fun-tracker {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 46px;
+  border: 1px solid rgba(245, 182, 66, 0.5);
+  border-radius: 16px;
+  padding: 8px 10px;
+  background: rgba(255, 244, 194, 0.94);
+  color: #54350b;
+  text-align: left;
+}
+
+.hud-fun-tracker span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffdb65, #f08f2d);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  color: #4d2b02;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.hud-fun-tracker strong,
+.hud-fun-tracker em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-fun-tracker em {
   font-style: normal;
   font-size: 12px;
   font-weight: 950;
@@ -6060,6 +6107,7 @@ body.in-game .map-toolbar #focusPlayer {
   }
 
   body.in-game .hud-mission-tracker,
+  body.in-game .hud-fun-tracker,
   body.in-game .hud-beginner-tracker,
   body.in-game .hud-ai-tracker {
     min-height: 40px;

@@ -146,6 +146,16 @@ try {
   assert.equal(pwaSnapshot.unsafeRejected, true);
   assert.equal(pwaSnapshot.backups, 5);
   assert.ok(pwaSnapshot.storageBytes > 0);
+  const funSnapshot = await page.evaluate(() => window.cashflowDebug.runFunPacingPreview(11));
+  assert.ok(funSnapshot.strategyChoices >= 3, `expected at least 3 strategy choices, got ${funSnapshot.strategyChoices}`);
+  assert.ok(funSnapshot.miniGames >= 1, `expected a mini game, got ${funSnapshot.miniGames}`);
+  assert.ok(funSnapshot.goalCompletions >= 1, `expected a short goal completion, got ${funSnapshot.goalCompletions}`);
+  assert.ok(funSnapshot.successRewards >= 1, `expected a success reward, got ${funSnapshot.successRewards}`);
+  assert.ok(funSnapshot.riskEvents >= 1, `expected a risk event, got ${funSnapshot.riskEvents}`);
+  assert.ok(funSnapshot.aiInteractions >= 1, `expected an AI interaction, got ${funSnapshot.aiInteractions}`);
+  assert.ok(funSnapshot.cityUpgrades >= 1, `expected a city feedback marker, got ${funSnapshot.cityUpgrades}`);
+  assert.ok(funSnapshot.bestCombo >= 1, `expected combo feedback, got ${funSnapshot.bestCombo}`);
+  assert.ok((await page.locator(".map-asset-marker.status-fun").count()) >= 1);
   await page.evaluate(() => window.cashflowDebug.showReleaseNotes());
   await expectText(page, "公开测试版说明");
   await expectText(page, "1.24.1-rc.1");

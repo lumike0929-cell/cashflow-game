@@ -129,6 +129,16 @@ import {
   avatarMarkup,
 } from "./gameExperience.js";
 import {
+  addCityUpgrade,
+  estimateOptionImpact,
+  funStats,
+  funText,
+  markPacedTurnDone,
+  migrateFunState,
+  recordFunOutcome,
+  selectPacedEngagement,
+} from "./funSystem.js";
+import {
   aiDifficultyModes,
   aiTemplates,
   buildMarketDashboard,
@@ -511,6 +521,7 @@ function createNewGameState(career, difficultyId = "standard") {
   configureAiMode(nextState, { mode: selectedGameMode, aiCount: selectedAiCount, difficulty: selectedAiDifficulty });
   migrateProgressState(nextState);
   migrateAiCompetitionState(nextState);
+  migrateFunState(nextState);
   ensureTutorialState(nextState);
   return nextState;
 }
@@ -545,6 +556,7 @@ function ensureTutorialState(nextState) {
   };
   nextState.parentGuideViewed = Boolean(nextState.parentGuideViewed);
   nextState.onboardingCompleted = Boolean(nextState.onboardingCompleted || uiState.onboardingCompleted);
+  migrateFunState(nextState);
   return nextState;
 }
 
@@ -617,6 +629,7 @@ function persistQuietly() {
   state.translationSchemaVersion = translationSchemaVersion;
   migrateProgressState(state);
   migrateAiCompetitionState(state);
+  migrateFunState(state);
   localStorage.setItem(state.activeChallenge ? CHALLENGE_STORAGE_KEY : STORAGE_KEY, JSON.stringify(state));
 }
 
@@ -1214,6 +1227,7 @@ function renderBoard() {
       if (assetType === "business") showBusinessDetail(assetId);
       if (assetType === "bank") showBankCenter();
       if (assetType === "insurance") showInsuranceCenter();
+      if (assetType === "fun") showCityFeedback(assetId);
     });
   });
   el.board.querySelectorAll("[data-ai-finance]").forEach((button) => {
@@ -1282,6 +1296,20 @@ function renderAiMapAvatars() {
       `;
     })
     .join("");
+}
+
+function renderFunGoalTracker() {
+  if (!state) return "";
+  const stats = funStats(state);
+  const goal = stats.activeGoal;
+  if (!goal || goal.completed) return "";
+  return `
+    <button class="hud-fun-tracker" type="button" id="hudFunTracker" aria-label="${funText(goal.title, getLocale())}">
+      <span>${stats.comboStreak > 1 ? "×" + stats.comboStreak : "★"}</span>
+      <strong>${funText(goal.title, getLocale())}</strong>
+      <em>${formatNumber(goal.progress)} / ${formatNumber(goal.target)}</em>
+    </button>
+  `;
 }
 
 function shortTileTitle(tile) {
@@ -1361,6 +1389,16 @@ function renderMapAssetMarkers() {
       id: item.id,
       type: "bank",
       status: "mortgage",
+    })),
+    ...migrateFunState(state).cityUpgrades.slice(-6).map((item) => ({
+      x: item.x,
+      y: item.y,
+      icon: item.icon,
+      label: funText(item.label, getLocale()),
+      tone: item.tone,
+      id: item.id,
+      type: "fun",
+      status: "fun",
     })),
   ];
   return markers
@@ -1701,6 +1739,7 @@ function renderActions() {
       </button>
     `
     : "";
+  const funTracker = renderFunGoalTracker();
   const beginnerMission = uiState.tutorialSettings.tutorialHints ? nextBeginnerMission() : null;
   const beginnerTracker = beginnerMission
     ? `
@@ -1722,6 +1761,7 @@ function renderActions() {
       <div class="hud-chip flow"><span>${t("finance.monthlyCashflow")}</span><strong>${money(netMonthlyCashflow())}</strong></div>
     </div>
     ${missionTracker}
+    ${funTracker}
     ${beginnerTracker}
     ${aiTracker}
     <div class="hud-shortcuts" aria-label="${translateText("游戏快捷入口")}">
@@ -1742,6 +1782,7 @@ function renderActions() {
   `;
   document.querySelector("#focusPlayerHud")?.addEventListener("click", () => focusCameraOnPlayer(true));
   document.querySelector("#hudMissionTracker")?.addEventListener("click", () => showProgressCenter("missions"));
+  document.querySelector("#hudFunTracker")?.addEventListener("click", showFunGoals);
   document.querySelector("#hudBeginnerTracker")?.addEventListener("click", showBeginnerMissions);
   document.querySelector("#openLeaderboard")?.addEventListener("click", showLeaderboardPanel);
   document.querySelector("#toggleSound")?.addEventListener("click", toggleSound);
@@ -3552,6 +3593,393 @@ function prefersReducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 }
 
+function showPacedEngagement(tile) {
+  if (!state) return false;
+  const engagement = selectPacedEngagement(state, tile);
+  if (!engagement) return false;
+  if (engagement.kind === "strategy") {
+    showStrategyEvent(engagement.event, engagement.turn);
+    return true;
+  }
+  if (engagement.kind === "minigame") {
+    showMiniGame(engagement.game, engagement.turn);
+    return true;
+  }
+  if (engagement.kind === "ai") {
+    showAiPersonalityMoment(engagement.turn);
+    return true;
+  }
+  if (engagement.kind === "summary") {
+    showFunStageSummary(engagement.turn);
+    return true;
+  }
+  return false;
+}
+
+function showStrategyEvent(event, turn) {
+  migrateFunState(state);
+  const locale = getLocale();
+  const metrics = [
+    [funText({ zhCN: "选择类型", zhTW: "選擇類型", en: "Choice Type" }, locale), funText(riskFamilyLabel(event.category), locale)],
+    [funText({ zhCN: "本回合目标", zhTW: "本回合目標", en: "This Turn's Goal" }, locale), funText({ zhCN: "比较成本、回报与安全垫。", zhTW: "比較成本、回報與安全墊。", en: "Compare cost, reward, and cash cushion." }, locale)],
+    [funText({ zhCN: "当前现金", zhTW: "目前現金", en: "Current Cash" }, locale), money(state.cash)],
+  ];
+  const actions = event.options.map((choice) => {
+    const immediateCash = moneyValue(choice.effects?.cash || 0);
+    const wouldOverdraw = state.cash + immediateCash < -2000;
+    return {
+      label: `${funText(riskLabel(choice.risk), locale)} · ${funText(choice.title, locale)}`,
+      className: choice.risk === "high" ? "danger" : choice.id === "balanced" ? "primary" : "",
+      disabled: wouldOverdraw,
+      onClick: () => completeStrategyChoice(event, choice, turn),
+    };
+  });
+  actions.push({
+    label: funText({ zhCN: "保留现金", zhTW: "保留現金", en: "Keep Cash" }, locale),
+    onClick: () => completeStrategyChoice(event, null, turn),
+  });
+  openSimpleModal({
+    type: funText({ zhCN: "策略事件", zhTW: "策略事件", en: "Strategy Event" }, locale),
+    title: `${event.icon} ${funText(event.title, locale)}`,
+    text: `${funText(event.description, locale)} ${funText({ zhCN: "每个选项的结果都不同。", zhTW: "每個選項的結果都不同。", en: "Each option has a different result." }, locale)}`,
+    metrics: [
+      ...metrics,
+      ...event.options.map((choice) => {
+        const impact = estimateOptionImpact(choice);
+        const effect = `${funText(choice.title, locale)} · ${funText(riskLabel(choice.risk), locale)} · ${money(impact.cash)} / ${funText({ zhCN: "月支出", zhTW: "月支出", en: "Monthly expenses" }, locale)} ${money(impact.baseExpenses)}`;
+        return [funText({ zhCN: "选项", zhTW: "選項", en: "Option" }, locale), effect];
+      }),
+    ],
+    actions,
+    outcome: "opportunity",
+    panel: "fun-event",
+  });
+}
+
+function completeStrategyChoice(event, choice, turn) {
+  const eventId = `fun-strategy-${event.id}-${state.round}-${state.position}-${choice?.id || "pass"}`;
+  if (state.settledEvents.includes(eventId)) return;
+  state.settledEvents.push(eventId);
+  state.funPacing.seenEventIds.push(event.id);
+  state.funPacing.seenEventIds = [...new Set(state.funPacing.seenEventIds)].slice(-80);
+  markPacedTurnDone(state, turn);
+  if (!choice) {
+    const completedGoals = recordFunOutcome(state, { kind: "strategy", id: event.id, success: false });
+    addLog(funText({ zhCN: "你选择保留现金，没有承担额外风险。", zhTW: "你選擇保留現金，沒有承擔額外風險。", en: "You kept cash and avoided extra risk." }, getLocale()));
+    persistQuietly();
+    render();
+    showFunResult({
+      title: { zhCN: "现金保留下来了", zhTW: "現金保留下來了", en: "Cash Preserved" },
+      text: { zhCN: "有时候不行动也是策略。你没有获得奖励，但现金垫保持稳定。", zhTW: "有時候不行動也是策略。你沒有獲得獎勵，但現金墊保持穩定。", en: "Sometimes passing is a strategy. You earned no reward, but your cushion stayed steady." },
+      cashDelta: 0,
+      expenseDelta: 0,
+      completedGoals,
+      outcome: "neutral",
+    });
+    return;
+  }
+  const result = applyFunEffects(choice.effects, choice.risk);
+  const city = addCityUpgrade(state, {
+    id: `fun-city-${event.id}-${state.round}-${state.position}`,
+    icon: cityIconFor(choice.cityEffect || event.category),
+    tone: result.success ? "gold" : "blue",
+    type: event.category,
+    x: cityPositionFor(event.category).x,
+    y: cityPositionFor(event.category).y,
+    label: {
+      zhCN: `${funText(choice.title, "zh-CN")}改变了城市`,
+      zhTW: `${funText(choice.title, "zh-TW")}改變了城市`,
+      en: `${funText(choice.title, "en")} changed the city`,
+    },
+  });
+  const completedGoals = recordFunOutcome(state, {
+    kind: "strategy",
+    id: event.id,
+    riskLevel: choice.risk,
+    isRisk: choice.risk !== "low",
+    isCrisis: !result.success && choice.risk === "high",
+    success: result.success || result.cashDelta > 0 || result.expenseDelta < 0 || result.iqDelta > 0,
+  });
+  const locale = getLocale();
+  const log = `${funText(choice.title, locale)}：${money(result.cashDelta)}，${funText({ zhCN: "月支出变化", zhTW: "月支出變化", en: "monthly expense change" }, locale)} ${money(result.expenseDelta)}。`;
+  addLog(log);
+  emitFinanceEffect(result.cashDelta, funText(choice.title, locale), result.cashDelta >= 0 ? "income" : "expense", eventId);
+  if (result.success) setAvatarMood(choice.risk === "high" ? "excited" : "happy", 1300);
+  else setAvatarMood("worried", 1300);
+  persistQuietly();
+  processProgress(false);
+  render();
+  showFunResult({
+    title: result.success ? choice.title : { zhCN: "结果需要复盘", zhTW: "結果需要複盤", en: "Review the Result" },
+    text: result.success ? choice.description : {
+      zhCN: "这次结果没有完全照计划发生。现金流游戏里，保留安全垫很重要。",
+      zhTW: "這次結果沒有完全照計畫發生。現金流遊戲裡，保留安全墊很重要。",
+      en: "This result did not go exactly as planned. In a cash-flow game, keeping a cushion matters.",
+    },
+    cashDelta: result.cashDelta,
+    expenseDelta: result.expenseDelta,
+    iqDelta: result.iqDelta,
+    completedGoals,
+    city,
+    outcome: result.success ? "positive" : "warning",
+  });
+}
+
+function showMiniGame(game, turn) {
+  const locale = getLocale();
+  openSimpleModal({
+    type: funText({ zhCN: "财商小游戏", zhTW: "財商小遊戲", en: "Money Mini Game" }, locale),
+    title: `${game.icon} ${funText(game.title, locale)}`,
+    text: funText(game.description, locale),
+    metrics: game.choices.map((choice) => [funText({ zhCN: "选择", zhTW: "選擇", en: "Choice" }, locale), funText(choice.title, locale)]),
+    actions: game.choices.map((choice) => ({
+      label: funText(choice.title, locale),
+      className: choice.correct ? "primary" : "",
+      onClick: () => completeMiniGame(game, choice, turn),
+    })),
+    outcome: "opportunity",
+    panel: "fun-minigame",
+  });
+}
+
+function completeMiniGame(game, choice, turn) {
+  const eventId = `fun-minigame-${game.id}-${state.round}-${choice.id}`;
+  if (state.settledEvents.includes(eventId)) return;
+  state.settledEvents.push(eventId);
+  markPacedTurnDone(state, turn);
+  const result = applyFunEffects(choice.effects, choice.correct ? "low" : "medium");
+  if (choice.correct) {
+    addCityUpgrade(state, {
+      id: `fun-city-${game.id}-${state.round}`,
+      icon: "★",
+      tone: "gold",
+      x: 748,
+      y: 486,
+      label: { zhCN: "小游戏成功点亮了城市", zhTW: "小遊戲成功點亮了城市", en: "A mini-game win lit up the city" },
+    });
+  }
+  const completedGoals = recordFunOutcome(state, {
+    kind: "minigame",
+    id: game.id,
+    success: choice.correct || result.cashDelta > 0 || result.expenseDelta < 0,
+  });
+  addLog(funText(choice.feedback, getLocale()));
+  emitFinanceEffect(result.cashDelta, funText(choice.title, getLocale()), result.cashDelta >= 0 ? "income" : "expense", eventId);
+  setAvatarMood(choice.correct ? "celebrating" : "thinking", 1300);
+  persistQuietly();
+  processProgress(false);
+  render();
+  showFunResult({
+    title: choice.correct ? { zhCN: "判断正确", zhTW: "判斷正確", en: "Good Read" } : { zhCN: "学到一课", zhTW: "學到一課", en: "Lesson Learned" },
+    text: choice.feedback,
+    cashDelta: result.cashDelta,
+    expenseDelta: result.expenseDelta,
+    iqDelta: result.iqDelta,
+    completedGoals,
+    outcome: choice.correct ? "positive" : "neutral",
+  });
+}
+
+function showAiPersonalityMoment(turn) {
+  const locale = getLocale();
+  const ai = state.aiPlayers?.[0] || null;
+  const aiName = locale === "en" ? "Kai" : ai?.name || funText({ zhCN: "小凯", zhTW: "小凱", en: "Kai" }, locale);
+  const personality = ai?.personality || funText({ zhCN: "平衡型", zhTW: "平衡型", en: "Balanced" }, locale);
+  openSimpleModal({
+    type: funText({ zhCN: "AI 互动", zhTW: "AI 互動", en: "AI Interaction" }, locale),
+    title: funText({ zhCN: `${aiName} 观察你的选择`, zhTW: `${aiName} 觀察你的選擇`, en: `${aiName} notices your choice` }, locale),
+    text: funText({
+      zhCN: "这位本机 AI 对手不会作弊，只会用自己的个性判断机会。它提醒你：现金垫和成长机会都要看。",
+      zhTW: "這位本機 AI 對手不會作弊，只會用自己的個性判斷機會。它提醒你：現金墊和成長機會都要看。",
+      en: "This local AI rival does not cheat. It follows its own personality and reminds you to watch both cushion and growth.",
+    }, locale),
+    metrics: [
+      [funText({ zhCN: "AI 个性", zhTW: "AI 個性", en: "AI Personality" }, locale), translateText(personality)],
+      [funText({ zhCN: "互动奖励", zhTW: "互動獎勵", en: "Interaction Reward" }, locale), funText({ zhCN: "财商 +1", zhTW: "財商 +1", en: "Money IQ +1" }, locale)],
+    ],
+    actions: [{
+      label: funText({ zhCN: "接受提醒", zhTW: "接受提醒", en: "Take the Hint" }, locale),
+      className: "primary",
+      onClick: () => completeAiMoment(turn),
+    }],
+    panel: "fun-ai",
+  });
+}
+
+function completeAiMoment(turn) {
+  const eventId = `fun-ai-${state.round}-${turn}`;
+  if (!state.settledEvents.includes(eventId)) {
+    state.settledEvents.push(eventId);
+    state.financialIq = moneyValue(state.financialIq) + 1;
+    markPacedTurnDone(state, turn);
+    const completedGoals = recordFunOutcome(state, { kind: "ai", id: eventId, success: true });
+    addLog(funText({ zhCN: "AI 互动让你多想一步，财商 +1。", zhTW: "AI 互動讓你多想一步，財商 +1。", en: "The AI interaction made you think one step further. Money IQ +1." }, getLocale()));
+    persistQuietly();
+    render();
+    showFunResult({
+      title: { zhCN: "多想一步", zhTW: "多想一步", en: "One Step Smarter" },
+      text: { zhCN: "竞争感不一定来自联网。不同性格的对手会提醒你用别的角度看机会。", zhTW: "競爭感不一定來自連線。不同性格的對手會提醒你用別的角度看機會。", en: "Competition does not require going online. Different rivals can remind you to view choices from another angle." },
+      iqDelta: 1,
+      completedGoals,
+      outcome: "positive",
+    });
+    return;
+  }
+  closeModal();
+}
+
+function showFunStageSummary(turn) {
+  const stats = funStats(state);
+  const locale = getLocale();
+  openSimpleModal({
+    type: funText({ zhCN: "阶段总结", zhTW: "階段總結", en: "Stage Summary" }, locale),
+    title: funText({ zhCN: "前 10 回合完成", zhTW: "前 10 回合完成", en: "First 10 Turns Complete" }, locale),
+    text: funText({
+      zhCN: "你已经经历了策略选择、风险、小任务、小遊戏和城市反馈。下一阶段可以开始追求更稳定的被动收入。",
+      zhTW: "你已經經歷了策略選擇、風險、小任務、小遊戲和城市回饋。下一階段可以開始追求更穩定的被動收入。",
+      en: "You have seen strategy choices, risk, short goals, mini games, and city feedback. Next, aim for steadier passive income.",
+    }, locale),
+    metrics: [
+      [funText({ zhCN: "策略选择", zhTW: "策略選擇", en: "Strategy Choices" }, locale), formatNumber(stats.strategyChoices)],
+      [funText({ zhCN: "小游戏", zhTW: "小遊戲", en: "Mini Games" }, locale), formatNumber(stats.miniGames)],
+      [funText({ zhCN: "短期目标", zhTW: "短期目標", en: "Short Goals" }, locale), formatNumber(stats.goalCompletions)],
+      [funText({ zhCN: "城市变化", zhTW: "城市變化", en: "City Changes" }, locale), formatNumber(stats.cityUpgrades)],
+    ],
+    actions: [{
+      label: t("ui.gotIt"),
+      className: "primary",
+      onClick: () => {
+        markPacedTurnDone(state, turn);
+        state.funPacing.lastSummaryRound = state.round;
+        persistQuietly();
+        closeModal();
+      },
+    }],
+    outcome: "positive",
+    panel: "fun-summary",
+  });
+}
+
+function showFunResult({ title, text, cashDelta = 0, expenseDelta = 0, iqDelta = 0, completedGoals = [], city = null, outcome = "neutral" }) {
+  const locale = getLocale();
+  const metrics = [
+    [funText({ zhCN: "现金变化", zhTW: "現金變化", en: "Cash Change" }, locale), money(cashDelta)],
+    [funText({ zhCN: "月支出变化", zhTW: "月支出變化", en: "Monthly Expense Change" }, locale), money(expenseDelta)],
+    [funText({ zhCN: "财商变化", zhTW: "財商變化", en: "Money IQ Change" }, locale), iqDelta ? `+${formatNumber(iqDelta)}` : "0"],
+  ];
+  if (completedGoals.length) {
+    metrics.push([funText({ zhCN: "短期目标完成", zhTW: "短期目標完成", en: "Short Goal Complete" }, locale), completedGoals.map((goal) => funText(goal.title, locale)).join(" · ")]);
+  }
+  if (city) metrics.push([funText({ zhCN: "城市反馈", zhTW: "城市回饋", en: "City Feedback" }, locale), funText(city.label, locale)]);
+  openSimpleModal({
+    type: funText({ zhCN: "回合反馈", zhTW: "回合回饋", en: "Turn Feedback" }, locale),
+    title: funText(title, locale),
+    text: funText(text, locale),
+    metrics,
+    actions: [{ label: t("ui.gotIt"), className: "primary", onClick: closeModal }],
+    outcome,
+    panel: "fun-result",
+  });
+}
+
+function applyFunEffects(effects = {}, risk = "low") {
+  const chance = Number.isFinite(Number(effects.successChance)) ? Number(effects.successChance) : 1;
+  const success = Math.random() <= chance;
+  const cashDelta = moneyValue(effects.cash || 0) + moneyValue(success ? effects.successCash || 0 : effects.failureCash || 0);
+  const expenseDelta = moneyValue(effects.baseExpenses || 0);
+  const salaryDelta = moneyValue(effects.salary || 0);
+  const iqDelta = moneyValue(effects.financialIq || 0);
+  state.cash = moneyValue(state.cash + cashDelta);
+  state.baseExpenses = Math.max(1000, moneyValue(state.baseExpenses + expenseDelta));
+  state.salary = Math.max(0, moneyValue(state.salary + salaryDelta));
+  state.financialIq = Math.max(0, moneyValue((state.financialIq || 0) + iqDelta));
+  return {
+    success: success || risk === "low",
+    cashDelta,
+    expenseDelta,
+    salaryDelta,
+    iqDelta,
+  };
+}
+
+function showFunGoals() {
+  const stats = funStats(state);
+  const locale = getLocale();
+  openSimpleModal({
+    type: funText({ zhCN: "短期目标", zhTW: "短期目標", en: "Short Goals" }, locale),
+    title: funText({ zhCN: "让这一局更有节奏", zhTW: "讓這一局更有節奏", en: "Give This Run Momentum" }, locale),
+    text: funText({ zhCN: "完成短期目标会带来小奖励和城市反馈，但不会破坏财务平衡。", zhTW: "完成短期目標會帶來小獎勵和城市回饋，但不會破壞財務平衡。", en: "Short goals give small rewards and city feedback without breaking the financial balance." }, locale),
+    metrics: state.shortTermFunGoals.map((goal) => [
+      funText(goal.title, locale),
+      `${formatNumber(goal.progress)} / ${formatNumber(goal.target)} · ${goal.completed ? funText({ zhCN: "已完成", zhTW: "已完成", en: "Done" }, locale) : funText(goal.reward, locale)}`,
+    ]).concat([
+      [funText({ zhCN: "当前连击", zhTW: "目前連擊", en: "Current Combo" }, locale), formatNumber(stats.comboStreak)],
+      [funText({ zhCN: "最佳连击", zhTW: "最佳連擊", en: "Best Combo" }, locale), formatNumber(stats.bestCombo)],
+    ]),
+    actions: [{ label: t("ui.gotIt"), className: "primary", onClick: closeModal }],
+    panel: "fun-goals",
+  });
+}
+
+function showCityFeedback(assetId) {
+  const item = state.cityUpgrades.find((upgrade) => upgrade.id === assetId);
+  const locale = getLocale();
+  openSimpleModal({
+    type: funText({ zhCN: "城市反馈", zhTW: "城市回饋", en: "City Feedback" }, locale),
+    title: item ? funText(item.label, locale) : funText({ zhCN: "城市有了新变化", zhTW: "城市有了新變化", en: "The city changed" }, locale),
+    text: funText({ zhCN: "这是玩家选择留下的城市标记。它不会重复结算事件，只用来提醒你刚刚做过的策略选择。", zhTW: "這是玩家選擇留下的城市標記。它不會重複結算事件，只用來提醒你剛剛做過的策略選擇。", en: "This marker came from a player choice. It does not resolve another event; it simply reminds you of a strategy decision." }, locale),
+    metrics: [[funText({ zhCN: "出现回合", zhTW: "出現回合", en: "Appeared on Round" }, locale), formatNumber(item?.round || state.round)]],
+    actions: [{ label: t("ui.gotIt"), className: "primary", onClick: closeModal }],
+    panel: "fun-city",
+  });
+}
+
+function riskLabel(risk) {
+  return {
+    low: { zhCN: "稳健", zhTW: "穩健", en: "Steady" },
+    medium: { zhCN: "平衡", zhTW: "平衡", en: "Balanced" },
+    high: { zhCN: "冒险", zhTW: "冒險", en: "Bold" },
+  }[risk] || { zhCN: "选择", zhTW: "選擇", en: "Choice" };
+}
+
+function riskFamilyLabel(category) {
+  return {
+    stock: { zhCN: "价格波动", zhTW: "價格波動", en: "Price Swing" },
+    property: { zhCN: "现金流资产", zhTW: "現金流資產", en: "Cash-Flow Asset" },
+    business: { zhCN: "经营判断", zhTW: "經營判斷", en: "Operating Choice" },
+    learn: { zhCN: "知识投资", zhTW: "知識投資", en: "Learning Investment" },
+    expense: { zhCN: "危机处理", zhTW: "危機處理", en: "Crisis Response" },
+    medical: { zhCN: "健康风险", zhTW: "健康風險", en: "Health Risk" },
+    insurance: { zhCN: "保障取舍", zhTW: "保障取捨", en: "Protection Tradeoff" },
+    market: { zhCN: "市场节奏", zhTW: "市場節奏", en: "Market Timing" },
+    job: { zhCN: "主动收入", zhTW: "主動收入", en: "Active Income" },
+    life: { zhCN: "生活选择", zhTW: "生活選擇", en: "Life Choice" },
+    bank: { zhCN: "借贷压力", zhTW: "借貸壓力", en: "Debt Pressure" },
+    tax: { zhCN: "预留责任", zhTW: "預留責任", en: "Set-Aside Choice" },
+  }[category] || { zhCN: "策略", zhTW: "策略", en: "Strategy" };
+}
+
+function cityIconFor(type) {
+  return { ticker: "股", home: "屋", shop: "店", book: "学", bill: "账", shield: "盾", chart: "市", work: "工", heart: "心", bank: "银", tax: "税" }[type] || "★";
+}
+
+function cityPositionFor(category) {
+  return {
+    stock: { x: 930, y: 410 },
+    property: { x: 500, y: 425 },
+    business: { x: 615, y: 690 },
+    learn: { x: 1010, y: 610 },
+    expense: { x: 760, y: 515 },
+    medical: { x: 1140, y: 620 },
+    insurance: { x: 1210, y: 575 },
+    market: { x: 890, y: 510 },
+    job: { x: 790, y: 350 },
+    life: { x: 650, y: 430 },
+    bank: { x: 720, y: 370 },
+    tax: { x: 1070, y: 430 },
+  }[category] || { x: 760, y: 520 };
+}
+
 function triggerTile(tile) {
   if (tile.type === "payday") {
     collectPayday("停在月结日");
@@ -3560,6 +3988,8 @@ function triggerTile(tile) {
     finishTurnSoon(220);
     return;
   }
+
+  if (showPacedEngagement(tile)) return;
 
   if (tile.type === "opportunity") {
     showOpportunity();
@@ -6935,6 +7365,7 @@ window.cashflowDebug = {
           shownNotifications: state.shownNotificationIds?.length || 0,
         }
       : null,
+    fun: state ? funStats(state) : null,
     ai: state
       ? {
           gameMode: state.gameMode || "solo",
@@ -7024,6 +7455,52 @@ window.cashflowDebug = {
       marketNews: state.marketNews?.length || 0,
       roundHistory: state.roundHistory?.length || 0,
     };
+  },
+  runFunPacingPreview: (seed = 7) => {
+    state = createNewGameState(careers[0], "beginner");
+    const random = createSeededRandom(seed);
+    for (let turn = 1; turn <= 10; turn += 1) {
+      state.round = turn + 1;
+      state.position = indexAfter(state.position, 1);
+      const tile = boardTiles[state.position];
+      const engagement = selectPacedEngagement(state, tile, random);
+      if (!engagement) continue;
+      if (engagement.kind === "strategy") {
+        const choice = engagement.event.options.find((item) => item.id === "balanced") || engagement.event.options[0];
+        applyFunEffects(choice.effects, choice.risk);
+        addCityUpgrade(state, {
+          id: `debug-city-${engagement.event.id}-${turn}`,
+          icon: cityIconFor(choice.cityEffect || engagement.event.category),
+          tone: "gold",
+          x: cityPositionFor(engagement.event.category).x,
+          y: cityPositionFor(engagement.event.category).y,
+          label: { zhCN: "测试城市变化", zhTW: "測試城市變化", en: "Test city change" },
+        });
+        recordFunOutcome(state, {
+          kind: "strategy",
+          id: engagement.event.id,
+          riskLevel: choice.risk,
+          isRisk: choice.risk !== "low",
+          isCrisis: engagement.turn === 4 || engagement.event.category === "expense" || engagement.event.category === "medical",
+          success: true,
+        });
+        markPacedTurnDone(state, engagement.turn);
+      } else if (engagement.kind === "minigame") {
+        const choice = engagement.game.choices.find((item) => item.correct) || engagement.game.choices[0];
+        applyFunEffects(choice.effects, "low");
+        recordFunOutcome(state, { kind: "minigame", id: engagement.game.id, success: choice.correct });
+        markPacedTurnDone(state, engagement.turn);
+      } else if (engagement.kind === "ai") {
+        state.financialIq += 1;
+        recordFunOutcome(state, { kind: "ai", id: `debug-ai-${turn}`, success: true });
+        markPacedTurnDone(state, engagement.turn);
+      } else if (engagement.kind === "summary") {
+        markPacedTurnDone(state, engagement.turn);
+      }
+    }
+    persistQuietly();
+    render();
+    return funStats(state);
   },
   runAiStressDebug: (aiCount = 3, rounds = 10, seed = 29) => runAiStressSimulation({ aiCount, rounds, seed }),
   showLeaderboardPanel,
