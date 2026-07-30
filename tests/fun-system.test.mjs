@@ -25,7 +25,7 @@ function makeState() {
   });
 }
 
-test("Sprint 26 provides 12 strategy events across required categories", () => {
+test("Sprint 27 provides at least 16 strategy events across required categories", () => {
   const categories = new Set(strategyEventDefinitions.map((event) => event.category));
   [
     "stock",
@@ -40,8 +40,11 @@ test("Sprint 26 provides 12 strategy events across required categories", () => {
     "life",
     "bank",
     "tax",
+    "assetSale",
+    "reserve",
+    "spending",
   ].forEach((category) => assert.ok(categories.has(category), `missing ${category}`));
-  assert.equal(strategyEventDefinitions.length, 12);
+  assert.ok(strategyEventDefinitions.length >= 16);
 });
 
 test("strategy events contain real option differences", () => {

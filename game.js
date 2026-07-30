@@ -240,6 +240,26 @@ import {
   recordFeedbackError,
   recordFeedbackTrace,
 } from "./feedbackSystem.js";
+import {
+  advanceLocalTurn,
+  applyPlayerSnapshotToState,
+  calculateLocalLeaderboard,
+  careerStrategyProfiles,
+  configureLocalMultiplayer,
+  currentLocalPlayer,
+  evaluateLocalVictory,
+  isLocalMultiplayer,
+  localGameModes,
+  localText,
+  localVictoryConditions,
+  markLocalTurnPendingSwitch,
+  migrateLocalMultiplayerState,
+  nextLocalPlayer,
+  normalizeLocalSetup,
+  playerColors,
+  saveActivePlayerSnapshot,
+  snapshotFromState,
+} from "./localMultiplayerSystem.js";
 
 const STORAGE_KEY = "cashflow-freedom-game-v1";
 const CHALLENGE_STORAGE_KEY = "cashflow-freedom-challenge-v1";
@@ -275,13 +295,13 @@ const careers = [
     note: "收入中等，适合用小生意和版权收入建立被动收入。",
   },
   {
-    id: "doctor",
-    icon: "医",
-    name: "牙科医生",
-    salary: 52000,
-    expenses: 42000,
-    savings: 36000,
-    note: "收入高但开销也高，需要控制负债和现金安全垫。",
+    id: "entrepreneur",
+    icon: "创",
+    name: "小生意创业者",
+    salary: 24000,
+    expenses: 20500,
+    savings: 14500,
+    note: "初期压力较高，适合练习现金储备、小生意成长和风险管理。",
   },
 ];
 
@@ -290,6 +310,10 @@ let selectedDifficultyId = "standard";
 let selectedGameMode = "solo";
 let selectedAiDifficulty = "standard";
 let selectedAiCount = 2;
+let selectedLocalPlayerCount = 1;
+let selectedLocalMode = "standard";
+let selectedVictoryCondition = "financialFreedom";
+let selectedLocalPlayers = normalizeLocalSetup({ playerCount: 1 }).players;
 
 const boardTiles = [
   { type: "payday", icon: "月", title: "月结日", text: "领取工资与被动收入，支付全部支出。" },
@@ -522,6 +546,7 @@ function createNewGameState(career, difficultyId = "standard") {
   migrateProgressState(nextState);
   migrateAiCompetitionState(nextState);
   migrateFunState(nextState);
+  migrateLocalMultiplayerState(nextState);
   ensureTutorialState(nextState);
   return nextState;
 }
@@ -557,6 +582,7 @@ function ensureTutorialState(nextState) {
   nextState.parentGuideViewed = Boolean(nextState.parentGuideViewed);
   nextState.onboardingCompleted = Boolean(nextState.onboardingCompleted || uiState.onboardingCompleted);
   migrateFunState(nextState);
+  migrateLocalMultiplayerState(nextState);
   return nextState;
 }
 
@@ -630,11 +656,96 @@ function persistQuietly() {
   migrateProgressState(state);
   migrateAiCompetitionState(state);
   migrateFunState(state);
+  migrateLocalMultiplayerState(state);
   localStorage.setItem(state.activeChallenge ? CHALLENGE_STORAGE_KEY : STORAGE_KEY, JSON.stringify(state));
+}
+
+function renderLocalSetupPanel() {
+  const locale = getLocale();
+  const setup = normalizeLocalSetup({
+    playerCount: selectedLocalPlayerCount,
+    mode: selectedLocalMode,
+    victoryCondition: selectedVictoryCondition,
+    players: selectedLocalPlayers,
+  });
+  selectedLocalPlayers = setup.players;
+  return `
+    <section class="local-setup-panel" aria-label="${localText({ zhCN: "本地多人设置", zhTW: "本地多人設定", en: "Local Multiplayer Setup" }, locale)}">
+      <div class="local-setup-header">
+        <span class="eyebrow">${localText({ zhCN: "本地轮流", zhTW: "本地輪流", en: "Hot-seat" }, locale)}</span>
+        <strong>${localText({ zhCN: "1～4 人同机轮流", zhTW: "1～4 人同機輪流", en: "1-4 local players" }, locale)}</strong>
+      </div>
+      <div class="local-count-picker" aria-label="${localText({ zhCN: "选择玩家人数", zhTW: "選擇玩家人數", en: "Choose player count" }, locale)}">
+        ${[1, 2, 3, 4].map((count) => `
+          <button type="button" class="${count === selectedLocalPlayerCount ? "selected" : ""}" data-local-count="${count}" aria-pressed="${count === selectedLocalPlayerCount}">
+            ${count}P
+          </button>
+        `).join("")}
+      </div>
+      <div class="local-rule-row">
+        <label>${localText({ zhCN: "游戏模式", zhTW: "遊戲模式", en: "Game Mode" }, locale)}
+          <select id="localModeSelect">
+            ${localGameModes.map((mode) => `<option value="${mode.id}" ${mode.id === selectedLocalMode ? "selected" : ""}>${localText(mode.title, locale)}</option>`).join("")}
+          </select>
+        </label>
+        <label>${localText({ zhCN: "胜利条件", zhTW: "勝利條件", en: "Win Condition" }, locale)}
+          <select id="localVictorySelect">
+            ${localVictoryConditions.map((condition) => `<option value="${condition.id}" ${condition.id === selectedVictoryCondition ? "selected" : ""}>${localText(condition.title, locale)}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <p class="local-rule-note">${localText(localGameModes.find((mode) => mode.id === selectedLocalMode)?.description, locale)} ${localText(localVictoryConditions.find((condition) => condition.id === selectedVictoryCondition)?.description, locale)}</p>
+      <div class="local-player-grid">
+        ${setup.players.map((player, index) => renderLocalPlayerSetupCard(player, index)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderLocalPlayerSetupCard(player, index) {
+  const locale = getLocale();
+  const careerBase = careers.find((item) => item.id === player.careerId) || careers[index % careers.length];
+  const career = localizeCareer(careerBase);
+  const adjusted = createDifficultyAdjustedCareer(career, selectedDifficultyId);
+  const profile = careerStrategyProfiles[player.careerId] || careerStrategyProfiles.teacher;
+  return `
+    <article class="local-player-card" style="--player-color:${player.color}">
+      <header>
+        <span>${localText({ zhCN: "玩家", zhTW: "玩家", en: "Player" }, locale)} ${index + 1}</span>
+        <input data-local-name="${index}" value="${escapeHtml(player.name)}" maxlength="16" aria-label="${localText({ zhCN: "玩家名称", zhTW: "玩家名稱", en: "Player name" }, locale)} ${index + 1}" />
+      </header>
+      <div class="local-player-avatar">${avatarMarkup(career, "happy", "right")}</div>
+      <strong>${career.name}</strong>
+      <small>${careerPersonality(career.id)}</small>
+      <div class="career-stat-pills compact">
+        <span>${t("finance.cash")} <strong>${money(adjusted.savings)}</strong></span>
+        <span>${t("finance.monthlyCashflow")} <strong>${money(adjusted.salary - adjusted.expenses)}</strong></span>
+      </div>
+      <div class="local-strategy-tags">
+        ${(profile.tags?.[locale === "zh-TW" ? "zhTW" : locale === "en" ? "en" : "zhCN"] || []).map((tag) => `<em>${escapeHtml(tag)}</em>`).join("")}
+      </div>
+      <div class="local-career-row" aria-label="${localText({ zhCN: "选择角色", zhTW: "選擇角色", en: "Choose character" }, locale)}">
+        ${careers.map((item) => {
+          const localCareer = localizeCareer(item);
+          return `<button type="button" class="${item.id === player.careerId ? "selected" : ""}" data-local-player-index="${index}" data-local-career="${item.id}" aria-label="${localCareer.name}">${localCareer.icon}</button>`;
+        }).join("")}
+      </div>
+      <div class="local-color-row" aria-label="${localText({ zhCN: "玩家颜色", zhTW: "玩家顏色", en: "Player color" }, locale)}">
+        ${playerColors.map((color) => `<button type="button" class="${color === player.color ? "selected" : ""}" data-local-player-index="${index}" data-local-color="${color}" style="--swatch:${color}" aria-label="${color}"></button>`).join("")}
+      </div>
+    </article>
+  `;
 }
 
 function renderSetup() {
   applyStaticTranslations();
+  selectedLocalPlayers = normalizeLocalSetup({
+    playerCount: selectedLocalPlayerCount,
+    mode: selectedLocalMode,
+    victoryCondition: selectedVictoryCondition,
+    players: selectedLocalPlayers,
+  }).players;
+  selectedLocalPlayers[0].careerId = selectedCareerId;
   const selectedBase = careers.find((item) => item.id === selectedCareerId) || careers[0];
   const selected = localizeCareer(selectedBase);
   const adjusted = createDifficultyAdjustedCareer(selected, selectedDifficultyId);
@@ -728,6 +839,7 @@ function renderSetup() {
               `
           }
         </div>
+        ${renderLocalSetupPanel()}
         ${homeProgress ? `
           <aside class="home-progress-summary" aria-label="${translateText("继续游戏进度摘要")}">
             <span>${translateText("当前进度")}</span>
@@ -787,6 +899,44 @@ function renderSetup() {
     selectedAiDifficulty = event.target.value || "standard";
     renderSetup();
   });
+  el.careerGrid.querySelectorAll("[data-local-count]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedLocalPlayerCount = Math.max(1, Math.min(4, moneyValue(button.dataset.localCount)));
+      selectedLocalPlayers = normalizeLocalSetup({ playerCount: selectedLocalPlayerCount, mode: selectedLocalMode, victoryCondition: selectedVictoryCondition, players: selectedLocalPlayers }).players;
+      soundManager.play("tap");
+      renderSetup();
+    });
+  });
+  document.querySelector("#localModeSelect")?.addEventListener("change", (event) => {
+    selectedLocalMode = event.target.value || "standard";
+    renderSetup();
+  });
+  document.querySelector("#localVictorySelect")?.addEventListener("change", (event) => {
+    selectedVictoryCondition = event.target.value || "financialFreedom";
+    renderSetup();
+  });
+  el.careerGrid.querySelectorAll("[data-local-career]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const index = moneyValue(button.dataset.localPlayerIndex);
+      selectedLocalPlayers[index].careerId = button.dataset.localCareer || selectedLocalPlayers[index].careerId;
+      if (index === 0) selectedCareerId = selectedLocalPlayers[index].careerId;
+      soundManager.play("tap");
+      renderSetup();
+    });
+  });
+  el.careerGrid.querySelectorAll("[data-local-name]").forEach((input) => {
+    input.addEventListener("input", () => {
+      const index = moneyValue(input.dataset.localName);
+      selectedLocalPlayers[index].name = input.value.slice(0, 16);
+    });
+  });
+  el.careerGrid.querySelectorAll("[data-local-color]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const index = moneyValue(button.dataset.localPlayerIndex);
+      selectedLocalPlayers[index].color = button.dataset.localColor || selectedLocalPlayers[index].color;
+      renderSetup();
+    });
+  });
   document.querySelector("#startSelectedCareer")?.addEventListener("click", startSelectedCareer);
   document.querySelector("#homeFeedbackButton")?.addEventListener("click", showFeedbackPanel);
   document.querySelector("#homeProgressSummary")?.addEventListener("click", () => {
@@ -839,6 +989,7 @@ function startSelectedCareer() {
   const career = localizeCareer(careerBase);
   if (localStorage.getItem(STORAGE_KEY)) createAutoBackup(localStorage, "new-game");
   state = createNewGameState(career, selectedDifficultyId);
+  configureSelectedLocalMultiplayer(state);
   state.locale = uiState.locale;
   state.localeVersion = localeVersion;
   state.translationSchemaVersion = translationSchemaVersion;
@@ -848,20 +999,58 @@ function startSelectedCareer() {
   showStartSummaryModal();
 }
 
+function configureSelectedLocalMultiplayer(nextState) {
+  const setup = normalizeLocalSetup({
+    playerCount: selectedLocalPlayerCount,
+    mode: selectedLocalMode,
+    victoryCondition: selectedVictoryCondition,
+    players: selectedLocalPlayers,
+  });
+  const snapshots = {};
+  setup.players.forEach((player, index) => {
+    const careerBase = careers.find((item) => item.id === player.careerId) || careers[index % careers.length] || careers[0];
+    const adjustedCareer = createDifficultyAdjustedCareer(localizeCareer(careerBase), selectedDifficultyId);
+    const playerState = createState(adjustedCareer);
+    playerState.gameDifficulty = selectedDifficultyId;
+    playerState.position = index % boardTiles.length;
+    playerState.logs = [`${player.name} ${localText({ zhCN: "加入现金流城市。", zhTW: "加入現金流城市。", en: "joined Cashflow City." }, getLocale())}`];
+    migrateFunState(playerState);
+    snapshots[player.playerId] = snapshotFromState(playerState);
+  });
+  configureLocalMultiplayer(nextState, setup, snapshots);
+  if (setup.playerCount > 1) {
+    nextState.gameMode = "solo";
+    nextState.aiPlayers = [];
+    nextState.turnOrder = ["player"];
+    nextState.currentActorId = "player";
+  }
+  applyPlayerSnapshotToState(nextState, nextState.localPlayers[0]);
+  return nextState;
+}
+
 function showStartSummaryModal() {
   if (!state) return;
   const careerBase = careers.find((item) => item.id === state.career?.id) || state.career || careers[0];
   const career = localizeCareer(careerBase);
   const difficultyId = state.gameDifficulty || selectedDifficultyId || "standard";
   const modeId = state.gameMode || selectedGameMode || "solo";
+  const localMode = localGameModes.find((item) => item.id === state.localMultiplayer?.mode) || localGameModes[1];
+  const victoryCondition = localVictoryConditions.find((item) => item.id === state.localMultiplayer?.victoryCondition) || localVictoryConditions[0];
   openSimpleModal({
     type: t("ui.startAdventure"),
     title: translateText("现金流挑战开始"),
     text: t("setup.startSummary", {
       profession: career.name,
       difficulty: difficultyLabel(difficultyId),
-      mode: gameModeLabel(modeId),
+      mode: isLocalMultiplayer(state) ? localText(localMode.title, getLocale()) : gameModeLabel(modeId),
     }),
+    metrics: isLocalMultiplayer(state)
+      ? [
+          [localText({ zhCN: "玩家人数", zhTW: "玩家人數", en: "Players" }, getLocale()), formatNumber(state.localPlayers.length)],
+          [localText({ zhCN: "胜利条件", zhTW: "勝利條件", en: "Win Condition" }, getLocale()), localText(victoryCondition.title, getLocale())],
+          [localText({ zhCN: "当前玩家", zhTW: "目前玩家", en: "Current Player" }, getLocale()), currentLocalPlayer(state)?.name || "Player 1"],
+        ]
+      : [],
     actions: [{ label: translateText("开始掷骰"), className: "primary", onClick: () => { closeModal(); maybeStartTutorial(); } }],
     panel: "start-summary",
   });
@@ -1122,6 +1311,18 @@ function finalizePlayerTurnAction({ reason = "release", force = false, renderNow
   } catch {
     // Feedback diagnostics must not keep the roll button locked.
   }
+  const shouldAdvanceLocalTurn = state
+    && el.modal.classList.contains("hidden")
+    && state.localMultiplayer?.pendingTurnSwitch
+    && (reason === "turn-complete" || reason === "no-event" || reason === "local-complete" || reason === "modal-close-complete");
+  const localAdvance = shouldAdvanceLocalTurn ? advanceLocalTurn(state) : null;
+  if (localAdvance) {
+    try {
+      persistQuietly();
+    } catch {
+      // Local turn switching must remain playable even if best-effort saving fails.
+    }
+  }
   if (renderNow && state) {
     try {
       render();
@@ -1132,6 +1333,10 @@ function finalizePlayerTurnAction({ reason = "release", force = false, renderNow
         // Rendering diagnostics are best-effort only.
       }
     }
+  }
+  if (localAdvance) {
+    focusCameraOnPlayer(true);
+    showLocalTurnToast(localAdvance);
   }
   if (state && modalHidden) assertTurnUnlockedSoon(reason);
   if (reason && state && modalHidden) window.setTimeout(() => el.rollDice.focus({ preventScroll: true }), 30);
@@ -1198,6 +1403,7 @@ function renderBoard() {
         <div class="avatar-anchor" id="avatarAnchor" style="left:${playerPoint.x}px; top:${playerPoint.y}px">
           ${avatarMarkup(state.career, uiState.avatarMood, uiState.avatarDirection)}
         </div>
+        ${renderLocalMapAvatars()}
         ${renderAiMapAvatars()}
       </div>
     </div>
@@ -1234,6 +1440,13 @@ function renderBoard() {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       showAiFinance(button.dataset.aiFinance || "");
+    });
+  });
+  el.board.querySelectorAll("[data-local-finance]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (uiState.draggingCamera || uiState.isMoving || uiState.isRolling) return;
+      showLocalLeaderboard();
     });
   });
   if (uiState.camera.follow) focusCameraOnPlayer(false);
@@ -1298,6 +1511,28 @@ function renderAiMapAvatars() {
     .join("");
 }
 
+function renderLocalMapAvatars() {
+  if (!isLocalMultiplayer(state)) return "";
+  const current = currentLocalPlayer(state);
+  return state.localPlayers
+    .filter((player) => player.playerId !== current?.playerId)
+    .map((player, index) => {
+      const position = moneyValue(player.snapshot?.position || 0) % boardPath.length;
+      const point = boardPath[position] || boardPath[0];
+      const careerBase = careers.find((item) => item.id === player.careerId) || careers[0];
+      const career = localizeCareer(careerBase);
+      const offsetAngle = (index / Math.max(1, state.localPlayers.length - 1)) * Math.PI * 2;
+      const x = point.x + Math.cos(offsetAngle) * 26;
+      const y = point.y + Math.sin(offsetAngle) * 20;
+      return `
+        <button class="local-map-avatar" type="button" data-local-finance="${player.playerId}" style="left:${x}px; top:${y}px; --player-color:${player.color}" aria-label="${escapeHtml(player.name)}">
+          ${avatarMarkup(career, "idle", "right")}
+        </button>
+      `;
+    })
+    .join("");
+}
+
 function renderFunGoalTracker() {
   if (!state) return "";
   const stats = funStats(state);
@@ -1309,6 +1544,35 @@ function renderFunGoalTracker() {
       <strong>${funText(goal.title, getLocale())}</strong>
       <em>${formatNumber(goal.progress)} / ${formatNumber(goal.target)}</em>
     </button>
+  `;
+}
+
+function renderLocalPlayerStrip() {
+  if (!isLocalMultiplayer(state)) return "";
+  const locale = getLocale();
+  const current = currentLocalPlayer(state);
+  const next = nextLocalPlayer(state);
+  const leaderboard = localLeaderboard();
+  const currentRank = leaderboard.find((item) => item.playerId === current?.playerId);
+  return `
+    <section class="local-player-strip" aria-label="${localText({ zhCN: "本地多人玩家顺序", zhTW: "本地多人玩家順序", en: "Local player order" }, locale)}">
+      <button type="button" class="local-current-player" id="openLocalLeaderboard" style="--player-color:${current?.color || playerColors[0]}">
+        <span>${localText({ zhCN: "当前玩家", zhTW: "目前玩家", en: "Current Player" }, locale)}</span>
+        <strong>${escapeHtml(current?.name || "Player 1")}</strong>
+        <em>#${currentRank?.rank || 1} · ${money(state.cash)} · ${money(netMonthlyCashflow())}</em>
+      </button>
+      <div class="local-turn-order">
+        ${state.localPlayers.map((player) => {
+          const rank = leaderboard.find((item) => item.playerId === player.playerId)?.rank || player.order;
+          return `
+            <span class="${player.playerId === current?.playerId ? "active" : ""}" style="--player-color:${player.color}">
+              <i>${rank}</i>${escapeHtml(player.name)}
+            </span>
+          `;
+        }).join("")}
+      </div>
+      <small>${localText({ zhCN: "下一位", zhTW: "下一位", en: "Next" }, locale)}：${escapeHtml(next?.name || "-")}</small>
+    </section>
   `;
 }
 
@@ -1339,6 +1603,7 @@ function shortTileTitle(tile) {
 
 function renderMapAssetMarkers() {
   if (!state) return "";
+  const activePlayerColor = currentLocalPlayer(state)?.color || null;
   const markers = [
     ...state.ownedProperties.slice(0, 4).map((item, index) => ({
       x: 450 + index * 48,
@@ -1348,6 +1613,7 @@ function renderMapAssetMarkers() {
       tone: "green",
       id: item.id,
       type: "property",
+      playerColor: activePlayerColor,
       status: item.mortgageBalance <= 0 ? "owned" : "mortgage",
     })),
     ...state.stockHoldings.slice(0, 4).map((item, index) => ({
@@ -1358,6 +1624,7 @@ function renderMapAssetMarkers() {
       tone: "violet",
       id: item.stockId,
       type: "stock",
+      playerColor: activePlayerColor,
       status: item.unrealizedGain >= 0 ? "up" : "down",
     })),
     ...state.businessHoldings.slice(0, 4).map((item, index) => ({
@@ -1368,6 +1635,7 @@ function renderMapAssetMarkers() {
       tone: "amber",
       id: item.businessId,
       type: "business",
+      playerColor: activePlayerColor,
       status: item.level > 1 ? "upgraded" : "base",
     })),
     ...state.insurancePolicies.filter((item) => item.active).slice(0, 2).map((item, index) => ({
@@ -1378,6 +1646,7 @@ function renderMapAssetMarkers() {
       tone: "blue",
       id: item.id,
       type: "insurance",
+      playerColor: activePlayerColor,
       status: "owned",
     })),
     ...state.liabilities.filter((item) => item.type !== "mortgage" && moneyValue(item.balance) > 0).slice(0, 2).map((item, index) => ({
@@ -1388,8 +1657,10 @@ function renderMapAssetMarkers() {
       tone: "slate",
       id: item.id,
       type: "bank",
+      playerColor: activePlayerColor,
       status: "mortgage",
     })),
+    ...renderOtherLocalAssetMarkerData(),
     ...migrateFunState(state).cityUpgrades.slice(-6).map((item) => ({
       x: item.x,
       y: item.y,
@@ -1398,18 +1669,64 @@ function renderMapAssetMarkers() {
       tone: item.tone,
       id: item.id,
       type: "fun",
+      playerColor: activePlayerColor,
       status: "fun",
     })),
   ];
   return markers
     .map(
       (marker) => `
-        <button class="map-asset-marker tone-${marker.tone} status-${marker.status}" type="button" data-map-asset="${marker.type}" data-map-id="${marker.id}" style="left:${marker.x}px; top:${marker.y}px" aria-label="${marker.label}">
+        <button class="map-asset-marker tone-${marker.tone} status-${marker.status}" type="button" data-map-asset="${marker.type}" data-map-id="${marker.id}" style="left:${marker.x}px; top:${marker.y}px; ${marker.playerColor ? `--player-color:${marker.playerColor};` : ""}" aria-label="${marker.label}">
           <span>${marker.icon}</span>
         </button>
       `,
     )
     .join("");
+}
+
+function renderOtherLocalAssetMarkerData() {
+  if (!isLocalMultiplayer(state)) return [];
+  const active = currentLocalPlayer(state);
+  return state.localPlayers
+    .filter((player) => player.playerId !== active?.playerId)
+    .flatMap((player, playerIndex) => {
+      const snapshot = player.snapshot || {};
+      return [
+        ...(snapshot.ownedProperties || []).slice(0, 2).map((item, index) => ({
+          x: 450 + index * 42 + playerIndex * 18,
+          y: 455 + (index % 2) * 34 + playerIndex * 14,
+          icon: propertyIcon(item.category),
+          label: `${player.name} ${t("hud.realEstate")}`,
+          tone: "green",
+          id: `${player.playerId}-${item.id}`,
+          type: "fun",
+          playerColor: player.color,
+          status: "owned",
+        })),
+        ...(snapshot.stockHoldings || []).slice(0, 2).map((item, index) => ({
+          x: 920 + index * 40 + playerIndex * 16,
+          y: 420 + (index % 2) * 30 + playerIndex * 12,
+          icon: stockIcon(item.sector),
+          label: `${player.name} ${t("hud.stock")}`,
+          tone: "violet",
+          id: `${player.playerId}-${item.stockId}`,
+          type: "fun",
+          playerColor: player.color,
+          status: "up",
+        })),
+        ...(snapshot.businessHoldings || []).slice(0, 2).map((item, index) => ({
+          x: 560 + index * 42 + playerIndex * 18,
+          y: 720 + (index % 2) * 30 + playerIndex * 12,
+          icon: businessIcon(item.category),
+          label: `${player.name} ${t("hud.business")}`,
+          tone: "amber",
+          id: `${player.playerId}-${item.businessId}`,
+          type: "fun",
+          playerColor: player.color,
+          status: item.level > 1 ? "upgraded" : "owned",
+        })),
+      ];
+    });
 }
 
 function setupMapControls() {
@@ -1751,6 +2068,7 @@ function renderActions() {
     `
     : "";
   el.actionStack.innerHTML = `
+    ${renderLocalPlayerStrip()}
     <div class="hud-status game-hud-status">
       <span>${t("hud.status")}</span>
       <strong>${translateText(uiState.hudStatus)}</strong>
@@ -1781,6 +2099,7 @@ function renderActions() {
     </div>
   `;
   document.querySelector("#focusPlayerHud")?.addEventListener("click", () => focusCameraOnPlayer(true));
+  document.querySelector("#openLocalLeaderboard")?.addEventListener("click", showLocalLeaderboard);
   document.querySelector("#hudMissionTracker")?.addEventListener("click", () => showProgressCenter("missions"));
   document.querySelector("#hudFunTracker")?.addEventListener("click", showFunGoals);
   document.querySelector("#hudBeginnerTracker")?.addEventListener("click", showBeginnerMissions);
@@ -1818,6 +2137,12 @@ function renderActions() {
 
 function processProgress(allowVictory = true) {
   if (!state) return null;
+  const localVictory = isLocalMultiplayer(state) ? evaluateLocalVictory(state, localLeaderboard()) : null;
+  if (allowVictory && localVictory) {
+    showLocalGameOver(localVictory);
+    persistQuietly();
+    return { localVictory };
+  }
   const result = evaluateProgress(state, {
     turnPhase: uiState.turnPhase,
     hasOpenEvent: !el.modal.classList.contains("hidden"),
@@ -1838,6 +2163,74 @@ function processProgress(allowVictory = true) {
   }
   persistQuietly();
   return result;
+}
+
+function localLeaderboard() {
+  if (!state) return [];
+  return calculateLocalLeaderboard(state, (snapshot) => ({
+    cash: moneyValue(snapshot.cash),
+    monthlyCashflow: calculateMonthlyCashflow(snapshot),
+    passiveIncome: calculatePassiveIncome(snapshot),
+    expenses: calculateTotalExpenses(snapshot),
+    netWorth: calculateNetWorth(snapshot),
+    freedomPercent: Math.round(calculateFinancialFreedomProgress(snapshot).percent),
+    round: moneyValue(snapshot.round || 1),
+  }));
+}
+
+function showLocalLeaderboard() {
+  const locale = getLocale();
+  const ranking = localLeaderboard();
+  openSimpleModal({
+    type: localText({ zhCN: "排行榜", zhTW: "排行榜", en: "Leaderboard" }, locale),
+    title: localText({ zhCN: "本地多人排行", zhTW: "本地多人排行", en: "Local Multiplayer Ranking" }, locale),
+    text: localText({
+      zhCN: "排名帮助大家比较进度，但不是唯一目标。也要看每位玩家学到了什么。",
+      zhTW: "排名幫助大家比較進度，但不是唯一目標。也要看每位玩家學到了什麼。",
+      en: "Ranking helps compare progress, but it is not the only goal. Notice what each player learned too.",
+    }, locale),
+    metrics: ranking.map((item) => [
+      `#${item.rank} ${item.name}`,
+      `${localText({ zhCN: "财务自由", zhTW: "財務自由", en: "Freedom" }, locale)} ${formatNumber(item.freedomPercent)}% · ${localText({ zhCN: "净资产", zhTW: "淨資產", en: "Net Worth" }, locale)} ${money(item.netWorth)} · ${localText({ zhCN: "月现金流", zhTW: "月現金流", en: "Monthly Cash Flow" }, locale)} ${money(item.monthlyCashflow)}`,
+    ]),
+    actions: [{ label: t("ui.gotIt"), className: "primary", onClick: closeModal }],
+    panel: "local-leaderboard",
+  });
+}
+
+function showLocalGameOver(result) {
+  const locale = getLocale();
+  const ranking = localLeaderboard();
+  openSimpleModal({
+    type: localText({ zhCN: "本地多人结束", zhTW: "本地多人結束", en: "Local Game Complete" }, locale),
+    title: `${result.winner.name} ${localText({ zhCN: "达成目标", zhTW: "達成目標", en: "Reached the Goal" }, locale)}`,
+    text: localText(result.condition.description, locale),
+    metrics: ranking.map((item) => [
+      `#${item.rank} ${item.name}`,
+      `${formatNumber(item.freedomPercent)}% · ${money(item.netWorth)} · ${money(item.passiveIncome)}`,
+    ]),
+    actions: [
+      { label: localText({ zhCN: "查看排行榜", zhTW: "查看排行榜", en: "View Leaderboard" }, locale), className: "primary", onClick: showLocalLeaderboard },
+      { label: t("ui.gotIt"), onClick: closeModal },
+    ],
+    outcome: "success",
+    panel: "local-game-over",
+  });
+}
+
+function showLocalTurnToast({ from, to }) {
+  if (!to) return;
+  const locale = getLocale();
+  const toast = document.createElement("div");
+  toast.className = "local-turn-toast";
+  toast.style.setProperty("--player-color", to.color || playerColors[0]);
+  toast.setAttribute("role", "status");
+  toast.textContent = `${localText({ zhCN: "轮到", zhTW: "輪到", en: "Turn:" }, locale)} ${to.name}`;
+  document.body.append(toast);
+  uiState.liveMessage = toast.textContent;
+  soundManager.play("tap");
+  window.setTimeout(() => toast.remove(), prefersReducedMotion() ? 500 : 1800);
+  addLog(`${from?.name || ""} → ${to.name}`);
 }
 
 function showUnlockToast(item) {
@@ -3483,6 +3876,7 @@ async function rollDice(forcedRoll = null) {
     haptic(8, uiState.hapticsEnabled);
     addLog(`掷出 ${roll}，逐格移动到「${boardTiles[next].title}」。`);
     state.round += 1;
+    markLocalTurnPendingSwitch(state);
     persistQuietly();
     render();
     if (uiState.camera.follow) ensurePlayerVisible(false);
@@ -3678,7 +4072,7 @@ function completeStrategyChoice(event, choice, turn) {
     });
     return;
   }
-  const result = applyFunEffects(choice.effects, choice.risk);
+  const result = applyFunEffects(choice.effects, choice.risk, event.category);
   const city = addCityUpgrade(state, {
     id: `fun-city-${event.id}-${state.round}-${state.position}`,
     icon: cityIconFor(choice.cityEffect || event.category),
@@ -3882,13 +4276,25 @@ function showFunResult({ title, text, cashDelta = 0, expenseDelta = 0, iqDelta =
   });
 }
 
-function applyFunEffects(effects = {}, risk = "low") {
-  const chance = Number.isFinite(Number(effects.successChance)) ? Number(effects.successChance) : 1;
+function applyFunEffects(effects = {}, risk = "low", category = "learn") {
+  const profile = careerStrategyProfiles[state?.career?.id] || careerStrategyProfiles.teacher;
+  const mode = localGameModes.find((item) => item.id === state?.localMultiplayer?.mode) || localGameModes[1];
+  const rawChance = Number.isFinite(Number(effects.successChance)) ? Number(effects.successChance) : 1;
+  const categoryLean = {
+    stock: profile.stock,
+    property: profile.property,
+    business: profile.business,
+    learn: profile.learning,
+  }[category] || 1;
+  const riskAdjustment = risk === "high" ? (profile.riskTolerance - 0.5) * 0.1 : risk === "medium" ? (profile.riskTolerance - 0.5) * 0.04 : 0;
+  const modeAdjustment = mode.id === "teaching" ? 0.04 : mode.id === "party" && risk !== "low" ? -0.03 : 0;
+  const chance = Math.max(0.12, Math.min(0.96, rawChance + (categoryLean - 1) * 0.08 + riskAdjustment + modeAdjustment));
   const success = Math.random() <= chance;
-  const cashDelta = moneyValue(effects.cash || 0) + moneyValue(success ? effects.successCash || 0 : effects.failureCash || 0);
+  const upsideScale = success && ["stock", "property", "business"].includes(category) ? Math.max(0.92, Math.min(1.12, 0.98 + (categoryLean - 1) * 0.16)) : 1;
+  const cashDelta = moneyValue(effects.cash || 0) + moneyValue((success ? effects.successCash || 0 : effects.failureCash || 0) * upsideScale);
   const expenseDelta = moneyValue(effects.baseExpenses || 0);
   const salaryDelta = moneyValue(effects.salary || 0);
-  const iqDelta = moneyValue(effects.financialIq || 0);
+  const iqDelta = moneyValue((effects.financialIq || 0) * (0.9 + profile.learning * 0.1));
   state.cash = moneyValue(state.cash + cashDelta);
   state.baseExpenses = Math.max(1000, moneyValue(state.baseExpenses + expenseDelta));
   state.salary = Math.max(0, moneyValue(state.salary + salaryDelta));
@@ -5975,7 +6381,7 @@ function closeModal() {
   el.modal.classList.add("hidden");
   document.body.classList.remove("modal-open");
   if (["openingEvent", "resolvingEvent", "showingResult", "turnComplete", "paused"].includes(phaseBeforeClose)) {
-    releaseTurnLock({ reason: "modal-close", force: true, renderNow: true });
+    releaseTurnLock({ reason: ["showingResult", "turnComplete"].includes(phaseBeforeClose) ? "modal-close-complete" : "modal-close", force: true, renderNow: true });
   } else if (state && !state.gameOver) {
     syncRollButton();
     renderActions();
@@ -7366,6 +7772,19 @@ window.cashflowDebug = {
         }
       : null,
     fun: state ? funStats(state) : null,
+    localMultiplayer: state
+      ? {
+          enabled: isLocalMultiplayer(state),
+          playerCount: state.localPlayers?.length || 1,
+          currentPlayerId: currentLocalPlayer(state)?.playerId || "player-1",
+          currentPlayerName: currentLocalPlayer(state)?.name || "",
+          nextPlayerName: nextLocalPlayer(state)?.name || "",
+          pendingTurnSwitch: Boolean(state.localMultiplayer?.pendingTurnSwitch),
+          mode: state.localMultiplayer?.mode || "standard",
+          victoryCondition: state.localMultiplayer?.victoryCondition || "financialFreedom",
+          leaderboard: localLeaderboard(),
+        }
+      : null,
     ai: state
       ? {
           gameMode: state.gameMode || "solo",
@@ -7467,7 +7886,7 @@ window.cashflowDebug = {
       if (!engagement) continue;
       if (engagement.kind === "strategy") {
         const choice = engagement.event.options.find((item) => item.id === "balanced") || engagement.event.options[0];
-        applyFunEffects(choice.effects, choice.risk);
+        applyFunEffects(choice.effects, choice.risk, engagement.event.category);
         addCityUpgrade(state, {
           id: `debug-city-${engagement.event.id}-${turn}`,
           icon: cityIconFor(choice.cityEffect || engagement.event.category),
@@ -7501,6 +7920,37 @@ window.cashflowDebug = {
     persistQuietly();
     render();
     return funStats(state);
+  },
+  configureLocalMultiplayerDebug: (count = 2, mode = "standard", victoryCondition = "financialFreedom") => {
+    const setup = normalizeLocalSetup({
+      playerCount: count,
+      mode,
+      victoryCondition,
+      players: Array.from({ length: count }, (_, index) => ({
+        playerId: `player-${index + 1}`,
+        name: `P${index + 1}`,
+        careerId: careers[index % careers.length].id,
+        color: playerColors[index % playerColors.length],
+      })),
+    });
+    state = createNewGameState(localizeCareer(careers[0]), "beginner");
+    const snapshots = {};
+    setup.players.forEach((player, index) => {
+      const playerState = createState(createDifficultyAdjustedCareer(localizeCareer(careers[index % careers.length]), "beginner"));
+      playerState.position = index;
+      snapshots[player.playerId] = snapshotFromState(playerState);
+    });
+    configureLocalMultiplayer(state, setup, snapshots);
+    applyPlayerSnapshotToState(state, state.localPlayers[0]);
+    persistQuietly();
+    render();
+    return window.cashflowDebug.getExperience().localMultiplayer;
+  },
+  advanceLocalTurnDebug: () => {
+    if (!state) return null;
+    markLocalTurnPendingSwitch(state);
+    releaseTurnLock({ reason: "local-complete", force: true, renderNow: true });
+    return window.cashflowDebug.getExperience().localMultiplayer;
   },
   runAiStressDebug: (aiCount = 3, rounds = 10, seed = 29) => runAiStressSimulation({ aiCount, rounds, seed }),
   showLeaderboardPanel,

@@ -105,6 +105,7 @@ export const careerGuidance = {
   teacher: "适合第一次玩：收入和支出都比较稳定，适合从小机会开始练习。",
   engineer: "适合喜欢比较数字的人：收入较高，但支出也高，高薪不代表一定更轻松。",
   designer: "适合喜欢尝试的人：收入较灵活，适合观察小生意和现金流。",
+  entrepreneur: "适合喜欢经营挑战的人：小生意成长潜力高，但更需要现金储备。",
   doctor: "适合挑战规划的人：收入高、生活成本也高，需要认真管理负债。",
 };
 
@@ -267,6 +268,7 @@ export function createCitySceneSvg(locale = "zh-CN") {
       ${district(1060, 645, 260, 205, "#ffe5e0", text.health, text.clinic)}
       ${district(730, 500, 230, 205, "#ccebd2", text.park, text.fountainBridge)}
       ${district(520, 500, 170, 115, "#e9f3ff", text.publicService, text.postLamp)}
+      ${district(1240, 790, 230, 118, "#fff7d6", text.freedomGoal, text.passiveIncome)}
       <path d="M80 600 C300 510 390 680 560 610 C750 530 890 590 1040 520 C1230 430 1370 520 1600 430" fill="none" stroke="url(#water)" stroke-width="92" stroke-linecap="round" opacity="0.9" />
       <path d="M80 600 C300 510 390 680 560 610 C750 530 890 590 1040 520 C1230 430 1370 520 1600 430" fill="none" stroke="#e8fbff" stroke-width="12" stroke-linecap="round" opacity="0.85" />
       <path d="M170 140 L1480 170 L1545 740 L1360 930 L230 890 L125 420 Z" fill="none" stroke="url(#road)" stroke-width="118" stroke-linejoin="round" stroke-linecap="round" opacity="0.78" />
@@ -291,6 +293,7 @@ export function createCitySceneSvg(locale = "zh-CN") {
       ${building(765, 705, text.school, "#dff3ff", "#246b9f", text.bookIcon)}
       ${building(1110, 700, text.commercial, "#e9f3ff", "#3573a4", text.bizIcon)}
       ${officeRow(1135, 610)}
+      ${building(1296, 764, text.freedomTower, "#fff7d6", "#d8a21f", "★")}
       ${bridge(930, 535)}
       ${bench(730, 590)}
       ${bench(930, 615)}
@@ -318,6 +321,7 @@ function citySceneLabels(locale = "zh-CN") {
     commercial: "Business", shopOffice: "Shops & Offices", startup: "Startup", shopLab: "Shop Lab Street",
     education: "Education", schoolCourse: "School & Courses", health: "Health", clinic: "Hospital & Clinics",
     park: "Park", fountainBridge: "Fountain & Bridge", publicService: "Public Services", postLamp: "Post & Lamps",
+    freedomGoal: "Freedom Goal", passiveIncome: "Passive Income", freedomTower: "Freedom Tower",
     gardenHomes: "Garden Homes", bank: "Bank", stocks: "Stocks", tickerBoard: "Ticker Board", propertyCenter: "Property Center",
     insuranceCenter: "Insurance Center", taxCenter: "Tax Center", hospital: "Hospital", startupStreet: "Startup Street",
     school: "School", apartments: "Apartments", parkFountain: "Park Fountain", start: "Start", cashflowRoad: "Cashflow Road",
@@ -330,6 +334,7 @@ function citySceneLabels(locale = "zh-CN") {
     commercial: "商业区", shopOffice: "商店与办公", startup: "创业区", shopLab: "小店实验街",
     education: "教育区", schoolCourse: "学校与课程", health: "医疗区", clinic: "医院与诊所",
     park: "公园休闲区", fountainBridge: "喷泉与小桥", publicService: "公共服务区", postLamp: "邮局与路灯",
+    freedomGoal: "自由目标区", passiveIncome: "被动收入", freedomTower: "自由塔",
     gardenHomes: "住宅花园", bank: "银行", stocks: "股票", tickerBoard: "行情板", propertyCenter: "房产中心",
     insuranceCenter: "保险中心", taxCenter: "税务中心", hospital: "医院", startupStreet: "创业街",
     school: "学校", apartments: "公寓", parkFountain: "公园喷泉", start: "起点", cashflowRoad: "现金流路",
@@ -976,6 +981,7 @@ function accessoryMarkup(id = "") {
   if (id === "teacher") return '<span class="avatar-accessory glasses"></span>';
   if (id === "engineer") return '<span class="avatar-accessory cap"></span>';
   if (id === "designer") return '<span class="avatar-accessory scarf"></span>';
+  if (id === "entrepreneur") return '<span class="avatar-accessory apron"></span><span class="avatar-accessory coin-pin"></span>';
   if (id === "doctor") return '<span class="avatar-accessory mirror"></span>';
   return "";
 }
@@ -1034,6 +1040,7 @@ function careerColor(id = "") {
     teacher: "#2b9467",
     engineer: "#246b9f",
     designer: "#6c5aa8",
+    entrepreneur: "#d97706",
     doctor: "#c84d42",
   }[id] || "#2b9467";
 }

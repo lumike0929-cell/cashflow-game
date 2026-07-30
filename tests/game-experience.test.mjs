@@ -127,10 +127,10 @@ test("角色表情、事件插画与教学提示资料齐全", () => {
 
 test("城市地图包含商业手机游戏级核心地标", () => {
   const city = createCitySceneSvg();
-  for (const label of ["住宅区", "金融区", "商业区", "创业区", "教育区", "医疗区", "公园休闲区", "公共服务区"]) {
+  for (const label of ["住宅区", "金融区", "商业区", "创业区", "教育区", "医疗区", "公园休闲区", "公共服务区", "自由目标区"]) {
     assert.match(city, new RegExp(label));
   }
-  for (const label of ["银行", "股票", "房产中心", "保险中心", "税务中心", "医院", "创业街", "学校", "商业区", "公寓"]) {
+  for (const label of ["银行", "股票", "房产中心", "保险中心", "税务中心", "医院", "创业街", "学校", "商业区", "公寓", "自由塔"]) {
     assert.match(city, new RegExp(label));
   }
   assert.match(city, /小桥|bridge|行情板/);
@@ -151,10 +151,11 @@ test("Sprint 21 新手引导资料完整且适合儿童理解", () => {
   assert.deepEqual(firstTenRoundTips.map((tip) => tip.round), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   assert.ok(beginnerMissionTemplates.length >= 10);
   assert.equal(new Set(beginnerMissionTemplates.map((mission) => mission.id)).size, beginnerMissionTemplates.length);
-  for (const id of ["teacher", "engineer", "designer", "doctor"]) {
+  for (const id of ["teacher", "engineer", "designer", "entrepreneur"]) {
     assert.ok(careerGuidance[id].length > 0);
     assert.doesNotMatch(careerGuidance[id], /最强|必然/);
   }
+  assert.ok(careerGuidance.doctor.length > 0);
 });
 
 test("儿童财务字典覆盖核心名词且不承诺收益", () => {

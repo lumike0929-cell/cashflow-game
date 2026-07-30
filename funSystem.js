@@ -445,6 +445,154 @@ export const strategyEventDefinitions = [
       en: "Cash stays for now, but you may pay more later.",
     }),
   ]),
+  strategyEvent("unemployment-response", "job", "🌧", {
+    zhCN: "危机事件：工作暂停",
+    zhTW: "危機事件：工作暫停",
+    en: "Crisis Event: Work Pause",
+  }, {
+    zhCN: "工作收入可能短暂停下。你需要选择如何守住现金流。",
+    zhTW: "工作收入可能短暫停下。你需要選擇如何守住現金流。",
+    en: "Work income may pause briefly. Choose how to protect cash flow.",
+  }, [
+    option("steady", "low", { cash: -600, baseExpenses: -220, financialIq: 1, successChance: 1 }, "work", {
+      zhCN: "立刻缩减支出",
+      zhTW: "立刻縮減支出",
+      en: "Cut Expenses Now",
+    }, {
+      zhCN: "少一点舒服，多一点安全。",
+      zhTW: "少一點舒服，多一點安全。",
+      en: "Less comfort now, more safety.",
+    }),
+    option("balanced", "medium", { cash: -900, salary: 500, financialIq: 1, successChance: 0.72, failureCash: -700 }, "work", {
+      zhCN: "投递短期项目",
+      zhTW: "投遞短期專案",
+      en: "Apply for Short Projects",
+    }, {
+      zhCN: "用行动争取收入，也保留一点现金。",
+      zhTW: "用行動爭取收入，也保留一點現金。",
+      en: "Act to rebuild income while preserving some cash.",
+    }),
+    option("risky", "high", { cash: -2200, salary: 1200, successCash: 1500, failureCash: -1800, successChance: 0.45 }, "work", {
+      zhCN: "全力转型",
+      zhTW: "全力轉型",
+      en: "Full Pivot",
+    }, {
+      zhCN: "可能打开新收入，也可能让现金压力变大。",
+      zhTW: "可能打開新收入，也可能讓現金壓力變大。",
+      en: "May open new income, but can increase cash pressure.",
+    }),
+  ]),
+  strategyEvent("asset-sale-choice", "assetSale", "🏷", {
+    zhCN: "资产选择：是否出售",
+    zhTW: "資產選擇：是否出售",
+    en: "Asset Choice: Sell or Hold",
+  }, {
+    zhCN: "你有机会卖出一项小资产。现金会增加，但未来收入可能减少。",
+    zhTW: "你有機會賣出一項小資產。現金會增加，但未來收入可能減少。",
+    en: "You can sell a small asset. Cash rises, but future income may fall.",
+  }, [
+    option("steady", "low", { cash: 900, baseExpenses: 40, successChance: 1 }, "home", {
+      zhCN: "卖出一小部分",
+      zhTW: "賣出一小部分",
+      en: "Sell a Small Part",
+    }, {
+      zhCN: "补现金，但保留多数未来机会。",
+      zhTW: "補現金，但保留多數未來機會。",
+      en: "Add cash while keeping most future upside.",
+    }),
+    option("balanced", "medium", { cash: 1900, baseExpenses: 120, successChance: 1 }, "chart", {
+      zhCN: "卖出一半",
+      zhTW: "賣出一半",
+      en: "Sell Half",
+    }, {
+      zhCN: "现金明显增加，但现金流会弱一些。",
+      zhTW: "現金明顯增加，但現金流會弱一些。",
+      en: "Cash rises clearly, but cash flow weakens a little.",
+    }),
+    option("risky", "medium", { cash: 0, successCash: 1200, failureCash: -900, successChance: 0.56 }, "chart", {
+      zhCN: "继续持有",
+      zhTW: "繼續持有",
+      en: "Keep Holding",
+    }, {
+      zhCN: "可能等到更好价格，也可能错过现金机会。",
+      zhTW: "可能等到更好價格，也可能錯過現金機會。",
+      en: "You may wait for a better price, or miss needed cash.",
+    }),
+  ]),
+  strategyEvent("cash-reserve-check", "reserve", "🧰", {
+    zhCN: "现金储备：安全垫检查",
+    zhTW: "現金儲備：安全墊檢查",
+    en: "Cash Reserve: Cushion Check",
+  }, {
+    zhCN: "你的现金垫决定遇到机会或意外时有多少选择。",
+    zhTW: "你的現金墊決定遇到機會或意外時有多少選擇。",
+    en: "Your cash cushion decides how many choices you have when opportunity or trouble appears.",
+  }, [
+    option("steady", "low", { cash: 500, financialIq: 1, successChance: 1 }, "bank", {
+      zhCN: "先补安全垫",
+      zhTW: "先補安全墊",
+      en: "Build the Cushion",
+    }, {
+      zhCN: "现金增加，短期成长慢一点。",
+      zhTW: "現金增加，短期成長慢一點。",
+      en: "Cash rises; growth may be slower for now.",
+    }),
+    option("balanced", "medium", { cash: -700, baseExpenses: -180, financialIq: 1, successChance: 1 }, "book", {
+      zhCN: "整理固定支出",
+      zhTW: "整理固定支出",
+      en: "Trim Fixed Expenses",
+    }, {
+      zhCN: "花时间调整预算，之后月现金流变轻。",
+      zhTW: "花時間調整預算，之後月現金流變輕。",
+      en: "Spend effort on the budget; future cash flow gets lighter.",
+    }),
+    option("risky", "high", { cash: -1600, successCash: 2600, failureCash: -1400, successChance: 0.5 }, "shop", {
+      zhCN: "用现金抓机会",
+      zhTW: "用現金抓機會",
+      en: "Use Cash for an Opportunity",
+    }, {
+      zhCN: "有翻盘感，但安全垫会变薄。",
+      zhTW: "有翻盤感，但安全墊會變薄。",
+      en: "It can feel like a comeback, but the cushion gets thinner.",
+    }),
+  ]),
+  strategyEvent("small-spending-choice", "spending", "🛍", {
+    zhCN: "小额消费：想要还是需要",
+    zhTW: "小額消費：想要還是需要",
+    en: "Small Spending: Want or Need",
+  }, {
+    zhCN: "你看到一个很想买的小东西。它不会毁掉财务，但习惯会累积。",
+    zhTW: "你看到一個很想買的小東西。它不會毀掉財務，但習慣會累積。",
+    en: "You see something tempting. One purchase won't ruin finances, but habits add up.",
+  }, [
+    option("steady", "low", { cash: 300, financialIq: 1, successChance: 1 }, "heart", {
+      zhCN: "等一天再决定",
+      zhTW: "等一天再決定",
+      en: "Wait One Day",
+    }, {
+      zhCN: "冲动降温，现金留下来。",
+      zhTW: "衝動降溫，現金留下來。",
+      en: "The impulse cools down, and cash stays.",
+    }),
+    option("balanced", "low", { cash: -350, successChance: 1 }, "bill", {
+      zhCN: "用娱乐预算买",
+      zhTW: "用娛樂預算買",
+      en: "Use Fun Money",
+    }, {
+      zhCN: "有预算就可以享受，但仍要记录支出。",
+      zhTW: "有預算就可以享受，但仍要記錄支出。",
+      en: "Enjoy it if it fits the budget, and still record it.",
+    }),
+    option("risky", "medium", { cash: -1200, failureCash: -500, successChance: 0.5 }, "bill", {
+      zhCN: "直接升级整套",
+      zhTW: "直接升級整套",
+      en: "Upgrade the Whole Set",
+    }, {
+      zhCN: "开心很快，但现金少得也快。",
+      zhTW: "開心很快，但現金少得也快。",
+      en: "It feels fun quickly, and cash drops quickly too.",
+    }),
+  ]),
 ];
 
 export const miniGameDefinitions = [

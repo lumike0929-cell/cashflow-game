@@ -79,28 +79,83 @@ try {
   await page.getByText("新手教学").click();
   const roleCount = await page.locator(".career-thumb").count();
   assert.equal(roleCount, 4);
-  for (const roleName of ["小学老师", "软件工程师", "自由设计师", "牙科医生"]) {
+  for (const roleName of ["小学老师", "软件工程师", "自由设计师", "小生意创业者"]) {
     await expectText(page, roleName);
   }
   await page.locator('[data-difficulty="beginner"]').click();
   assert.equal(await page.locator(".difficulty-picker button.selected").innerText(), "新手");
-  await page.locator('[data-career="doctor"]').click();
+  await page.locator('[data-career="entrepreneur"]').click();
+  await page.locator('[data-local-count="4"]').click();
+  await page.locator('[data-local-player-index="1"][data-local-career="engineer"]').click();
+  await page.locator('[data-local-player-index="2"][data-local-career="designer"]').click();
+  await page.locator('[data-local-player-index="3"][data-local-career="entrepreneur"]').click();
+  await page.locator('[data-local-name="1"]').fill("贝贝");
+  await page.locator('[data-local-name="2"]').fill("琪琪");
+  await page.locator('[data-local-name="3"]').fill("豆豆");
+  const localSetupUi = await page.evaluate(() => ({
+    countButtons: document.querySelectorAll("[data-local-count]").length,
+    cards: document.querySelectorAll(".local-player-card").length,
+    selectedCareers: [...document.querySelectorAll(".local-player-card")].map((card) => card.querySelector(".local-career-row .selected")?.getAttribute("data-local-career")),
+    width: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  assert.equal(localSetupUi.countButtons, 4);
+  assert.equal(localSetupUi.cards, 4);
+  assert.deepEqual(localSetupUi.selectedCareers, ["entrepreneur", "engineer", "designer", "entrepreneur"]);
+  assert.ok(localSetupUi.width <= localSetupUi.clientWidth + 1, `local setup overflow: ${localSetupUi.width} > ${localSetupUi.clientWidth}`);
   await page.locator("#startSelectedCareer").click();
   await page.evaluate(() => window.cashflowDebug.closeModal());
   let beginnerSnapshot = await page.evaluate(() => window.cashflowDebug.getExperience());
   assert.equal(beginnerSnapshot.onboardingCompleted, true);
   assert.equal(beginnerSnapshot.beginnerMissions.some((mission) => mission.id === "choose-character" && mission.completed), true);
   assert.equal(beginnerSnapshot.nextBeginnerMission, "first-roll");
+  assert.equal(beginnerSnapshot.localMultiplayer.enabled, true);
+  assert.equal(beginnerSnapshot.localMultiplayer.playerCount, 4);
+  assert.equal(await page.locator(".local-player-strip").count(), 1);
+  assert.equal(await page.locator(".local-map-avatar").count(), 3);
+  const localDebug = await page.evaluate(() => {
+    const before = window.cashflowDebug.getExperience().localMultiplayer;
+    const states = [before.currentPlayerId];
+    for (let index = 0; index < 20; index += 1) {
+      states.push(window.cashflowDebug.advanceLocalTurnDebug().currentPlayerId);
+    }
+    const after = window.cashflowDebug.getExperience().localMultiplayer;
+    const rootState = window.cashflowDebug.getState();
+    return {
+      states,
+      currentPlayerId: after.currentPlayerId,
+      playerCount: after.playerCount,
+      pendingTurnSwitch: after.pendingTurnSwitch,
+      leaderboard: after.leaderboard.length,
+      snapshots: rootState.localPlayers.map((player) => ({
+        id: player.playerId,
+        careerId: player.careerId,
+        cash: player.snapshot.cash,
+        position: player.snapshot.position,
+      })),
+      localAvatars: document.querySelectorAll(".local-map-avatar").length,
+      stripVisible: Boolean(document.querySelector(".local-player-strip")),
+      rollDisabled: document.querySelector("#rollDice")?.disabled,
+    };
+  });
+  assert.equal(localDebug.playerCount, 4);
+  assert.equal(new Set(localDebug.states).size, 4);
+  assert.equal(localDebug.pendingTurnSwitch, false);
+  assert.equal(localDebug.leaderboard, 4);
+  assert.equal(localDebug.localAvatars, 3);
+  assert.equal(localDebug.stripVisible, true);
+  assert.equal(localDebug.rollDisabled, false);
+  assert.deepEqual(localDebug.snapshots.map((item) => item.careerId), ["entrepreneur", "engineer", "designer", "entrepreneur"]);
   await page.evaluate(() => {
-    const career = { id: "doctor", icon: "医", name: "牙科医生", salary: 52000, expenses: 42000, savings: 36000 };
+    const career = { id: "entrepreneur", icon: "创", name: "小生意创业者", salary: 24000, expenses: 20500, savings: 14500 };
     window.cashflowDebug.setState({
       career,
       month: 1,
       round: 1,
       position: 0,
       cash: 420000,
-      salary: 52000,
-      baseExpenses: 42000,
+      salary: 24000,
+      baseExpenses: 20500,
       assets: [],
       liabilities: [],
       logs: [],

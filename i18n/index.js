@@ -1024,6 +1024,7 @@ const domain = {
       teacher: { name: "小學老師", icon: "師", note: "工資穩定，現金不多，適合練習從小機會開始累積資產。", guidance: "適合第一次玩：收入和支出都比較穩定，適合從小機會開始練習。", personality: "探險型老師", shortNote: "穩定起步，適合練習小額機會。" },
       engineer: { name: "軟體工程師", icon: "工", note: "現金流較寬裕，但生活支出高，容易被大額消費拖慢。", guidance: "適合喜歡比較數字的人：收入較高，但支出也高，高薪不代表一定更輕鬆。", personality: "系統發明家", shortNote: "現金流較寬，適合比較不同資產。" },
       designer: { name: "自由設計師", icon: "設", note: "收入中等，適合用小生意和版權收入建立被動收入。", guidance: "適合喜歡嘗試的人：收入較靈活，適合觀察小生意和現金流。", personality: "創意小店長", shortNote: "靈活經營，適合嘗試小生意。" },
+      entrepreneur: { name: "小生意創業者", icon: "創", note: "初期壓力較高，適合練習現金儲備、小生意成長和風險管理。", guidance: "適合喜歡經營挑戰的人：小生意成長潛力高，但更需要現金儲備。", personality: "街區創業家", shortNote: "小生意潛力高，也要守住現金。" },
       doctor: { name: "牙科醫生", icon: "醫", note: "收入高但開銷也高，需要控制負債和現金安全墊。", guidance: "適合挑戰規劃的人：收入高、生活成本也高，需要認真管理負債。", personality: "穩健規劃師", shortNote: "收入高，也要管理高支出。" },
     },
     boardTiles: [
@@ -1094,6 +1095,7 @@ const domain = {
       teacher: { name: "小学老师", icon: "师", note: "工资稳定，现金不多，适合练习从小机会开始累积资产。", guidance: "适合第一次玩：收入和支出都比较稳定，适合从小机会开始练习。", personality: "探险型老师", shortNote: "稳定起步，适合练习小额机会。" },
       engineer: { name: "软件工程师", icon: "工", note: "现金流较宽裕，但生活支出高，容易被大额消费拖慢。", guidance: "适合喜欢比较数字的人：收入较高，但支出也高，高薪不代表一定更轻松。", personality: "系统发明家", shortNote: "现金流较宽，适合比较不同资产。" },
       designer: { name: "自由设计师", icon: "设", note: "收入中等，适合用小生意和版权收入建立被动收入。", guidance: "适合喜欢尝试的人：收入较灵活，适合观察小生意和现金流。", personality: "创意小店长", shortNote: "灵活经营，适合尝试小生意。" },
+      entrepreneur: { name: "小生意创业者", icon: "创", note: "初期压力较高，适合练习现金储备、小生意成长和风险管理。", guidance: "适合喜欢经营挑战的人：小生意成长潜力高，但更需要现金储备。", personality: "街区创业家", shortNote: "小生意潜力高，也要守住现金。" },
       doctor: { name: "牙科医生", icon: "医", note: "收入高但开销也高，需要控制负债和现金安全垫。", guidance: "适合挑战规划的人：收入高、生活成本也高，需要认真管理负债。", personality: "稳健规划师", shortNote: "收入高，也要管理高支出。" },
     },
     boardTiles: null,
@@ -1104,6 +1106,7 @@ const domain = {
       teacher: { name: "Elementary Teacher", icon: "T", note: "Stable salary with limited cash. Good for practicing small opportunities.", guidance: "Good for first-time players: stable income and expenses make choices easier to read.", personality: "Explorer Teacher", shortNote: "A steady start for small opportunities." },
       engineer: { name: "Software Engineer", icon: "E", note: "More cash flow, but higher living costs can slow progress.", guidance: "Good for number-checkers: higher income, but higher expenses too.", personality: "Systems Inventor", shortNote: "More room to compare assets." },
       designer: { name: "Freelance Designer", icon: "D", note: "Flexible income. Good for learning business and cash flow.", guidance: "Good for experimenters: flexible income and business choices.", personality: "Creative Shopkeeper", shortNote: "Flexible and business-friendly." },
+      entrepreneur: { name: "Small Business Founder", icon: "Biz", note: "Early pressure is higher. Great for practicing cash reserves and business growth.", guidance: "Good for players who like operating choices: higher business upside, but cash reserves matter more.", personality: "Street Founder", shortNote: "Business upside with cash pressure." },
       doctor: { name: "Dentist", icon: "Dr", note: "High income and high costs. Debt and cash cushions matter.", guidance: "Good for planning practice: high income with high lifestyle costs.", personality: "Careful Planner", shortNote: "High income, high expenses." },
     },
     boardTiles: [

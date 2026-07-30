@@ -11,6 +11,7 @@ import { migrateBankingStatePart } from "./bankingStorageMigration.js";
 import { migrateLifeEventStatePart } from "./lifeEventStorageMigration.js";
 import { migrateProgressState } from "./progressSystem.js";
 import { migrateAiCompetitionState } from "./aiCompetitionSystem.js";
+import { migrateLocalMultiplayerState } from "./localMultiplayerSystem.js";
 
 export const CURRENT_SAVE_VERSION = 4;
 
@@ -65,6 +66,7 @@ export function migrateSavedState(candidate) {
   migrateLifeEventStatePart(state, candidate);
   migrateProgressState(state);
   migrateAiCompetitionState(state);
+  migrateLocalMultiplayerState(state);
   return state;
 }
 
