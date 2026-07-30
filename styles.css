@@ -5384,15 +5384,10 @@ body[data-quality="battery"] .finance-effect {
   }
 
   .intro-actions {
-    position: absolute;
-    left: 14px;
-    right: 14px;
-    bottom: 16px;
-    z-index: 5;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(112px, 0.74fr);
     gap: 9px;
-    margin: 0;
+    margin-top: 18px;
   }
 
   .hero-main-button {
@@ -5402,14 +5397,10 @@ body[data-quality="battery"] .finance-effect {
   }
 
   .intro-secondary-actions {
-    position: absolute;
-    left: 14px;
-    right: 14px;
-    bottom: 82px;
-    z-index: 5;
     display: grid;
-    grid-template-columns: 1fr 1fr 0.78fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
+    margin-top: 10px;
   }
 
   .intro-secondary-actions button {

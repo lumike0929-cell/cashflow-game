@@ -67,6 +67,15 @@ try {
   assert.equal(heroCheck.heroVisible, true);
   assert.equal(heroCheck.startVisible, true);
   assert.ok(heroCheck.width <= heroCheck.clientWidth + 1, `home overflow: ${heroCheck.width} > ${heroCheck.clientWidth}`);
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 430, height: 932 },
+    { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
+    { width: 1440, height: 900 },
+  ]) {
+    await verifyStartAdventureEntry(page, viewport);
+  }
   await page.evaluate(() => window.cashflowDebug.showOnboarding(0));
   await expectText(page, "欢迎来到现金流冒险城");
   await page.getByText("家长／老师说明").click();
@@ -517,9 +526,12 @@ try {
     Math.abs(gestureDragged.x - gestureBefore.x) + Math.abs(gestureDragged.y - gestureBefore.y) > 18,
     `manual board drag did not move camera: ${JSON.stringify({ gestureBefore, gestureDragged })}`,
   );
+  await page.evaluate(() => window.cashflowDebug.zoomMap(-0.22));
+  const wheelBase = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
+  await page.mouse.move(viewportRect.x + viewportRect.width * 0.5, viewportRect.y + viewportRect.height * 0.5);
   await page.mouse.wheel(0, -320);
   const gestureZoomed = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
-  assert.ok(gestureZoomed.scale > gestureDragged.scale, `wheel zoom did not increase scale: ${JSON.stringify({ gestureDragged, gestureZoomed })}`);
+  assert.ok(gestureZoomed.scale > wheelBase.scale, `wheel zoom did not increase scale: ${JSON.stringify({ gestureDragged, wheelBase, gestureZoomed })}`);
   await page.locator("#focusPlayer").click();
   const gestureFocused = await page.evaluate(() => window.cashflowDebug.getExperience().camera);
   assert.equal(gestureFocused.follow, true, "Find Player should restore camera follow");
@@ -1040,13 +1052,10 @@ async function expectModalText(page, text) {
 
 async function runEnglishI18nSmoke(page) {
   await assertEnglishUiClean(page, "English home");
-  await expectText(page, "Welcome to Cashflow Adventure City");
-  await assertEnglishUiClean(page, "English onboarding modal");
-  await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.locator("#startAdventure").click();
-  await expectText(page, "Start Directly");
-  await assertEnglishUiClean(page, "English onboarding from start");
-  await page.getByText("Start Directly").click();
+  await expectText(page, "Hot-seat");
+  assert.equal(await page.locator(".local-player-card").count(), 1);
+  await assertEnglishUiClean(page, "English new adventure setup");
   await page.locator('[data-career="designer"]').click();
   await expectText(page, "Freelance Designer");
   await expectText(page, "Difficulty: Standard");
@@ -1113,6 +1122,72 @@ async function runEnglishI18nSmoke(page) {
   await resolveModalUntilReady(page, "reject");
   await waitForRollReady(page, "English smoke after event");
   await restoreRandom(page);
+}
+
+async function verifyStartAdventureEntry(page, viewport) {
+  await page.setViewportSize(viewport);
+  await page.evaluate(() => localStorage.clear());
+  await page.reload({ waitUntil: "networkidle" });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.selectOption("#topLocaleSelect", "zh-CN");
+  await page.selectOption("#topLocaleSelect", "en");
+  await page.selectOption("#topLocaleSelect", "zh-CN");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const before = await page.evaluate(() => {
+    const button = document.querySelector("#startAdventure");
+    const rect = button?.getBoundingClientRect();
+    const center = rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : { x: 0, y: 0 };
+    const top = document.elementFromPoint(center.x, center.y);
+    const heroTitle = document.querySelector(".home-hero h1")?.getBoundingClientRect();
+    const actions = document.querySelector(".intro-actions")?.getBoundingClientRect();
+    const secondary = document.querySelector(".intro-secondary-actions")?.getBoundingClientRect();
+    const overlaps = (a, b) => Boolean(a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top);
+    return {
+      exists: Boolean(button),
+      disabled: Boolean(button?.disabled),
+      pointerEvents: button ? getComputedStyle(button).pointerEvents : "",
+      rect: rect?.toJSON(),
+      topId: top?.id || "",
+      topClass: typeof top?.className === "string" ? top.className : "",
+      topClosestStart: Boolean(top?.closest?.("#startAdventure")),
+      modalHidden: document.querySelector("#cardModal")?.classList.contains("hidden"),
+      hiddenModalDisplay: getComputedStyle(document.querySelector("#cardModal")).display,
+      titleActionOverlap: overlaps(heroTitle, actions),
+      titleSecondaryOverlap: overlaps(heroTitle, secondary),
+      width: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    };
+  });
+  assert.equal(before.exists, true, `${viewport.width}px start button missing`);
+  assert.equal(before.disabled, false, `${viewport.width}px start button disabled`);
+  assert.equal(before.pointerEvents, "auto", `${viewport.width}px start button pointer-events`);
+  assert.equal(before.topClosestStart, true, `${viewport.width}px start button blocked by ${before.topId || before.topClass}`);
+  assert.equal(before.modalHidden, true, `${viewport.width}px hidden modal is open before start`);
+  assert.equal(before.hiddenModalDisplay, "none", `${viewport.width}px hidden modal still captures layout`);
+  assert.equal(before.titleActionOverlap, false, `${viewport.width}px start actions overlap title`);
+  assert.equal(before.titleSecondaryOverlap, false, `${viewport.width}px secondary actions overlap title`);
+  assert.ok(before.width <= before.clientWidth + 1, `${viewport.width}px home overflow before start`);
+
+  await page.locator("#startAdventure").click();
+  await page.waitForFunction(() => document.querySelector(".local-setup-panel") && document.querySelectorAll(".career-thumb").length === 4);
+  const after = await page.evaluate(() => ({
+    modalHidden: document.querySelector("#cardModal")?.classList.contains("hidden"),
+    localCards: document.querySelectorAll(".local-player-card").length,
+    careerThumbs: document.querySelectorAll(".career-thumb").length,
+    focusedSelection: document.body.classList.contains("selection-active"),
+    width: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  assert.equal(after.modalHidden, true, `${viewport.width}px start opened blocking modal`);
+  assert.equal(after.localCards, 1, `${viewport.width}px default start should show 1 player`);
+  assert.equal(after.careerThumbs, 4, `${viewport.width}px career setup missing`);
+  assert.equal(after.focusedSelection, true, `${viewport.width}px start did not enter setup`);
+  assert.ok(after.width <= after.clientWidth + 1, `${viewport.width}px setup overflow after start`);
+
+  await page.locator("[data-local-count='2']").click();
+  assert.equal(await page.locator(".local-player-card").count(), 2, `${viewport.width}px 2P setup did not render`);
+  await page.locator("[data-local-count='4']").click();
+  assert.equal(await page.locator(".local-player-card").count(), 4, `${viewport.width}px 4P setup did not render`);
 }
 
 async function assertEnglishFinancialSurfaces(page) {

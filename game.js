@@ -943,10 +943,6 @@ function renderSetup() {
     state = savedState;
     showProgressCenter("freedom");
   });
-  if (!savedState && !uiState.onboardingCompleted && !uiState.onboardingAutoShown && el.modal.classList.contains("hidden")) {
-    uiState.onboardingAutoShown = true;
-    window.setTimeout(() => showOnboarding(), 80);
-  }
 }
 
 function careerPersonality(id) {
@@ -1064,6 +1060,36 @@ function showCharacterSelection() {
   const selectedThumb = el.careerGrid?.querySelector(".career-thumb.selected");
   if (selectedThumb instanceof HTMLElement) {
     selectedThumb.focus({ preventScroll: true });
+  }
+}
+
+function beginNewAdventure() {
+  try {
+    if (!el.startAdventure || el.startAdventure.disabled) return;
+    if (!el.modal.classList.contains("hidden")) closeModal();
+    selectedLocalPlayerCount = Math.max(1, Math.min(4, moneyValue(selectedLocalPlayerCount) || 1));
+    selectedLocalMode = localGameModes.some((mode) => mode.id === selectedLocalMode) ? selectedLocalMode : "standard";
+    selectedVictoryCondition = localVictoryConditions.some((condition) => condition.id === selectedVictoryCondition) ? selectedVictoryCondition : "financialFreedom";
+    selectedLocalPlayers = normalizeLocalSetup({
+      playerCount: selectedLocalPlayerCount,
+      mode: selectedLocalMode,
+      victoryCondition: selectedVictoryCondition,
+      players: selectedLocalPlayers,
+    }).players;
+    soundManager.play("tap");
+    showCharacterSelection();
+  } catch (error) {
+    recordFeedbackError(localStorage, "UI_TARGET_MISSING", error?.message || "start adventure failed");
+    el.modal.classList.add("hidden");
+    document.body.classList.remove("modal-open");
+    openSimpleModal({
+      type: translateText("启动失败"),
+      title: translateText("暂时无法打开新游戏设置"),
+      text: translateText("刚才的开始流程没有完成。你的存档没有被删除，请再试一次。"),
+      actions: [{ label: translateText("重试"), className: "primary", onClick: () => { closeModal(); beginNewAdventure(); } }],
+      outcome: "warning",
+      panel: "start-error",
+    });
   }
 }
 
@@ -7499,10 +7525,7 @@ el.loadGame?.addEventListener("click", loadGame);
 el.resetGame?.addEventListener("click", confirmResetGame);
 el.gameMenu?.addEventListener("click", showGameMenu);
 el.continueGameHome?.addEventListener("click", loadGame);
-el.startAdventure?.addEventListener("click", () => {
-  if (!uiState.onboardingCompleted) showOnboarding();
-  else showCharacterSelection();
-});
+el.startAdventure?.addEventListener("click", beginNewAdventure);
 el.rulesHome?.addEventListener("click", showRules);
 el.progressHome?.addEventListener("click", () => {
   if (!state) {
