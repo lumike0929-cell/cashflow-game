@@ -1,12 +1,12 @@
 export const releaseInfo = {
-  appVersion: "1.29.0-boardgame-rc",
+  appVersion: "1.31.0-playtest-polish",
   releaseChannel: "Public Beta",
   releaseLabel: "RC1 Public Beta",
   nextFixTarget: "RC2",
   saveSchemaVersion: 4,
   backupSchemaVersion: 1,
   translationSchemaVersion: 1,
-  serviceWorkerVersion: "cashflow-game-shell-boardgame-rc-20260801",
+  serviceWorkerVersion: "cashflow-game-shell-playtest-polish-20260801",
   buildDate: "2026-08-01",
   releaseNotes: {
     "zh-TW": [

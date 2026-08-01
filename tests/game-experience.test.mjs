@@ -7,6 +7,7 @@ import {
   beginnerMissionTemplates,
   cameraForTile,
   careerGuidance,
+  cityDistricts,
   clampCamera,
   contextTipMessages,
   createCitySceneSvg,
@@ -25,6 +26,7 @@ import {
   tileVisual,
   tutorialControllerSteps,
   tutorialSteps,
+  visualPacingBeats,
 } from "../gameExperience.js";
 
 test("城市棋盘维持 40 格循环，经过末尾会回到第 1 格", () => {
@@ -57,6 +59,20 @@ test("角色路径是多分区桌游路线且避开财务自由核心地标", ()
   assert.ok(mapSize.height >= 1000);
 });
 
+test("Sprint 31 城市地图有分区、街区和视觉节奏保底", () => {
+  assert.ok(cityDistricts.length >= 6);
+  assert.deepEqual(cityDistricts.map((district) => district.id), ["residential", "finance", "startup", "education", "health", "freedom"]);
+  assert.ok(cityDistricts.every((district) => district.icon && district.color && district.width >= 200));
+  const city = createCitySceneSvg("en");
+  for (const marker of ["city-street-grid", "street-main", "street-branch", "city-intersection", "freedom-progress-beacons", "progress-beacon"]) {
+    assert.match(city, new RegExp(marker));
+  }
+  assert.ok(visualPacingBeats.length >= 8);
+  assert.deepEqual(visualPacingBeats.map((beat) => beat.turn), [1, 3, 5, 7, 9, 11, 13, 15]);
+  assert.ok(visualPacingBeats.some((beat) => beat.type === "crisis"));
+  assert.ok(visualPacingBeats.some((beat) => beat.visual === "freedom-core-light"));
+});
+
 test("骰子显示正确点数，格子视觉类别可取得", () => {
   for (let value = 1; value <= 6; value += 1) {
     const markup = diceMarkup(value, false);
@@ -64,6 +80,7 @@ test("骰子显示正确点数，格子视觉类别可取得", () => {
     assert.equal(activeDots, value);
     assert.equal(markup.match(/class="dice-side dice-side-/g)?.length || 0, 6);
     assert.equal(markup.match(/class="dice-spark/g)?.length || 0, 3);
+    assert.equal(markup.match(/class="dice-ring/g)?.length || 0, 1);
     assert.match(markup, new RegExp(`data-result="${value}"`));
     assert.match(markup, new RegExp(`dice-pop" aria-hidden="true">${value}`));
   }
@@ -126,12 +143,14 @@ test("镜头可缩放、拖曳并回到玩家，偏好可恢复", () => {
 
 test("角色表情、事件插画与教学提示资料齐全", () => {
   const career = { id: "engineer", icon: "工", name: "软件工程师" };
-  for (const mood of ["neutral", "happy", "excited", "worried", "sad", "proud", "surprised", "thinking", "tired", "celebrating"]) {
+  for (const mood of ["neutral", "happy", "excited", "worried", "shocked", "disappointed", "sad", "proud", "surprised", "thinking", "tired", "celebrating"]) {
     const markup = avatarMarkup(career, mood, "left");
     assert.match(markup, new RegExp(`mood-${mood}`));
     assert.match(markup, /facing-left/);
     assert.match(markup, /avatar-mouth/);
     assert.match(markup, /avatar-accessory/);
+    assert.match(markup, /avatar-career-silhouette/);
+    assert.match(markup, /avatar-ear/);
   }
   assert.ok(tutorialSteps.length >= 9);
   assert.equal(tutorialSteps[0].id, "goal");

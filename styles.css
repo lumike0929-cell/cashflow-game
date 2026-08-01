@@ -2103,6 +2103,34 @@ body[data-motion="reduced"] .city-map-stage {
   font-weight: 950;
 }
 
+.freedom-progress-beacons {
+  filter: drop-shadow(0 8px 6px rgba(24, 42, 33, 0.14));
+}
+
+.progress-beacon {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: beacon-glow 2200ms ease-in-out infinite alternate;
+}
+
+.beacon-1 {
+  animation-delay: 180ms;
+}
+
+.beacon-2 {
+  animation-delay: 360ms;
+}
+
+.beacon-3 {
+  animation-delay: 540ms;
+}
+
+.progress-beacon-label {
+  fill: #24332d;
+  font-size: 13px;
+  font-weight: 950;
+}
+
 .zone-badge {
   filter: drop-shadow(0 12px 10px rgba(24, 42, 33, 0.14));
 }
@@ -2192,6 +2220,47 @@ body[data-motion="reduced"] .city-map-stage {
   fill: #5f726a;
   font-size: 18px;
   font-weight: 850;
+}
+
+.district-grid,
+.city-street-grid path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.district-grid {
+  stroke: rgba(255, 255, 255, 0.58);
+  stroke-width: 5;
+  stroke-dasharray: 18 16;
+}
+
+.district-icon {
+  font-size: 28px;
+}
+
+.city-street-grid {
+  filter: drop-shadow(0 12px 10px rgba(24, 42, 33, 0.1));
+}
+
+.street-main {
+  stroke: rgba(248, 250, 244, 0.68);
+  stroke-width: 40;
+}
+
+.street-branch {
+  stroke: rgba(248, 250, 244, 0.44);
+  stroke-width: 26;
+}
+
+.street-dash {
+  stroke: rgba(83, 98, 92, 0.25);
+  stroke-width: 5;
+  stroke-dasharray: 18 18;
+}
+
+.city-intersection {
+  filter: drop-shadow(0 10px 8px rgba(24, 42, 33, 0.12));
 }
 
 .building-sign {
@@ -2571,6 +2640,7 @@ body[data-motion="reduced"] .city-map-stage {
   inset: 5px;
   border-radius: 18px;
   border: 2px dashed rgba(255, 255, 255, 0.58);
+  border-top-width: 8px;
   pointer-events: none;
 }
 
@@ -2585,6 +2655,20 @@ body[data-motion="reduced"] .city-map-stage {
   font-size: 24px;
   font-weight: 950;
   box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.92), 0 5px 10px rgba(24, 42, 33, 0.1);
+}
+
+.map-tile.payday .tile-icon,
+.map-tile.opportunity .tile-icon,
+.map-tile.stockOpportunity .tile-icon,
+.map-tile.businessOpportunity .tile-icon,
+.map-tile.bank .tile-icon,
+.map-tile.learn .tile-icon,
+.map-tile.market .tile-icon {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.92),
+    0 7px 0 rgba(23, 32, 29, 0.08),
+    0 12px 16px rgba(24, 42, 33, 0.14);
 }
 
 .map-tile.active::before {
@@ -2758,6 +2842,22 @@ body[data-motion="reduced"] .city-map-stage {
   background: linear-gradient(180deg, #fff7c2, #f5b642);
   border-color: rgba(255, 255, 255, 0.9);
   box-shadow: 0 0 0 6px rgba(255, 217, 92, 0.28), 0 8px 0 rgba(96, 60, 9, 0.16), 0 14px 22px rgba(127, 86, 17, 0.2);
+}
+
+.map-asset-marker::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border: 2px solid color-mix(in srgb, var(--player-color, #ffd86b), transparent 30%);
+  border-radius: 22px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.map-asset-marker.status-owned::after,
+.map-asset-marker.status-upgraded::after,
+.map-asset-marker.status-fun::after {
+  animation: city-upgrade-pulse 1600ms ease-in-out infinite;
 }
 
 .map-asset-marker span {
@@ -3142,7 +3242,9 @@ body[data-motion="reduced"] .city-map-stage {
 
 .avatar-backpack,
 .avatar-outfit,
-.avatar-prop {
+.avatar-prop,
+.avatar-ear,
+.avatar-career-silhouette {
   position: absolute;
   pointer-events: none;
 }
@@ -3182,6 +3284,23 @@ body[data-motion="reduced"] .city-map-stage {
   width: 54px;
   height: 54px;
   box-shadow: 0 11px 18px rgba(24, 42, 33, 0.18), inset 0 5px 0 rgba(255, 255, 255, 0.38);
+}
+
+.avatar-ear {
+  z-index: 0;
+  top: 25px;
+  width: 12px;
+  height: 15px;
+  border-radius: 50%;
+  background: #f2b07f;
+}
+
+.avatar-ear.left {
+  left: 7px;
+}
+
+.avatar-ear.right {
+  right: 7px;
 }
 
 .avatar-hair {
@@ -3283,18 +3402,30 @@ body[data-motion="reduced"] .city-map-stage {
 
 .avatar-teacher .avatar-body {
   border-radius: 18px 18px 12px 12px;
+  background:
+    linear-gradient(90deg, transparent 0 42%, rgba(255, 255, 255, 0.46) 43% 57%, transparent 58%),
+    var(--avatar-color, var(--green));
 }
 
 .avatar-engineer .avatar-body {
   border-radius: 16px 16px 18px 18px;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(142, 208, 235, 0.9) 0 6px, transparent 7px),
+    linear-gradient(180deg, var(--avatar-color, var(--green)), #354740);
 }
 
 .avatar-designer .avatar-body {
   border-radius: 24px 14px 18px 14px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0 28%, transparent 29%),
+    linear-gradient(180deg, var(--avatar-color, var(--green)), #f0bb63);
 }
 
 .avatar-entrepreneur .avatar-body {
   border-radius: 14px 24px 14px 18px;
+  background:
+    linear-gradient(90deg, transparent 0 34%, rgba(36, 51, 45, 0.22) 35% 42%, transparent 43%),
+    var(--avatar-color, var(--green));
 }
 
 .avatar-arm.left {
@@ -3410,6 +3541,17 @@ body[data-motion="reduced"] .city-map-stage {
   clip-path: polygon(50% 0, 62% 35%, 100% 35%, 69% 56%, 82% 100%, 50% 72%, 18% 100%, 31% 56%, 0 35%, 38% 35%);
 }
 
+.avatar-career-silhouette {
+  z-index: -1;
+  left: 13px;
+  top: 15px;
+  width: 50px;
+  height: 72px;
+  border-radius: 30px 30px 16px 16px;
+  background: color-mix(in srgb, var(--avatar-color, #1f7a52), transparent 72%);
+  filter: blur(0.2px);
+}
+
 .mood-walking .avatar-arm.left,
 .mood-walking .avatar-leg.right {
   animation: avatar-walk 240ms ease-in-out infinite alternate;
@@ -3464,14 +3606,35 @@ body[data-motion="reduced"] .city-map-stage {
   transform: rotate(18deg);
 }
 
+.mood-shocked .avatar-eye,
+.mood-surprised .avatar-eye {
+  transform: scale(1.26);
+}
+
+.mood-shocked .avatar-mouth,
+.mood-surprised .avatar-mouth {
+  width: 13px;
+  height: 13px;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: transparent;
+}
+
+.mood-disappointed .avatar-mouth {
+  border-radius: 0 0 999px 999px;
+  transform: rotate(180deg);
+}
+
 .mood-sad,
-.mood-tired {
+.mood-tired,
+.mood-disappointed {
   transform: translateY(4px);
   filter: grayscale(0.28);
 }
 
 .mood-worried::after,
-.mood-sad::after {
+.mood-sad::after,
+.mood-shocked::after {
   animation: avatar-sweat 900ms ease-in-out infinite alternate;
 }
 
@@ -3690,6 +3853,20 @@ body[data-motion="reduced"] .city-map-stage {
   pointer-events: none;
 }
 
+.dice-ring {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  width: 118px;
+  height: 118px;
+  border: 4px solid rgba(255, 216, 107, 0.48);
+  border-radius: 50%;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.65);
+  pointer-events: none;
+}
+
 .dice-spark.spark-a {
   left: -10px;
   top: 8px;
@@ -3707,6 +3884,10 @@ body[data-motion="reduced"] .city-map-stage {
 
 .dice3d.rolling .dice-spark {
   animation: dice-sparkle 820ms ease-out both;
+}
+
+.dice3d.rolling .dice-ring {
+  animation: dice-ring-lock 980ms ease-out both;
 }
 
 .dice3d.rolling .spark-b {
@@ -3740,7 +3921,8 @@ body[data-quality="battery"] .env-water-shine,
 body[data-quality="battery"] .effect-particle,
 body[data-quality="battery"] .tile-particle,
 body[data-quality="battery"] .dice-flight-trail,
-body[data-quality="battery"] .dice-spark {
+body[data-quality="battery"] .dice-spark,
+body[data-quality="battery"] .dice-ring {
   display: none;
 }
 
@@ -3753,8 +3935,14 @@ body[data-motion="reduced"] .board-route-direction {
 }
 
 body[data-motion="reduced"] .dice-spark,
+body[data-motion="reduced"] .dice-ring,
 body[data-motion="reduced"] .dice-flight-trail {
+  animation: none !important;
   display: none !important;
+}
+
+body[data-motion="reduced"] .progress-beacon {
+  animation: none !important;
 }
 
 body[data-visibility="hidden"] .environment-overlay *,
@@ -5288,6 +5476,52 @@ body[data-quality="battery"] .finance-effect {
   100% {
     opacity: 0;
     transform: translate(20px, -22px) scale(0.75);
+  }
+}
+
+@keyframes dice-ring-lock {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+
+  54% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.34);
+  }
+}
+
+@keyframes beacon-glow {
+  from {
+    opacity: 0.76;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes city-upgrade-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  45% {
+    opacity: 0.82;
+    transform: scale(1.06);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.22);
   }
 }
 

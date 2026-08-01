@@ -1,6 +1,6 @@
 {
   "name": "cashflow-game",
-  "version": "1.29.0-boardgame-rc",
+  "version": "1.31.0-playtest-polish",
   "private": true,
   "type": "module",
   "scripts": {

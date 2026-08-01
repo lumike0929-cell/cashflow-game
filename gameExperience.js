@@ -152,6 +152,26 @@ export const boardPath = [
   { x: 160, y: 650 },
 ];
 
+export const cityDistricts = [
+  { id: "residential", labelKey: "residential", icon: "🏘", x: 372, y: 360, width: 270, height: 225, color: "#e7f6ea", street: "gardenLane" },
+  { id: "finance", labelKey: "finance", icon: "🏦", x: 690, y: 340, width: 260, height: 210, color: "#fff4cf", street: "bankTicker" },
+  { id: "startup", labelKey: "startup", icon: "🏪", x: 405, y: 625, width: 285, height: 225, color: "#fff1ce", street: "shopLab" },
+  { id: "education", labelKey: "education", icon: "🎓", x: 735, y: 660, width: 255, height: 205, color: "#efe9ff", street: "schoolCourse" },
+  { id: "health", labelKey: "health", icon: "🏥", x: 1060, y: 645, width: 260, height: 205, color: "#ffe5e0", street: "clinic" },
+  { id: "freedom", labelKey: "freedomGoal", icon: "★", x: 1240, y: 790, width: 230, height: 118, color: "#fff7d6", street: "passiveIncome" },
+];
+
+export const visualPacingBeats = [
+  { turn: 1, type: "strategy", visual: "event-card-choice" },
+  { turn: 3, type: "asset", visual: "city-marker" },
+  { turn: 5, type: "crisis", visual: "risk-pulse" },
+  { turn: 7, type: "minigame", visual: "mini-game-card" },
+  { turn: 9, type: "combo", visual: "combo-toast" },
+  { turn: 11, type: "chain", visual: "event-chain-continuation" },
+  { turn: 13, type: "milestone", visual: "freedom-core-light" },
+  { turn: 15, type: "summary", visual: "stage-summary" },
+];
+
 export const tileVisuals = {
   payday: { category: "薪水日", status: "月结", tone: "gold", badge: "金币" },
   opportunity: { category: "房地产", status: "机会", tone: "green", badge: "房屋" },
@@ -231,6 +251,7 @@ export function nextIndices(position, count, total) {
 
 export function createCitySceneSvg(locale = "zh-CN") {
   const text = citySceneLabels(locale);
+  const districts = cityDistricts.map((districtInfo) => district(districtInfo, text)).join("");
   return `
     <svg class="city-scene" viewBox="0 0 ${mapSize.width} ${mapSize.height}" role="img" aria-label="${text.mapAria}">
       <defs>
@@ -260,22 +281,19 @@ export function createCitySceneSvg(locale = "zh-CN") {
         <path d="M0 910 C220 820 380 900 560 835 C780 755 950 850 1160 785 C1370 720 1500 790 1680 720 V1120 H0 Z" fill="#bfe4bd" opacity="0.42" />
       </g>
       <g class="scene-layer midground-layer">
-      ${district(372, 360, 270, 225, "#e7f6ea", text.residential, text.gardenLane)}
-      ${district(690, 340, 260, 210, "#fff4cf", text.finance, text.bankTicker)}
-      ${district(1010, 365, 285, 225, "#e9f3ff", text.commercial, text.shopOffice)}
-      ${district(405, 625, 285, 225, "#fff1ce", text.startup, text.shopLab)}
-      ${district(735, 660, 255, 205, "#efe9ff", text.education, text.schoolCourse)}
-      ${district(1060, 645, 260, 205, "#ffe5e0", text.health, text.clinic)}
+      ${districts}
+      ${district({ id: "commercial", labelKey: "commercial", icon: "🏢", x: 1010, y: 365, width: 285, height: 225, color: "#e9f3ff", street: "shopOffice" }, text)}
       ${district(730, 500, 230, 205, "#ccebd2", text.park, text.fountainBridge)}
       ${district(520, 500, 170, 115, "#e9f3ff", text.publicService, text.postLamp)}
-      ${district(1240, 790, 230, 118, "#fff7d6", text.freedomGoal, text.passiveIncome)}
       <path d="M80 600 C300 510 390 680 560 610 C750 530 890 590 1040 520 C1230 430 1370 520 1600 430" fill="none" stroke="url(#water)" stroke-width="92" stroke-linecap="round" opacity="0.9" />
       <path d="M80 600 C300 510 390 680 560 610 C750 530 890 590 1040 520 C1230 430 1370 520 1600 430" fill="none" stroke="#e8fbff" stroke-width="12" stroke-linecap="round" opacity="0.85" />
+      ${cityStreetGrid(text)}
       <path class="city-board-loop" d="M210 790 L210 660 L250 520 L360 430 L500 395 L640 410 L705 460 L980 590 L1010 535 L1145 455 L1290 405 L1445 430 L1505 555 L1460 690 L1340 760 L1195 780 L1050 740 L920 670 L780 650 L640 705 L525 805 L610 910 L770 940 L930 915 L1090 930 L1250 885 L1410 830 L1510 710 L1540 565 L1490 330 L1360 245 L1190 210 L1015 230 L850 190 L680 220 L515 185 L355 230 L225 330 L145 485 L160 650 Z" fill="none" stroke="url(#road)" stroke-width="128" stroke-linejoin="round" stroke-linecap="round" opacity="0.82" />
       <path class="city-board-lane" d="M210 790 L210 660 L250 520 L360 430 L500 395 L640 410 L705 460 L980 590 L1010 535 L1145 455 L1290 405 L1445 430 L1505 555 L1460 690 L1340 760 L1195 780 L1050 740 L920 670 L780 650 L640 705 L525 805 L610 910 L770 940 L930 915 L1090 930 L1250 885 L1410 830 L1510 710 L1540 565 L1490 330 L1360 245 L1190 210 L1015 230 L850 190 L680 220 L515 185 L355 230 L225 330 L145 485 L160 650 Z" fill="none" stroke="#f8faf4" stroke-width="18" stroke-dasharray="34 26" stroke-linejoin="round" stroke-linecap="round" opacity="0.9" />
       ${roadDirections(text)}
       <path d="M450 330 L1240 330 M450 820 L1240 820 M620 330 L620 840 M1020 330 L1020 840" stroke="#f8faf4" stroke-width="34" stroke-linecap="round" opacity="0.42" />
       <path d="M450 330 L1240 330 M450 820 L1240 820 M620 330 L620 840 M1020 330 L1020 840" stroke="#becac4" stroke-width="4" stroke-dasharray="18 18" opacity="0.36" />
+      ${intersectionPlazas()}
       ${flowerbeds()}
       </g>
       <g class="scene-layer building-layer">
@@ -306,6 +324,7 @@ export function createCitySceneSvg(locale = "zh-CN") {
       <circle cx="835" cy="555" r="16" fill="#ffffff" opacity="0.85" />
       <text x="835" y="655" text-anchor="middle" class="city-label">${text.parkFountain}</text>
       ${freedomCore(text)}
+      ${progressBeacons(text)}
       ${zoneBadges(text)}
       ${trees()}
       ${lamps()}
@@ -328,6 +347,7 @@ function citySceneLabels(locale = "zh-CN") {
     insuranceCenter: "Insurance Center", taxCenter: "Tax Center", hospital: "Hospital", startupStreet: "Startup Street",
     school: "School", apartments: "Apartments", parkFountain: "Park Fountain", start: "Start", cashflowRoad: "Cashflow Road",
     homeIcon: "Home", shieldIcon: "Shield", taxIcon: "Tax", shopIcon: "Shop", bookIcon: "Book", bizIcon: "Biz",
+    milestone25: "25%", milestone50: "50%", milestone75: "75%", milestone100: "Freedom",
   };
   if (locale === "en") return en;
   return {
@@ -341,6 +361,7 @@ function citySceneLabels(locale = "zh-CN") {
     insuranceCenter: "保险中心", taxCenter: "税务中心", hospital: "医院", startupStreet: "创业街",
     school: "学校", apartments: "公寓", parkFountain: "公园喷泉", start: "起点", cashflowRoad: "现金流路",
     homeIcon: "房", shieldIcon: "盾", taxIcon: "税", shopIcon: "店", bookIcon: "书", bizIcon: "商",
+    milestone25: "25%", milestone50: "50%", milestone75: "75%", milestone100: "自由",
   };
 }
 
@@ -416,6 +437,8 @@ export function avatarMarkup(career, mood = "neutral", direction = "right") {
       </span>
       <span class="avatar-head">
         <span class="avatar-hair ${id}"></span>
+        <span class="avatar-ear left"></span>
+        <span class="avatar-ear right"></span>
         ${accessory}
         <span class="avatar-eye left"></span>
         <span class="avatar-eye right"></span>
@@ -425,6 +448,7 @@ export function avatarMarkup(career, mood = "neutral", direction = "right") {
         <span class="avatar-face-label">${icon}</span>
       </span>
       ${prop}
+      <span class="avatar-career-silhouette" aria-hidden="true"></span>
       <span class="avatar-spark"></span>
       <span class="avatar-direction" aria-hidden="true"></span>
     </div>
@@ -444,6 +468,7 @@ export function diceMarkup(value = 1, rolling = false, locale = "zh-CN") {
       <span class="dice-spark spark-a" aria-hidden="true"></span>
       <span class="dice-spark spark-b" aria-hidden="true"></span>
       <span class="dice-spark spark-c" aria-hidden="true"></span>
+      <span class="dice-ring" aria-hidden="true"></span>
       <span class="dice-corner top"></span>
       <div class="dice-cube" data-result="${value}" aria-hidden="true">
         ${sideFaces}
@@ -693,15 +718,70 @@ export function haptic(pattern, enabled = true) {
   }
 }
 
-function district(x, y, width, height, fill, title, subtitle) {
+function district(config, textOrY, width, height, fill, title, subtitle) {
+  const info = typeof config === "object"
+    ? {
+      id: config.id || "district",
+      x: config.x,
+      y: config.y,
+      width: config.width,
+      height: config.height,
+      fill: config.color || config.fill,
+      title: textOrY?.[config.labelKey] || config.title,
+      subtitle: textOrY?.[config.street] || config.subtitle,
+      icon: config.icon || "●",
+    }
+    : {
+      id: "legacy",
+      x: config,
+      y: textOrY,
+      width,
+      height,
+      fill,
+      title,
+      subtitle,
+      icon: "●",
+    };
   return `
-    <g class="city-district">
-      <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="34" fill="${fill}" stroke="#ffffff" stroke-width="8" opacity="0.78" />
-      <rect x="${x + 12}" y="${y + 12}" width="${width - 24}" height="${height - 24}" rx="26" fill="url(#zoneGlow)" opacity="0.34" />
-      <text x="${x + 24}" y="${y + 42}" class="district-label">${title}</text>
-      <text x="${x + 24}" y="${y + 74}" class="district-subtitle">${subtitle}</text>
+    <g class="city-district district-${info.id}">
+      <rect x="${info.x}" y="${info.y}" width="${info.width}" height="${info.height}" rx="34" fill="${info.fill}" stroke="#ffffff" stroke-width="8" opacity="0.78" />
+      <rect x="${info.x + 12}" y="${info.y + 12}" width="${info.width - 24}" height="${info.height - 24}" rx="26" fill="url(#zoneGlow)" opacity="0.34" />
+      <path class="district-grid" d="M${info.x + 28} ${info.y + 98} H${info.x + info.width - 28} M${info.x + 28} ${info.y + 142} H${info.x + info.width - 28} M${info.x + info.width * 0.48} ${info.y + 88} V${info.y + info.height - 26}" />
+      <circle cx="${info.x + info.width - 44}" cy="${info.y + 44}" r="28" fill="#ffffff" opacity="0.78" />
+      <text x="${info.x + info.width - 44}" y="${info.y + 54}" text-anchor="middle" class="district-icon">${info.icon}</text>
+      <text x="${info.x + 24}" y="${info.y + 42}" class="district-label">${info.title}</text>
+      <text x="${info.x + 24}" y="${info.y + 74}" class="district-subtitle">${info.subtitle}</text>
     </g>
   `;
+}
+
+function cityStreetGrid(text = citySceneLabels()) {
+  return `
+    <g class="city-street-grid" aria-label="${text.cashflowRoad}">
+      <path class="street-main" d="M260 300 H620 Q690 300 725 360 T835 515 T975 612 T1270 705" />
+      <path class="street-main" d="M380 890 Q525 730 690 760 T1060 805 T1490 650" />
+      <path class="street-branch" d="M535 235 V430 M850 190 V410 M1185 215 V455 M1450 330 V705 M210 650 H525 M640 705 H920" />
+      <path class="street-dash" d="M260 300 H620 Q690 300 725 360 T835 515 T975 612 T1270 705" />
+      <path class="street-dash" d="M380 890 Q525 730 690 760 T1060 805 T1490 650" />
+    </g>
+  `;
+}
+
+function intersectionPlazas() {
+  const points = [
+    [360, 430, "#e7f6ea"],
+    [705, 460, "#fff4cf"],
+    [1010, 535, "#e9f3ff"],
+    [640, 705, "#fff1ce"],
+    [920, 670, "#efe9ff"],
+    [1340, 760, "#fff7d6"],
+  ];
+  return points.map(([x, y, fill]) => `
+    <g class="city-intersection" transform="translate(${x} ${y})">
+      <circle r="52" fill="${fill}" stroke="#ffffff" stroke-width="10" opacity="0.86" />
+      <path d="M-26 0 H26 M0 -26 V26" stroke="#becac4" stroke-width="8" stroke-linecap="round" opacity="0.5" />
+    </g>
+  `).join("");
 }
 
 function freedomCore(text = citySceneLabels()) {
@@ -715,6 +795,25 @@ function freedomCore(text = citySceneLabels()) {
       <path d="M754 620 H916" stroke="#246b9f" stroke-width="8" stroke-linecap="round" opacity="0.7" />
       <text x="835" y="385" text-anchor="middle" class="freedom-core-title">${text.freedomGoal}</text>
       <text x="835" y="662" text-anchor="middle" class="freedom-core-subtitle">${text.passiveIncome}</text>
+    </g>
+  `;
+}
+
+function progressBeacons(text = citySceneLabels()) {
+  const beacons = [
+    [720, 588, text.milestone25, "#9fe0b9"],
+    [790, 632, text.milestone50, "#8ed0eb"],
+    [878, 632, text.milestone75, "#c7b9ff"],
+    [948, 588, text.milestone100, "#ffd86b"],
+  ];
+  return `
+    <g class="freedom-progress-beacons">
+      ${beacons.map(([x, y, label, fill], index) => `
+        <g class="progress-beacon beacon-${index}">
+          <circle cx="${x}" cy="${y}" r="24" fill="${fill}" stroke="#ffffff" stroke-width="6" />
+          <text x="${x}" y="${y + 6}" text-anchor="middle" class="progress-beacon-label">${label}</text>
+        </g>
+      `).join("")}
     </g>
   `;
 }
