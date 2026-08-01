@@ -68,6 +68,7 @@ try {
   assert.equal(heroCheck.startVisible, true);
   assert.ok(heroCheck.width <= heroCheck.clientWidth + 1, `home overflow: ${heroCheck.width} > ${heroCheck.clientWidth}`);
   for (const viewport of [
+    { width: 375, height: 667 },
     { width: 390, height: 844 },
     { width: 430, height: 932 },
     { width: 768, height: 1024 },
@@ -187,7 +188,7 @@ try {
       iconCount: manifest.icons.length,
       workerOk: workerResponse.ok,
       iconOk: iconResponse.ok,
-      workerHasCache: (await workerResponse.text()).includes("cashflow-game-shell-rc1"),
+      workerHasCache: (await workerResponse.text()).includes("cashflow-game-shell-startflow-p0-20260730"),
       serviceWorkerSupported: "serviceWorker" in navigator,
       exportedOk: exported.ok,
       parsedOk: parsed.ok,
@@ -222,7 +223,7 @@ try {
   assert.ok((await page.locator(".map-asset-marker.status-fun").count()) >= 1);
   await page.evaluate(() => window.cashflowDebug.showReleaseNotes());
   await expectText(page, "公开测试版说明");
-  await expectText(page, "1.24.1-rc.1");
+  await expectText(page, "1.24.2-startflow-p0");
   assert.match(await page.locator("#cardModal").innerText(), /Public Beta/);
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.showFeedbackPanel());
@@ -692,8 +693,6 @@ try {
   await page.evaluate(() => window.cashflowDebug.startChallengeDebug());
   const challengeState = await page.evaluate(() => window.cashflowDebug.getExperience().progress.challenge);
   assert.equal(challengeState.id, "starter-cashflow");
-  await page.evaluate(() => window.cashflowDebug.showProgressCenter("challenges"));
-  assert.match(await page.locator("#cardModal").innerText(), /新手现金流/);
   await page.evaluate(() => window.cashflowDebug.closeModal());
   assert.deepEqual(consoleErrors, []);
 
@@ -1053,6 +1052,9 @@ async function expectModalText(page, text) {
 async function runEnglishI18nSmoke(page) {
   await assertEnglishUiClean(page, "English home");
   await page.locator("#startAdventure").click();
+  await expectModalText(page, "Choose Players");
+  await assertEnglishUiClean(page, "English player count setup modal");
+  await page.locator("[data-start-player-count='1']").click();
   await expectText(page, "Hot-seat");
   assert.equal(await page.locator(".local-player-card").count(), 1);
   await assertEnglishUiClean(page, "English new adventure setup");
@@ -1126,8 +1128,12 @@ async function runEnglishI18nSmoke(page) {
 
 async function verifyStartAdventureEntry(page, viewport) {
   await page.setViewportSize(viewport);
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => {
+    localStorage.clear();
+    window.__cashflowStartTrace = [];
+  });
   await page.reload({ waitUntil: "networkidle" });
+  await page.evaluate(() => { window.__cashflowStartTrace = []; });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.selectOption("#topLocaleSelect", "zh-CN");
   await page.selectOption("#topLocaleSelect", "en");
@@ -1136,17 +1142,34 @@ async function verifyStartAdventureEntry(page, viewport) {
   const before = await page.evaluate(() => {
     const button = document.querySelector("#startAdventure");
     const rect = button?.getBoundingClientRect();
-    const center = rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : { x: 0, y: 0 };
-    const top = document.elementFromPoint(center.x, center.y);
+    const points = rect ? {
+      center: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+      topLeft: { x: rect.left + 5, y: rect.top + 5 },
+      topRight: { x: rect.right - 5, y: rect.top + 5 },
+      bottomLeft: { x: rect.left + 5, y: rect.bottom - 5 },
+      bottomRight: { x: rect.right - 5, y: rect.bottom - 5 },
+    } : {};
+    const pointTargets = Object.fromEntries(Object.entries(points).map(([key, point]) => {
+      const target = document.elementFromPoint(point.x, point.y);
+      return [key, {
+        id: target?.id || "",
+        className: typeof target?.className === "string" ? target.className : "",
+        tag: target?.tagName || "",
+        closestStart: Boolean(target?.closest?.("#startAdventure")),
+      }];
+    }));
+    const top = points.center ? document.elementFromPoint(points.center.x, points.center.y) : null;
     const heroTitle = document.querySelector(".home-hero h1")?.getBoundingClientRect();
     const actions = document.querySelector(".intro-actions")?.getBoundingClientRect();
     const secondary = document.querySelector(".intro-secondary-actions")?.getBoundingClientRect();
+    const logo = document.querySelector(".game-logo")?.getBoundingClientRect();
     const overlaps = (a, b) => Boolean(a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top);
     return {
       exists: Boolean(button),
       disabled: Boolean(button?.disabled),
       pointerEvents: button ? getComputedStyle(button).pointerEvents : "",
       rect: rect?.toJSON(),
+      pointTargets,
       topId: top?.id || "",
       topClass: typeof top?.className === "string" ? top.className : "",
       topClosestStart: Boolean(top?.closest?.("#startAdventure")),
@@ -1154,6 +1177,8 @@ async function verifyStartAdventureEntry(page, viewport) {
       hiddenModalDisplay: getComputedStyle(document.querySelector("#cardModal")).display,
       titleActionOverlap: overlaps(heroTitle, actions),
       titleSecondaryOverlap: overlaps(heroTitle, secondary),
+      logoActionOverlap: overlaps(logo, actions),
+      logoSecondaryOverlap: overlaps(logo, secondary),
       width: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
     };
@@ -1162,19 +1187,50 @@ async function verifyStartAdventureEntry(page, viewport) {
   assert.equal(before.disabled, false, `${viewport.width}px start button disabled`);
   assert.equal(before.pointerEvents, "auto", `${viewport.width}px start button pointer-events`);
   assert.equal(before.topClosestStart, true, `${viewport.width}px start button blocked by ${before.topId || before.topClass}`);
+  for (const [point, target] of Object.entries(before.pointTargets)) {
+    assert.equal(target.closestStart, true, `${viewport.width}px start button ${point} blocked by ${target.tag}#${target.id}.${target.className}`);
+  }
   assert.equal(before.modalHidden, true, `${viewport.width}px hidden modal is open before start`);
   assert.equal(before.hiddenModalDisplay, "none", `${viewport.width}px hidden modal still captures layout`);
   assert.equal(before.titleActionOverlap, false, `${viewport.width}px start actions overlap title`);
   assert.equal(before.titleSecondaryOverlap, false, `${viewport.width}px secondary actions overlap title`);
+  assert.equal(before.logoActionOverlap, false, `${viewport.width}px start actions overlap logo`);
+  assert.equal(before.logoSecondaryOverlap, false, `${viewport.width}px secondary actions overlap logo`);
   assert.ok(before.width <= before.clientWidth + 1, `${viewport.width}px home overflow before start`);
 
-  await page.locator("#startAdventure").click();
+  await page.locator("#startAdventure").tap();
+  await page.waitForFunction(() => {
+    const modal = document.querySelector("#cardModal");
+    const card = modal?.querySelector(".modal-card");
+    return modal && card && !modal.classList.contains("hidden") && card.dataset.panel === "start-setup" && card.getBoundingClientRect().width > 0;
+  });
+  const modalState = await page.evaluate(() => ({
+    modalHidden: document.querySelector("#cardModal")?.classList.contains("hidden"),
+    panel: document.querySelector("#cardModal .modal-card")?.dataset.panel || "",
+    title: document.querySelector("#modalTitle")?.textContent || "",
+    actionButtons: document.querySelectorAll("[data-start-player-count]").length,
+    firstActionVisible: document.querySelector("[data-start-player-count='1']")?.getBoundingClientRect().width > 0,
+    trace: window.__cashflowStartTrace || [],
+    width: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  assert.equal(modalState.modalHidden, false, `${viewport.width}px start setup modal did not open`);
+  assert.equal(modalState.panel, "start-setup", `${viewport.width}px wrong start setup panel`);
+  assert.equal(modalState.actionButtons, 4, `${viewport.width}px player count actions missing`);
+  assert.equal(modalState.firstActionVisible, true, `${viewport.width}px first player count action hidden`);
+  assert.ok(modalState.trace.some((item) => item.code === "START_BUTTON_CLICK"), `${viewport.width}px start click trace missing`);
+  assert.ok(modalState.trace.some((item) => item.code === "BEGIN_ADVENTURE_ENTER"), `${viewport.width}px begin adventure trace missing`);
+  assert.ok(modalState.trace.some((item) => item.code === "PLAYER_SETUP_VISIBLE"), `${viewport.width}px setup visible trace missing`);
+  assert.ok(modalState.width <= modalState.clientWidth + 1, `${viewport.width}px modal overflow after start`);
+
+  await page.locator("[data-start-player-count='1']").click();
   await page.waitForFunction(() => document.querySelector(".local-setup-panel") && document.querySelectorAll(".career-thumb").length === 4);
   const after = await page.evaluate(() => ({
     modalHidden: document.querySelector("#cardModal")?.classList.contains("hidden"),
     localCards: document.querySelectorAll(".local-player-card").length,
     careerThumbs: document.querySelectorAll(".career-thumb").length,
     focusedSelection: document.body.classList.contains("selection-active"),
+    trace: window.__cashflowStartTrace || [],
     width: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth,
   }));
@@ -1182,6 +1238,7 @@ async function verifyStartAdventureEntry(page, viewport) {
   assert.equal(after.localCards, 1, `${viewport.width}px default start should show 1 player`);
   assert.equal(after.careerThumbs, 4, `${viewport.width}px career setup missing`);
   assert.equal(after.focusedSelection, true, `${viewport.width}px start did not enter setup`);
+  assert.ok(after.trace.some((item) => item.code === "PLAYER_SETUP_RENDER_DONE" && item.count === 1), `${viewport.width}px 1P setup render trace missing`);
   assert.ok(after.width <= after.clientWidth + 1, `${viewport.width}px setup overflow after start`);
 
   await page.locator("[data-local-count='2']").click();

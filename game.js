@@ -648,6 +648,15 @@ function addLog(message) {
   state.logs = state.logs.slice(0, 9);
 }
 
+function traceStartFlow(code, data = {}) {
+  if (!Array.isArray(window.__cashflowStartTrace)) return;
+  window.__cashflowStartTrace.push({
+    code,
+    time: Date.now(),
+    ...data,
+  });
+}
+
 function persistQuietly() {
   if (!state) return;
   state.locale = uiState.locale;
@@ -1063,22 +1072,100 @@ function showCharacterSelection() {
   }
 }
 
+function setupPlayerCountLabel(count) {
+  return localText({
+    zhCN: `${count} 人`,
+    zhTW: `${count} 人`,
+    en: `${count} ${count === 1 ? "Player" : "Players"}`,
+  }, getLocale());
+}
+
+function prepareNewAdventureSetup() {
+  selectedLocalPlayerCount = Math.max(1, Math.min(4, moneyValue(selectedLocalPlayerCount) || 1));
+  selectedLocalMode = localGameModes.some((mode) => mode.id === selectedLocalMode) ? selectedLocalMode : "standard";
+  selectedVictoryCondition = localVictoryConditions.some((condition) => condition.id === selectedVictoryCondition) ? selectedVictoryCondition : "financialFreedom";
+  selectedLocalPlayers = normalizeLocalSetup({
+    playerCount: selectedLocalPlayerCount,
+    mode: selectedLocalMode,
+    victoryCondition: selectedVictoryCondition,
+    players: selectedLocalPlayers,
+  }).players;
+}
+
+function openCharacterSetupForCount(count) {
+  traceStartFlow("PLAYER_SETUP_RENDER_BEGIN", { count });
+  selectedLocalPlayerCount = Math.max(1, Math.min(4, moneyValue(count) || 1));
+  selectedLocalPlayers = normalizeLocalSetup({
+    playerCount: selectedLocalPlayerCount,
+    mode: selectedLocalMode,
+    victoryCondition: selectedVictoryCondition,
+    players: selectedLocalPlayers,
+  }).players;
+  renderSetup();
+  traceStartFlow("PLAYER_SETUP_RENDER_DONE", { count: selectedLocalPlayerCount });
+  closeModal();
+  showCharacterSelection();
+  const visible = Boolean(el.careerGrid?.querySelector(".local-setup-panel") && el.careerGrid?.querySelectorAll(".local-player-card").length === selectedLocalPlayerCount);
+  traceStartFlow(visible ? "PLAYER_SETUP_VISIBLE" : "SETUP_RENDER_FAILED", { count: selectedLocalPlayerCount });
+  if (!visible) {
+    showRecoverableTip(
+      localText({ zhCN: "设置暂时没有显示", zhTW: "設定暫時沒有顯示", en: "Setup did not appear" }, getLocale()),
+      localText({ zhCN: "请再点一次开始冒险。你的存档没有被删除。", zhTW: "請再點一次開始冒險。你的存檔沒有被刪除。", en: "Please tap Start Adventure again. Your save was not deleted." }, getLocale()),
+    );
+  }
+}
+
+function showPlayerSetupModal() {
+  prepareNewAdventureSetup();
+  traceStartFlow("PLAYER_SETUP_RENDER_BEGIN", { count: selectedLocalPlayerCount, modal: true });
+  renderSetup();
+  const locale = getLocale();
+  const mode = localGameModes.find((item) => item.id === selectedLocalMode) || localGameModes[1];
+  const victory = localVictoryConditions.find((item) => item.id === selectedVictoryCondition) || localVictoryConditions[0];
+  openSimpleModal({
+    type: localText({ zhCN: "开始冒险", zhTW: "開始冒險", en: "Start Adventure" }, locale),
+    title: localText({ zhCN: "选择玩家人数", zhTW: "選擇玩家人數", en: "Choose Players" }, locale),
+    text: localText({
+      zhCN: "先选择这局有几位本地玩家。接着会进入角色与规则设置。",
+      zhTW: "先選擇這局有幾位本地玩家。接著會進入角色與規則設定。",
+      en: "Choose how many local players will join. Next, you will set characters and rules.",
+    }, locale),
+    metrics: [
+      [localText({ zhCN: "默认模式", zhTW: "預設模式", en: "Default Mode" }, locale), localText(mode.title, locale)],
+      [localText({ zhCN: "胜利条件", zhTW: "勝利條件", en: "Win Condition" }, locale), localText(victory.title, locale)],
+      [localText({ zhCN: "可稍后调整", zhTW: "可稍後調整", en: "Can Adjust Next" }, locale), localText({ zhCN: "角色、颜色与规则", zhTW: "角色、顏色與規則", en: "Characters, colors, and rules" }, locale)],
+    ],
+    actions: [1, 2, 3, 4].map((count) => ({
+      label: setupPlayerCountLabel(count),
+      className: count === 1 ? "primary" : "",
+      data: { startPlayerCount: String(count) },
+      onClick: () => openCharacterSetupForCount(count),
+    })),
+    outcome: "success",
+    panel: "start-setup",
+  });
+  traceStartFlow("PLAYER_SETUP_RENDER_DONE", { count: selectedLocalPlayerCount, modal: true });
+  const modalCard = el.modal.querySelector(".modal-card");
+  const visible = Boolean(modalCard && !el.modal.classList.contains("hidden") && modalCard.getBoundingClientRect().width > 0 && modalCard.getBoundingClientRect().height > 0);
+  traceStartFlow(visible ? "PLAYER_SETUP_VISIBLE" : "SETUP_HIDDEN_BY_OVERLAY", { modal: true });
+  requestAnimationFrame(() => {
+    const firstAction = el.modalActions.querySelector("[data-start-player-count]");
+    if (firstAction instanceof HTMLElement) firstAction.focus({ preventScroll: true });
+  });
+}
+
 function beginNewAdventure() {
+  traceStartFlow("BEGIN_ADVENTURE_ENTER", { disabled: Boolean(el.startAdventure?.disabled) });
   try {
-    if (!el.startAdventure || el.startAdventure.disabled) return;
+    if (!el.startAdventure || el.startAdventure.disabled) {
+      traceStartFlow("SETUP_VALIDATION_FAILED", { reason: "start-button-disabled-or-missing" });
+      return;
+    }
     if (!el.modal.classList.contains("hidden")) closeModal();
-    selectedLocalPlayerCount = Math.max(1, Math.min(4, moneyValue(selectedLocalPlayerCount) || 1));
-    selectedLocalMode = localGameModes.some((mode) => mode.id === selectedLocalMode) ? selectedLocalMode : "standard";
-    selectedVictoryCondition = localVictoryConditions.some((condition) => condition.id === selectedVictoryCondition) ? selectedVictoryCondition : "financialFreedom";
-    selectedLocalPlayers = normalizeLocalSetup({
-      playerCount: selectedLocalPlayerCount,
-      mode: selectedLocalMode,
-      victoryCondition: selectedVictoryCondition,
-      players: selectedLocalPlayers,
-    }).players;
     soundManager.play("tap");
-    showCharacterSelection();
+    showPlayerSetupModal();
   } catch (error) {
+    traceStartFlow("START_HANDLER_EXCEPTION", { message: error?.message || "unknown" });
     recordFeedbackError(localStorage, "UI_TARGET_MISSING", error?.message || "start adventure failed");
     el.modal.classList.add("hidden");
     document.body.classList.remove("modal-open");
@@ -2027,6 +2114,7 @@ function changeLocale(locale) {
     if (activePanel === "feedback") showFeedbackPanel();
     if (activePanel === "glossary") showGlossary(glossaryTerm || null);
     if (activePanel === "start-summary") showStartSummaryModal();
+    if (activePanel === "start-setup") showPlayerSetupModal();
     if (activePanel === "onboarding") showOnboarding(Number(modalCard?.dataset.onboardingIndex || uiState.onboardingIndex || 0));
   }
 }
@@ -6322,6 +6410,10 @@ function openSimpleModal({ type, title, text, metrics = [], actions = [], outcom
     button.type = "button";
     button.textContent = translateText(action.label);
     if (action.className) button.className = action.className;
+    Object.entries(action.data || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) button.dataset[key] = String(value);
+    });
+    if (action.ariaLabel) button.setAttribute("aria-label", translateText(action.ariaLabel));
     if (action.disabled) button.disabled = true;
     button.addEventListener("click", () => {
       if (button.disabled) return;
@@ -7525,7 +7617,10 @@ el.loadGame?.addEventListener("click", loadGame);
 el.resetGame?.addEventListener("click", confirmResetGame);
 el.gameMenu?.addEventListener("click", showGameMenu);
 el.continueGameHome?.addEventListener("click", loadGame);
-el.startAdventure?.addEventListener("click", beginNewAdventure);
+  el.startAdventure?.addEventListener("click", () => {
+    traceStartFlow("START_BUTTON_CLICK");
+    beginNewAdventure();
+  });
 el.rulesHome?.addEventListener("click", showRules);
 el.progressHome?.addEventListener("click", () => {
   if (!state) {

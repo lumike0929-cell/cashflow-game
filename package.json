@@ -1,6 +1,6 @@
 {
   "name": "cashflow-game",
-  "version": "1.24.1-rc.1",
+  "version": "1.24.2-startflow-p0",
   "private": true,
   "type": "module",
   "scripts": {

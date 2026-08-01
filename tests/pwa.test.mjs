@@ -98,7 +98,7 @@ test("PWA manifest, icons, and service worker shell are present", async () => {
   await access("icons/apple-touch-icon.svg");
 
   const worker = await readFile("sw.js", "utf8");
-  assert.match(worker, /cashflow-game-shell-rc1/);
+  assert.match(worker, /cashflow-game-shell-startflow-p0-20260730/);
   assert.match(worker, /networkFirst/);
   assert.match(worker, /staleWhileRevalidate/);
   assert.match(worker, /response\.ok/);
@@ -125,7 +125,7 @@ test("public beta release information is complete and localized", () => {
   assert.equal(releaseInfo.releaseLabel, "RC1 Public Beta");
   assert.equal(releaseInfo.releaseChannel, "Public Beta");
   assert.equal(releaseInfo.nextFixTarget, "RC2");
-  assert.equal(releaseInfo.serviceWorkerVersion, "cashflow-game-shell-rc1-i18n2");
+  assert.equal(releaseInfo.serviceWorkerVersion, "cashflow-game-shell-startflow-p0-20260730");
   assert.equal(releaseInfo.saveSchemaVersion, 4);
   assert.equal(releaseInfo.translationSchemaVersion, 1);
   for (const locale of ["zh-TW", "zh-CN", "en"]) {
