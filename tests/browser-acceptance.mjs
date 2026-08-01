@@ -188,7 +188,7 @@ try {
       iconCount: manifest.icons.length,
       workerOk: workerResponse.ok,
       iconOk: iconResponse.ok,
-      workerHasCache: (await workerResponse.text()).includes("cashflow-game-shell-startflow-p0-20260731"),
+      workerHasCache: (await workerResponse.text()).includes("cashflow-game-shell-fun-rc-20260801"),
       serviceWorkerSupported: "serviceWorker" in navigator,
       exportedOk: exported.ok,
       parsedOk: parsed.ok,
@@ -223,7 +223,7 @@ try {
   assert.ok((await page.locator(".map-asset-marker.status-fun").count()) >= 1);
   await page.evaluate(() => window.cashflowDebug.showReleaseNotes());
   await expectText(page, "公开测试版说明");
-  await expectText(page, "1.24.3-startflow-p0");
+  await expectText(page, "1.28.0-fun-rc");
   assert.match(await page.locator("#cardModal").innerText(), /Public Beta/);
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.showFeedbackPanel());

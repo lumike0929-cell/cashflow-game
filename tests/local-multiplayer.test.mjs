@@ -207,3 +207,30 @@ test("snapshot cloning avoids shared arrays across turns", () => {
   assert.equal(state.assets.length, 1);
   assert.equal(snapshot.assets.length, 2);
 });
+
+test("four-player local multiplayer can cycle 30 turns without shared state or skipped players", () => {
+  const setup = normalizeLocalSetup({ playerCount: 4, mode: "party", victoryCondition: "roundLimit" });
+  const state = {};
+  configureLocalMultiplayer(state, setup, {
+    "player-1": makeSnapshot("teacher", 12000, 3000, 0),
+    "player-2": makeSnapshot("engineer", 16000, 4200, 4),
+    "player-3": makeSnapshot("designer", 10000, 2500, 8),
+    "player-4": makeSnapshot("entrepreneur", 9000, 2200, 12),
+  });
+  applyPlayerSnapshotToState(state, state.localPlayers[0]);
+  const visited = [];
+  for (let turn = 0; turn < 30; turn += 1) {
+    const current = currentLocalPlayer(state);
+    visited.push(current.playerId);
+    state.cash += 100 + turn;
+    state.position = (state.position + 1) % 40;
+    markLocalTurnPendingSwitch(state);
+    advanceLocalTurn(state);
+  }
+  assert.deepEqual(visited.slice(0, 8), ["player-1", "player-2", "player-3", "player-4", "player-1", "player-2", "player-3", "player-4"]);
+  assert.equal(state.localMultiplayer.turnHistory.length, 30);
+  const cashValues = state.localPlayers.map((player) => player.snapshot.cash);
+  assert.equal(new Set(cashValues).size, 4);
+  state.localPlayers[0].snapshot.assets = [{ id: "p1-only" }];
+  assert.deepEqual(state.localPlayers[1].snapshot.assets || [], []);
+});

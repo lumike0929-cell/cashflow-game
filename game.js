@@ -137,6 +137,7 @@ import {
   migrateFunState,
   recordFunOutcome,
   selectPacedEngagement,
+  advanceFunEventChain,
 } from "./funSystem.js";
 import {
   aiDifficultyModes,
@@ -4172,6 +4173,7 @@ function completeStrategyChoice(event, choice, turn) {
   state.funPacing.seenEventIds = [...new Set(state.funPacing.seenEventIds)].slice(-80);
   markPacedTurnDone(state, turn);
   if (!choice) {
+    if (event.chainId) advanceFunEventChain(state, event.chainId, "pass");
     const completedGoals = recordFunOutcome(state, { kind: "strategy", id: event.id, success: false });
     addLog(funText({ zhCN: "你选择保留现金，没有承担额外风险。", zhTW: "你選擇保留現金，沒有承擔額外風險。", en: "You kept cash and avoided extra risk." }, getLocale()));
     persistQuietly();
@@ -4186,6 +4188,7 @@ function completeStrategyChoice(event, choice, turn) {
     });
     return;
   }
+  const chainProgress = event.chainId ? advanceFunEventChain(state, event.chainId, choice.id) : null;
   const result = applyFunEffects(choice.effects, choice.risk, event.category);
   const city = addCityUpgrade(state, {
     id: `fun-city-${event.id}-${state.round}-${state.position}`,
@@ -4201,11 +4204,14 @@ function completeStrategyChoice(event, choice, turn) {
     },
   });
   const completedGoals = recordFunOutcome(state, {
-    kind: "strategy",
+    kind: event.competition ? "competition" : event.mood || "strategy",
     id: event.id,
+    chainId: event.chainId || null,
+    chainComplete: Boolean(chainProgress?.completed),
     riskLevel: choice.risk,
     isRisk: choice.risk !== "low",
-    isCrisis: !result.success && choice.risk === "high",
+    isCrisis: event.mood === "crisis" || (!result.success && choice.risk === "high"),
+    isLucky: event.mood === "lucky",
     success: result.success || result.cashDelta > 0 || result.expenseDelta < 0 || result.iqDelta > 0,
   });
   const locale = getLocale();
@@ -4341,15 +4347,17 @@ function showFunStageSummary(turn) {
   const locale = getLocale();
   openSimpleModal({
     type: funText({ zhCN: "阶段总结", zhTW: "階段總結", en: "Stage Summary" }, locale),
-    title: funText({ zhCN: "前 10 回合完成", zhTW: "前 10 回合完成", en: "First 10 Turns Complete" }, locale),
+    title: funText({ zhCN: "前 15 回合完成", zhTW: "前 15 回合完成", en: "First 15 Turns Complete" }, locale),
     text: funText({
-      zhCN: "你已经经历了策略选择、风险、小任务、小遊戏和城市反馈。下一阶段可以开始追求更稳定的被动收入。",
-      zhTW: "你已經經歷了策略選擇、風險、小任務、小遊戲和城市回饋。下一階段可以開始追求更穩定的被動收入。",
-      en: "You have seen strategy choices, risk, short goals, mini games, and city feedback. Next, aim for steadier passive income.",
+      zhCN: "你已经经历了角色事件、剧情延续、风险、小任务、小游戏、竞争提示和城市反馈。下一阶段可以追求更稳定的被动收入。",
+      zhTW: "你已經經歷了角色事件、劇情延續、風險、小任務、小遊戲、競爭提示和城市回饋。下一階段可以追求更穩定的被動收入。",
+      en: "You have seen role events, story follow-ups, risk, short goals, mini games, competition, and city feedback. Next, aim for steadier passive income.",
     }, locale),
     metrics: [
       [funText({ zhCN: "策略选择", zhTW: "策略選擇", en: "Strategy Choices" }, locale), formatNumber(stats.strategyChoices)],
       [funText({ zhCN: "小游戏", zhTW: "小遊戲", en: "Mini Games" }, locale), formatNumber(stats.miniGames)],
+      [funText({ zhCN: "剧情链", zhTW: "劇情鏈", en: "Story Chains" }, locale), formatNumber(stats.eventChains)],
+      [funText({ zhCN: "竞争互动", zhTW: "競爭互動", en: "Competition Moments" }, locale), formatNumber(stats.competitionMoments)],
       [funText({ zhCN: "短期目标", zhTW: "短期目標", en: "Short Goals" }, locale), formatNumber(stats.goalCompletions)],
       [funText({ zhCN: "城市变化", zhTW: "城市變化", en: "City Changes" }, locale), formatNumber(stats.cityUpgrades)],
     ],
@@ -4476,6 +4484,9 @@ function riskFamilyLabel(category) {
     life: { zhCN: "生活选择", zhTW: "生活選擇", en: "Life Choice" },
     bank: { zhCN: "借贷压力", zhTW: "借貸壓力", en: "Debt Pressure" },
     tax: { zhCN: "预留责任", zhTW: "預留責任", en: "Set-Aside Choice" },
+    lucky: { zhCN: "幸运机会", zhTW: "幸運機會", en: "Lucky Break" },
+    crisis: { zhCN: "危机处理", zhTW: "危機處理", en: "Crisis Response" },
+    competition: { zhCN: "竞争机会", zhTW: "競爭機會", en: "Competitive Chance" },
   }[category] || { zhCN: "策略", zhTW: "策略", en: "Strategy" };
 }
 
@@ -4496,6 +4507,9 @@ function cityPositionFor(category) {
     job: { x: 790, y: 350 },
     life: { x: 650, y: 430 },
     bank: { x: 720, y: 370 },
+    lucky: { x: 790, y: 430 },
+    crisis: { x: 760, y: 515 },
+    competition: { x: 850, y: 470 },
     tax: { x: 1070, y: 430 },
   }[category] || { x: 760, y: 520 };
 }
@@ -7996,7 +8010,7 @@ window.cashflowDebug = {
   runFunPacingPreview: (seed = 7) => {
     state = createNewGameState(careers[0], "beginner");
     const random = createSeededRandom(seed);
-    for (let turn = 1; turn <= 10; turn += 1) {
+    for (let turn = 1; turn <= 15; turn += 1) {
       state.round = turn + 1;
       state.position = indexAfter(state.position, 1);
       const tile = boardTiles[state.position];
@@ -8035,6 +8049,7 @@ window.cashflowDebug = {
         markPacedTurnDone(state, engagement.turn);
       }
     }
+    state.round = 1;
     persistQuietly();
     render();
     return funStats(state);
