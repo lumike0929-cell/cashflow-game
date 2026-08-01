@@ -110,46 +110,46 @@ export const careerGuidance = {
 };
 
 export const boardPath = [
-  { x: 170, y: 140 },
-  { x: 300, y: 110 },
-  { x: 430, y: 105 },
-  { x: 560, y: 120 },
-  { x: 690, y: 105 },
-  { x: 820, y: 130 },
-  { x: 950, y: 105 },
-  { x: 1080, y: 120 },
-  { x: 1210, y: 110 },
-  { x: 1340, y: 135 },
-  { x: 1480, y: 170 },
-  { x: 1530, y: 285 },
-  { x: 1515, y: 395 },
-  { x: 1540, y: 510 },
-  { x: 1510, y: 625 },
-  { x: 1545, y: 740 },
-  { x: 1480, y: 865 },
-  { x: 1360, y: 930 },
-  { x: 1235, y: 960 },
-  { x: 1110, y: 940 },
-  { x: 985, y: 975 },
-  { x: 860, y: 945 },
-  { x: 735, y: 970 },
-  { x: 610, y: 940 },
-  { x: 485, y: 965 },
-  { x: 360, y: 930 },
-  { x: 230, y: 890 },
-  { x: 150, y: 780 },
-  { x: 125, y: 660 },
-  { x: 150, y: 540 },
-  { x: 125, y: 420 },
-  { x: 155, y: 300 },
-  { x: 275, y: 250 },
-  { x: 430, y: 255 },
-  { x: 590, y: 245 },
-  { x: 750, y: 260 },
-  { x: 910, y: 245 },
-  { x: 1070, y: 260 },
-  { x: 1230, y: 245 },
-  { x: 1385, y: 265 },
+  { x: 210, y: 790 },
+  { x: 210, y: 660 },
+  { x: 250, y: 520 },
+  { x: 360, y: 430 },
+  { x: 500, y: 395 },
+  { x: 640, y: 410 },
+  { x: 705, y: 460 },
+  { x: 980, y: 590 },
+  { x: 1010, y: 535 },
+  { x: 1145, y: 455 },
+  { x: 1290, y: 405 },
+  { x: 1445, y: 430 },
+  { x: 1505, y: 555 },
+  { x: 1460, y: 690 },
+  { x: 1340, y: 760 },
+  { x: 1195, y: 780 },
+  { x: 1050, y: 740 },
+  { x: 920, y: 670 },
+  { x: 780, y: 650 },
+  { x: 640, y: 705 },
+  { x: 525, y: 805 },
+  { x: 610, y: 910 },
+  { x: 770, y: 940 },
+  { x: 930, y: 915 },
+  { x: 1090, y: 930 },
+  { x: 1250, y: 885 },
+  { x: 1410, y: 830 },
+  { x: 1510, y: 710 },
+  { x: 1540, y: 565 },
+  { x: 1490, y: 330 },
+  { x: 1360, y: 245 },
+  { x: 1190, y: 210 },
+  { x: 1015, y: 230 },
+  { x: 850, y: 190 },
+  { x: 680, y: 220 },
+  { x: 515, y: 185 },
+  { x: 355, y: 230 },
+  { x: 225, y: 330 },
+  { x: 145, y: 485 },
+  { x: 160, y: 650 },
 ];
 
 export const tileVisuals = {
@@ -271,8 +271,8 @@ export function createCitySceneSvg(locale = "zh-CN") {
       ${district(1240, 790, 230, 118, "#fff7d6", text.freedomGoal, text.passiveIncome)}
       <path d="M80 600 C300 510 390 680 560 610 C750 530 890 590 1040 520 C1230 430 1370 520 1600 430" fill="none" stroke="url(#water)" stroke-width="92" stroke-linecap="round" opacity="0.9" />
       <path d="M80 600 C300 510 390 680 560 610 C750 530 890 590 1040 520 C1230 430 1370 520 1600 430" fill="none" stroke="#e8fbff" stroke-width="12" stroke-linecap="round" opacity="0.85" />
-      <path d="M170 140 L1480 170 L1545 740 L1360 930 L230 890 L125 420 Z" fill="none" stroke="url(#road)" stroke-width="118" stroke-linejoin="round" stroke-linecap="round" opacity="0.78" />
-      <path d="M170 140 L1480 170 L1545 740 L1360 930 L230 890 L125 420 Z" fill="none" stroke="#f8faf4" stroke-width="14" stroke-dasharray="32 28" stroke-linejoin="round" stroke-linecap="round" opacity="0.86" />
+      <path class="city-board-loop" d="M210 790 L210 660 L250 520 L360 430 L500 395 L640 410 L705 460 L980 590 L1010 535 L1145 455 L1290 405 L1445 430 L1505 555 L1460 690 L1340 760 L1195 780 L1050 740 L920 670 L780 650 L640 705 L525 805 L610 910 L770 940 L930 915 L1090 930 L1250 885 L1410 830 L1510 710 L1540 565 L1490 330 L1360 245 L1190 210 L1015 230 L850 190 L680 220 L515 185 L355 230 L225 330 L145 485 L160 650 Z" fill="none" stroke="url(#road)" stroke-width="128" stroke-linejoin="round" stroke-linecap="round" opacity="0.82" />
+      <path class="city-board-lane" d="M210 790 L210 660 L250 520 L360 430 L500 395 L640 410 L705 460 L980 590 L1010 535 L1145 455 L1290 405 L1445 430 L1505 555 L1460 690 L1340 760 L1195 780 L1050 740 L920 670 L780 650 L640 705 L525 805 L610 910 L770 940 L930 915 L1090 930 L1250 885 L1410 830 L1510 710 L1540 565 L1490 330 L1360 245 L1190 210 L1015 230 L850 190 L680 220 L515 185 L355 230 L225 330 L145 485 L160 650 Z" fill="none" stroke="#f8faf4" stroke-width="18" stroke-dasharray="34 26" stroke-linejoin="round" stroke-linecap="round" opacity="0.9" />
       ${roadDirections(text)}
       <path d="M450 330 L1240 330 M450 820 L1240 820 M620 330 L620 840 M1020 330 L1020 840" stroke="#f8faf4" stroke-width="34" stroke-linecap="round" opacity="0.42" />
       <path d="M450 330 L1240 330 M450 820 L1240 820 M620 330 L620 840 M1020 330 L1020 840" stroke="#becac4" stroke-width="4" stroke-dasharray="18 18" opacity="0.36" />
@@ -305,6 +305,8 @@ export function createCitySceneSvg(locale = "zh-CN") {
       <circle cx="835" cy="555" r="36" fill="#8ed0eb" />
       <circle cx="835" cy="555" r="16" fill="#ffffff" opacity="0.85" />
       <text x="835" y="655" text-anchor="middle" class="city-label">${text.parkFountain}</text>
+      ${freedomCore(text)}
+      ${zoneBadges(text)}
       ${trees()}
       ${lamps()}
       ${coinsAndClouds()}
@@ -399,15 +401,18 @@ export function avatarMarkup(career, mood = "neutral", direction = "right") {
   const color = careerColor(id);
   const expression = expressionForMood(mood);
   const accessory = accessoryMarkup(id);
+  const prop = avatarPropMarkup(id);
   return `
-    <div class="player-avatar mood-${mood} facing-${direction}" aria-label="玩家角色">
+    <div class="player-avatar avatar-${id} mood-${mood} facing-${direction}" aria-label="玩家角色">
       <span class="avatar-shadow"></span>
       <span class="avatar-leg left"></span>
       <span class="avatar-leg right"></span>
+      <span class="avatar-backpack"></span>
       <span class="avatar-body" style="--avatar-color:${color}">
         <span class="avatar-arm left"></span>
         <span class="avatar-arm right"></span>
         <span class="avatar-badge">${icon}</span>
+        <span class="avatar-outfit"></span>
       </span>
       <span class="avatar-head">
         <span class="avatar-hair ${id}"></span>
@@ -419,6 +424,7 @@ export function avatarMarkup(career, mood = "neutral", direction = "right") {
         <span class="avatar-mouth ${expression}"></span>
         <span class="avatar-face-label">${icon}</span>
       </span>
+      ${prop}
       <span class="avatar-spark"></span>
       <span class="avatar-direction" aria-hidden="true"></span>
     </div>
@@ -435,6 +441,9 @@ export function diceMarkup(value = 1, rolling = false, locale = "zh-CN") {
   return `
     <div class="dice3d ${rolling ? "rolling" : ""}" aria-label="${locale === "en" ? `Die ${value}` : `骰子 ${value}`}">
       <span class="dice-flight-trail" aria-hidden="true"></span>
+      <span class="dice-spark spark-a" aria-hidden="true"></span>
+      <span class="dice-spark spark-b" aria-hidden="true"></span>
+      <span class="dice-spark spark-c" aria-hidden="true"></span>
       <span class="dice-corner top"></span>
       <div class="dice-cube" data-result="${value}" aria-hidden="true">
         ${sideFaces}
@@ -693,6 +702,41 @@ function district(x, y, width, height, fill, title, subtitle) {
       <text x="${x + 24}" y="${y + 74}" class="district-subtitle">${subtitle}</text>
     </g>
   `;
+}
+
+function freedomCore(text = citySceneLabels()) {
+  return `
+    <g class="freedom-core" filter="url(#softShadow)">
+      <ellipse cx="835" cy="525" rx="184" ry="112" fill="#ffffff" opacity="0.76" />
+      <path d="M740 556 C760 496 800 462 835 420 C872 462 914 496 932 556 Z" fill="#fff4cf" stroke="#d8a21f" stroke-width="8" />
+      <circle cx="835" cy="484" r="36" fill="#d8a21f" />
+      <text x="835" y="497" text-anchor="middle" class="freedom-core-symbol">¥</text>
+      <path d="M724 588 H946" stroke="#1f7a52" stroke-width="12" stroke-linecap="round" />
+      <path d="M754 620 H916" stroke="#246b9f" stroke-width="8" stroke-linecap="round" opacity="0.7" />
+      <text x="835" y="385" text-anchor="middle" class="freedom-core-title">${text.freedomGoal}</text>
+      <text x="835" y="662" text-anchor="middle" class="freedom-core-subtitle">${text.passiveIncome}</text>
+    </g>
+  `;
+}
+
+function zoneBadges(text = citySceneLabels()) {
+  const badges = [
+    [346, 345, "🏘", text.residential],
+    [675, 318, "🏦", text.finance],
+    [1115, 345, "🏢", text.commercial],
+    [432, 612, "🏪", text.startup],
+    [720, 640, "🎓", text.education],
+    [1115, 640, "🏥", text.health],
+    [1295, 760, "★", text.freedomGoal],
+  ];
+  return badges.map(([x, y, icon, label]) => `
+    <g class="zone-badge">
+      <circle cx="${x}" cy="${y}" r="42" fill="#ffffff" opacity="0.88" />
+      <circle cx="${x}" cy="${y}" r="34" fill="#fff7d6" stroke="#d8a21f" stroke-width="4" />
+      <text x="${x}" y="${y + 10}" text-anchor="middle" class="zone-badge-icon">${icon}</text>
+      <text x="${x}" y="${y + 64}" text-anchor="middle" class="zone-badge-label">${label}</text>
+    </g>
+  `).join("");
 }
 
 function glossary(id, term, shortDefinition, childExample, whyItMatters, iconKey, relatedTerms = []) {
@@ -984,6 +1028,15 @@ function accessoryMarkup(id = "") {
   if (id === "entrepreneur") return '<span class="avatar-accessory apron"></span><span class="avatar-accessory coin-pin"></span>';
   if (id === "doctor") return '<span class="avatar-accessory mirror"></span>';
   return "";
+}
+
+function avatarPropMarkup(id = "") {
+  if (id === "teacher") return '<span class="avatar-prop book"></span><span class="avatar-prop pencil"></span>';
+  if (id === "engineer") return '<span class="avatar-prop laptop"></span><span class="avatar-prop headset"></span>';
+  if (id === "designer") return '<span class="avatar-prop brush"></span><span class="avatar-prop palette"></span>';
+  if (id === "entrepreneur") return '<span class="avatar-prop shop-bag"></span><span class="avatar-prop coin-stack"></span>';
+  if (id === "doctor") return '<span class="avatar-prop kit"></span>';
+  return '<span class="avatar-prop learner-star"></span>';
 }
 
 function illustrationKey(type = "") {

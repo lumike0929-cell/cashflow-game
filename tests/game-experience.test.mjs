@@ -35,10 +35,24 @@ test("城市棋盘维持 40 格循环，经过末尾会回到第 1 格", () => {
   assert.deepEqual(nextIndices(38, 4, 40), [39, 0, 1, 2]);
 });
 
-test("角色路径不穿越中央城市核心区域", () => {
-  const central = { left: 380, right: 1300, top: 330, bottom: 790 };
-  const inside = boardPath.filter((point) => point.x > central.left && point.x < central.right && point.y > central.top && point.y < central.bottom);
-  assert.equal(inside.length, 0);
+test("角色路径是多分区桌游路线且避开财务自由核心地标", () => {
+  const freedomCore = { left: 740, right: 940, top: 420, bottom: 635 };
+  const insideCore = boardPath.filter((point) => point.x > freedomCore.left && point.x < freedomCore.right && point.y > freedomCore.top && point.y < freedomCore.bottom);
+  assert.equal(insideCore.length, 0);
+  const xs = boardPath.map((point) => point.x);
+  const ys = boardPath.map((point) => point.y);
+  assert.ok(Math.max(...xs) - Math.min(...xs) > 1300);
+  assert.ok(Math.max(...ys) - Math.min(...ys) > 700);
+  const turnCount = boardPath.slice(1, -1).filter((point, index) => {
+    const previous = boardPath[index];
+    const next = boardPath[index + 2];
+    const dx1 = point.x - previous.x;
+    const dy1 = point.y - previous.y;
+    const dx2 = next.x - point.x;
+    const dy2 = next.y - point.y;
+    return Math.abs(dx1 * dy2 - dy1 * dx2) > 4000;
+  }).length;
+  assert.ok(turnCount >= 12);
   assert.ok(mapSize.width >= 1600);
   assert.ok(mapSize.height >= 1000);
 });
@@ -49,6 +63,7 @@ test("骰子显示正确点数，格子视觉类别可取得", () => {
     const activeDots = markup.match(/class="active"/g)?.length || 0;
     assert.equal(activeDots, value);
     assert.equal(markup.match(/class="dice-side dice-side-/g)?.length || 0, 6);
+    assert.equal(markup.match(/class="dice-spark/g)?.length || 0, 3);
     assert.match(markup, new RegExp(`data-result="${value}"`));
     assert.match(markup, new RegExp(`dice-pop" aria-hidden="true">${value}`));
   }

@@ -1,6 +1,6 @@
 {
   "name": "cashflow-game",
-  "version": "1.28.0-fun-rc",
+  "version": "1.29.0-boardgame-rc",
   "private": true,
   "type": "module",
   "scripts": {

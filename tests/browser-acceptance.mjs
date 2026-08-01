@@ -188,7 +188,7 @@ try {
       iconCount: manifest.icons.length,
       workerOk: workerResponse.ok,
       iconOk: iconResponse.ok,
-      workerHasCache: (await workerResponse.text()).includes("cashflow-game-shell-fun-rc-20260801"),
+      workerHasCache: (await workerResponse.text()).includes("cashflow-game-shell-boardgame-rc-20260801"),
       serviceWorkerSupported: "serviceWorker" in navigator,
       exportedOk: exported.ok,
       parsedOk: parsed.ok,
@@ -223,7 +223,7 @@ try {
   assert.ok((await page.locator(".map-asset-marker.status-fun").count()) >= 1);
   await page.evaluate(() => window.cashflowDebug.showReleaseNotes());
   await expectText(page, "公开测试版说明");
-  await expectText(page, "1.28.0-fun-rc");
+  await expectText(page, "1.29.0-boardgame-rc");
   assert.match(await page.locator("#cardModal").innerText(), /Public Beta/);
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.showFeedbackPanel());
@@ -726,9 +726,19 @@ try {
       wordBreak: getComputedStyle(document.querySelector("#rollDice")).wordBreak,
       toolbar: document.querySelector(".map-toolbar")?.getBoundingClientRect().toJSON(),
       player: document.querySelector("#avatarAnchor")?.getBoundingClientRect().toJSON(),
+      complexLoop: Boolean(document.querySelector(".city-board-loop")),
+      freedomCore: Boolean(document.querySelector(".freedom-core")),
+      zoneBadges: document.querySelectorAll(".zone-badge").length,
+      avatarProps: document.querySelectorAll("#avatarAnchor .avatar-prop").length,
+      avatarCareerClass: [...document.querySelector("#avatarAnchor .player-avatar")?.classList || []].some((name) => name.startsWith("avatar-")),
     }));
     assert.equal(overflow.hasMap, true);
     assert.equal(overflow.hasHud, true);
+    assert.equal(overflow.complexLoop, true);
+    assert.equal(overflow.freedomCore, true);
+    assert.ok(overflow.zoneBadges >= 6);
+    assert.ok(overflow.avatarProps >= 1);
+    assert.equal(overflow.avatarCareerClass, true);
     assert.equal(overflow.writingMode, "horizontal-tb");
     assert.equal(overflow.whiteSpace, "nowrap");
     assert.equal(overflow.wordBreak, "keep-all");
