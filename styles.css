@@ -2263,6 +2263,36 @@ body[data-motion="reduced"] .city-map-stage {
   filter: drop-shadow(0 10px 8px rgba(24, 42, 33, 0.12));
 }
 
+.district-finance .district-icon,
+.district-startup .district-icon,
+.district-health .district-icon {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.district-finance .district-icon {
+  animation: market-light-blink 2400ms ease-in-out infinite;
+}
+
+.district-startup .district-icon {
+  animation: shop-sign-warm 2800ms ease-in-out infinite;
+}
+
+.district-health .district-icon {
+  animation: gentle-alert 3200ms ease-in-out infinite;
+}
+
+.map-building {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+
+.map-asset-marker.status-owned,
+.map-asset-marker.status-upgraded,
+.map-asset-marker.status-fun {
+  animation: asset-building-lit 2600ms ease-in-out infinite alternate;
+}
+
 .building-sign {
   fill: #24332d;
   font-size: 30px;
@@ -2580,9 +2610,18 @@ body[data-motion="reduced"] .city-map-stage {
   padding: 0;
   background: var(--green);
   color: #ffffff;
-  font-size: 10px;
+  font-size: 0;
   font-weight: 950;
   transform: translate(-50%, -50%);
+}
+
+.mini-player::after,
+.mini-ai::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffffff;
 }
 
 .mini-ai {
@@ -2590,7 +2629,7 @@ body[data-motion="reduced"] .city-map-stage {
   height: 18px;
   min-height: 18px;
   background: var(--violet);
-  font-size: 9px;
+  font-size: 0;
 }
 
 .map-tile {
@@ -2870,9 +2909,23 @@ body[data-motion="reduced"] .city-map-stage {
   z-index: 5;
   width: 68px;
   height: 88px;
-  transform: translate(-50%, -86%);
+  transform: translate(-50%, -112%);
   transition: left 180ms linear, top 180ms linear;
   pointer-events: none;
+}
+
+.avatar-anchor::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 50px;
+  height: 18px;
+  border: 3px solid rgba(255, 255, 255, 0.86);
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255, 216, 107, 0.38), rgba(31, 122, 82, 0.18));
+  box-shadow: 0 0 0 5px rgba(255, 216, 107, 0.13), 0 8px 12px rgba(24, 42, 33, 0.14);
+  transform: translateX(-50%);
 }
 
 .local-map-avatar {
@@ -2881,7 +2934,7 @@ body[data-motion="reduced"] .city-map-stage {
   width: 44px;
   height: 58px;
   padding: 0;
-  transform: translate(-50%, -84%);
+  transform: translate(-50%, -112%);
   border: 3px solid var(--player-color, #f97316);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.72);
@@ -3945,6 +3998,11 @@ body[data-motion="reduced"] .progress-beacon {
   animation: none !important;
 }
 
+body[data-motion="reduced"] .district-icon,
+body[data-motion="reduced"] .map-asset-marker {
+  animation: none !important;
+}
+
 body[data-visibility="hidden"] .environment-overlay *,
 body[data-visibility="hidden"] .player-avatar *,
 body[data-visibility="hidden"] .finance-effect * {
@@ -4226,7 +4284,7 @@ body[data-quality="battery"] .finance-effect {
 
 .local-player-strip {
   display: grid;
-  grid-template-columns: minmax(150px, 0.85fr) minmax(0, 1.4fr) auto;
+  grid-template-columns: minmax(156px, 0.88fr) minmax(0, 1.2fr) minmax(104px, auto);
   gap: 8px;
   align-items: center;
   padding: 8px;
@@ -4238,20 +4296,16 @@ body[data-quality="battery"] .finance-effect {
 
 .local-current-player {
   display: grid;
-  gap: 2px;
-  min-height: 48px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 6px 8px;
   border-color: color-mix(in srgb, var(--player-color, #f97316), #ffffff 30%);
   border-radius: 14px;
   background: linear-gradient(135deg, color-mix(in srgb, var(--player-color, #f97316), #111 15%), #26352f);
   color: #fff;
   text-align: left;
-}
-
-.local-current-player span,
-.local-current-player em {
-  font-size: 11px;
-  font-style: normal;
-  opacity: 0.88;
 }
 
 .local-current-player strong {
@@ -4298,9 +4352,49 @@ body[data-quality="battery"] .finance-effect {
 }
 
 .local-player-strip small {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 2px 6px;
+  align-items: center;
   font-size: 12px;
   font-weight: 850;
   white-space: nowrap;
+}
+
+.local-next-player span {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border: 2px solid color-mix(in srgb, var(--player-color, #f97316), #ffffff 38%);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.88);
+  overflow: hidden;
+}
+
+.local-next-player .player-avatar {
+  transform: scale(0.38);
+  transform-origin: center bottom;
+}
+
+.local-next-player b,
+.local-next-player em {
+  overflow: hidden;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.local-next-player b {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 10px;
+}
+
+.local-next-player em {
+  color: #ffffff;
+  font-size: 12px;
 }
 
 .local-turn-toast {
@@ -5525,6 +5619,52 @@ body[data-quality="battery"] .finance-effect {
   }
 }
 
+@keyframes market-light-blink {
+  0%,
+  100% {
+    opacity: 0.78;
+  }
+
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 8px rgba(255, 216, 107, 0.45));
+  }
+}
+
+@keyframes shop-sign-warm {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 8px rgba(240, 187, 99, 0.42));
+  }
+}
+
+@keyframes gentle-alert {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+
+  45% {
+    opacity: 1;
+    filter: drop-shadow(0 0 7px rgba(200, 77, 66, 0.32));
+  }
+}
+
+@keyframes asset-building-lit {
+  from {
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  to {
+    transform: translate(-50%, -54%) scale(1.04);
+  }
+}
+
 @keyframes avatar-breathe {
   0%,
   100% {
@@ -6466,6 +6606,12 @@ body.in-game {
   overflow-x: hidden;
 }
 
+body.in-game #careerGrid,
+body.in-game .select-start-button {
+  display: none !important;
+  pointer-events: none !important;
+}
+
 body.in-game .topbar {
   min-height: 66px;
   padding-block: 10px;
@@ -6547,6 +6693,71 @@ body.in-game .turn-card {
   border-radius: 24px;
 }
 
+body.in-game .hud-player-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 70px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--player-color, #1f7a52), #ffffff 42%);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 14% 12%, color-mix(in srgb, var(--player-color, #1f7a52), transparent 60%), transparent 42%),
+    rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  overflow: hidden;
+  text-align: left;
+}
+
+body.in-game .hud-player-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  border: 2px solid color-mix(in srgb, var(--player-color, #1f7a52), #ffffff 44%);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--player-color, #1f7a52), transparent 72%);
+  overflow: hidden;
+}
+
+body.in-game .hud-player-avatar .player-avatar {
+  transform: scale(0.54);
+  transform-origin: center bottom;
+}
+
+body.in-game .hud-player-copy,
+body.in-game .local-player-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+body.in-game .hud-player-copy small,
+body.in-game .hud-player-copy em,
+body.in-game .local-player-copy small,
+body.in-game .local-player-copy em {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.in-game .hud-player-copy strong,
+body.in-game .local-player-copy strong {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.12;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 body.in-game .turn-card .dice-box {
   flex: 0 0 190px;
   grid-template-columns: 76px minmax(0, 1fr);
@@ -6584,16 +6795,39 @@ body.in-game #rollDice {
   writing-mode: horizontal-tb;
 }
 
+body.in-game #rollDice:not(:disabled) {
+  box-shadow:
+    0 0 0 4px rgba(255, 216, 107, 0.18),
+    0 10px 18px rgba(216, 162, 31, 0.24);
+}
+
+body.in-game[data-turn-phase="rolling"] .dice3d,
+body.in-game[data-turn-phase="diceResult"] .dice3d {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 170px);
+  z-index: 45;
+  margin-left: -45px;
+}
+
+body.in-game[data-turn-phase="rolling"] .dice-box,
+body.in-game[data-turn-phase="diceResult"] .dice-box {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255, 216, 107, 0.22), transparent 38%),
+    rgba(227, 244, 235, 0.78);
+}
+
 body.in-game .action-stack {
   flex: 1 1 auto;
   min-width: 0;
-  grid-template-columns: minmax(120px, 170px) minmax(220px, 310px) minmax(0, 1fr);
+  grid-template-columns: minmax(150px, 190px) minmax(120px, 170px) minmax(180px, 260px) minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   max-height: none;
   overflow: visible;
 }
 
+body.in-game .action-stack > .hud-player-card,
 body.in-game .action-stack > .game-hud-status,
 body.in-game .action-stack > .hud-summary-grid,
 body.in-game .action-stack > .hud-shortcuts {
@@ -6855,7 +7089,7 @@ body.in-game .map-toolbar #focusPlayer {
 
 @media (max-width: 1180px) {
   body.in-game .layout {
-    padding-bottom: calc(168px + env(safe-area-inset-bottom));
+    padding-bottom: calc(132px + env(safe-area-inset-bottom));
   }
 
   body.in-game .turn-card {
@@ -6867,7 +7101,7 @@ body.in-game .map-toolbar #focusPlayer {
   }
 
   body.in-game .turn-card .dice-box {
-    flex: 0 0 min(178px, 30vw);
+    flex: 0 0 min(150px, 27vw);
     max-height: 100%;
   }
 
@@ -6902,39 +7136,39 @@ body.in-game .map-toolbar #focusPlayer {
 
 @media (max-width: 760px) {
   body.in-game .layout {
-    padding-bottom: calc(152px + env(safe-area-inset-bottom));
+    padding-bottom: calc(118px + env(safe-area-inset-bottom));
   }
 
   body.in-game .board-card {
-    min-height: max(404px, calc(100dvh - 250px));
+    min-height: max(438px, calc(100dvh - 218px));
   }
 
   body.in-game .board {
-    min-height: max(358px, calc(100dvh - 334px));
-    height: max(358px, calc(100dvh - 334px));
+    min-height: max(392px, calc(100dvh - 292px));
+    height: max(392px, calc(100dvh - 292px));
   }
 
   body.in-game .turn-card {
     left: max(8px, env(safe-area-inset-left));
     right: max(8px, env(safe-area-inset-right));
     bottom: max(14px, calc(env(safe-area-inset-bottom) + 12px));
-    min-height: 112px;
-    max-height: 142px;
-    gap: 8px;
-    padding: 8px;
-    border-radius: 20px;
+    min-height: 86px;
+    max-height: 110px;
+    gap: 7px;
+    padding: 7px;
+    border-radius: 18px;
   }
 
   body.in-game .turn-card .dice-box {
-    flex-basis: min(132px, 43vw);
-    grid-template-columns: 50px minmax(0, 1fr);
+    flex-basis: min(106px, 34vw);
+    grid-template-columns: 42px minmax(0, 1fr);
     grid-template-areas:
       "dice label"
       "dice button";
     gap: 4px 7px;
-    min-height: 92px;
-    padding: 7px;
-    border-radius: 16px;
+    min-height: 72px;
+    padding: 6px;
+    border-radius: 15px;
   }
 
   body.in-game .dice-box > span {
@@ -6946,31 +7180,31 @@ body.in-game .map-toolbar #focusPlayer {
   }
 
   body.in-game .dice-box > strong {
-    min-height: 52px;
+    min-height: 44px;
   }
 
   body.in-game .dice3d {
-    width: 46px;
-    height: 46px;
+    width: 40px;
+    height: 40px;
   }
 
   body.in-game .dice-face {
-    width: 44px;
-    height: 44px;
-    padding: 6px;
-    border-radius: 12px;
+    width: 38px;
+    height: 38px;
+    padding: 5px;
+    border-radius: 11px;
   }
 
   body.in-game .dice-face span {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
   }
 
   body.in-game #rollDice {
     min-width: 0;
-    min-height: 40px;
-    max-height: 44px;
-    padding-inline: 8px;
+    min-height: 34px;
+    max-height: 38px;
+    padding-inline: 7px;
     border-radius: 13px;
     font-size: clamp(11px, 3.2vw, 13px);
     line-height: 1.15;
@@ -6981,16 +7215,16 @@ body.in-game .map-toolbar #focusPlayer {
 
   body.in-game .action-stack {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-    max-height: 104px;
+    gap: 5px;
+    max-height: 78px;
     overflow-y: auto;
     overscroll-behavior: contain;
     padding-right: 1px;
   }
 
   body.in-game .game-hud-status {
-    min-height: 42px;
-    padding: 6px 8px;
+    min-height: 34px;
+    padding: 5px 7px;
     border-radius: 14px;
   }
 
@@ -7009,8 +7243,8 @@ body.in-game .map-toolbar #focusPlayer {
   }
 
   body.in-game .hud-chip {
-    min-height: 42px;
-    padding: 6px 8px;
+    min-height: 34px;
+    padding: 5px 7px;
     border-radius: 12px;
   }
 
@@ -7028,7 +7262,7 @@ body.in-game .map-toolbar #focusPlayer {
   }
 
   body.in-game .hud-shortcuts button {
-    min-height: 40px;
+    min-height: 32px;
     padding: 4px 2px;
     border-radius: 11px;
   }
@@ -7041,7 +7275,118 @@ body.in-game .map-toolbar #focusPlayer {
   }
 
   body.in-game .hud-shortcuts button strong {
+    display: none;
+  }
+
+  body.in-game .hud-player-card {
+    min-height: 34px;
+    grid-template-columns: 32px minmax(0, 1fr);
+    padding: 5px 7px;
+    border-radius: 14px;
+  }
+
+  body.in-game .hud-player-avatar {
+    width: 30px;
+    height: 30px;
+    min-height: 30px;
+  }
+
+  body.in-game .hud-player-avatar .player-avatar {
+    transform: scale(0.39);
+  }
+
+  body.in-game .hud-player-copy strong {
+    font-size: 12px;
+  }
+
+  body.in-game .hud-player-copy small,
+  body.in-game .hud-player-copy em {
     font-size: 9px;
+  }
+
+  body.in-game .local-player-strip {
+    grid-column: span 2;
+    grid-template-columns: minmax(0, 1fr) minmax(72px, auto);
+    min-height: 36px;
+    padding: 4px 6px;
+    border-radius: 14px;
+  }
+
+  body.in-game .local-current-player {
+    min-height: 32px;
+    grid-template-columns: 30px minmax(0, 1fr);
+    padding: 4px 6px;
+  }
+
+  body.in-game .local-turn-order {
+    display: none;
+  }
+
+  body.in-game .local-next-player {
+    grid-template-columns: 24px minmax(0, 1fr);
+    font-size: 10px;
+  }
+
+  body.in-game .local-next-player span {
+    width: 24px;
+    height: 24px;
+    min-height: 24px;
+  }
+
+  body.in-game .local-next-player .player-avatar {
+    transform: scale(0.32);
+  }
+
+  body.in-game[data-turn-phase="rolling"] .dice3d,
+  body.in-game[data-turn-phase="diceResult"] .dice3d {
+    bottom: calc(env(safe-area-inset-bottom) + 128px);
+    width: 68px;
+    height: 68px;
+    margin-left: -34px;
+  }
+
+  body.in-game[data-turn-phase="rolling"] .dice-face,
+  body.in-game[data-turn-phase="diceResult"] .dice-face {
+    width: 62px;
+    height: 62px;
+    padding: 9px;
+    border-radius: 16px;
+  }
+
+  body.in-game[data-turn-phase="rolling"] .dice-face span,
+  body.in-game[data-turn-phase="diceResult"] .dice-face span {
+    width: 8px;
+    height: 8px;
+  }
+
+  body.in-game .avatar-anchor {
+    width: 54px;
+    height: 72px;
+    transform: translate(-50%, -128%);
+  }
+
+  body.in-game .player-avatar {
+    width: 54px;
+    height: 72px;
+  }
+
+  body.in-game .avatar-anchor::before {
+    width: 42px;
+    height: 14px;
+    bottom: -3px;
+  }
+
+  body.in-game .local-map-avatar {
+    width: 36px;
+    height: 48px;
+    transform: translate(-50%, -130%);
+  }
+
+  body.in-game .local-map-avatar .player-avatar {
+    transform: scale(0.48);
+  }
+
+  body.in-game .hud-shortcuts button strong {
     line-height: 1.1;
   }
 

@@ -188,7 +188,7 @@ try {
       iconCount: manifest.icons.length,
       workerOk: workerResponse.ok,
       iconOk: iconResponse.ok,
-      workerHasCache: (await workerResponse.text()).includes("cashflow-game-shell-playtest-polish-20260801"),
+      workerHasCache: (await workerResponse.text()).includes("cashflow-game-shell-ui-polish-20260801"),
       serviceWorkerSupported: "serviceWorker" in navigator,
       exportedOk: exported.ok,
       parsedOk: parsed.ok,
@@ -223,7 +223,7 @@ try {
   assert.ok((await page.locator(".map-asset-marker.status-fun").count()) >= 1);
   await page.evaluate(() => window.cashflowDebug.showReleaseNotes());
   await expectText(page, "公开测试版说明");
-  await expectText(page, "1.31.0-playtest-polish");
+  await expectText(page, "1.32.0-ui-polish");
   assert.match(await page.locator("#cardModal").innerText(), /Public Beta/);
   await page.evaluate(() => window.cashflowDebug.closeModal());
   await page.evaluate(() => window.cashflowDebug.showFeedbackPanel());
@@ -289,6 +289,7 @@ try {
   await page.evaluate(() => window.cashflowDebug.showTutorialSettings());
   assert.match(await page.locator("#cardModal").innerText(), /新手引导与儿童解说|新手引導與兒童解說|Beginner Guide/);
   await page.evaluate(() => window.cashflowDebug.closeModal());
+  await page.waitForFunction(() => document.querySelector("#cardModal")?.classList.contains("hidden"));
   await page.evaluate(() => window.cashflowDebug.showRecoverableTip("现在还不能掷骰", "当前事件还没处理完，完成或关闭事件卡后就能继续。"));
   await expectText(page, "当前事件还没处理完");
   await page.evaluate(() => window.cashflowDebug.closeModal());
@@ -717,6 +718,8 @@ try {
       hasMap: Boolean(document.querySelector(".city-map-viewport")),
       hasHud: Boolean(document.querySelector(".turn-card")),
       hud: document.querySelector(".turn-card")?.getBoundingClientRect().toJSON(),
+      hudPlayerCard: Boolean(document.querySelector(".hud-player-card")),
+      hudPlayerAvatar: Boolean(document.querySelector(".hud-player-card .hud-player-avatar .player-avatar")),
       board: document.querySelector(".board")?.getBoundingClientRect().toJSON(),
       roll: document.querySelector("#rollDice")?.getBoundingClientRect().toJSON(),
       diceBox: document.querySelector(".turn-card .dice-box")?.getBoundingClientRect().toJSON(),
@@ -726,6 +729,17 @@ try {
       wordBreak: getComputedStyle(document.querySelector("#rollDice")).wordBreak,
       toolbar: document.querySelector(".map-toolbar")?.getBoundingClientRect().toJSON(),
       player: document.querySelector("#avatarAnchor")?.getBoundingClientRect().toJSON(),
+      playerFootRing: getComputedStyle(document.querySelector("#avatarAnchor"), "::before").content !== "none",
+      activeTileLabel: document.querySelector(".map-tile.active .tile-copy strong")?.getBoundingClientRect().toJSON(),
+      playerOverTileLabel: (() => {
+        const player = document.querySelector("#avatarAnchor")?.getBoundingClientRect();
+        const label = document.querySelector(".map-tile.active .tile-copy strong")?.getBoundingClientRect();
+        return Boolean(player && label && player.left < label.right && player.right > label.left && player.top < label.bottom && player.bottom > label.top);
+      })(),
+      miniPlayerText: document.querySelector(".mini-player")?.textContent.trim() || "",
+      miniPlayerDot: getComputedStyle(document.querySelector(".mini-player"), "::after").content !== "none",
+      localPlayerStrip: Boolean(document.querySelector(".local-player-strip")),
+      localNextPlayer: Boolean(document.querySelector(".local-next-player .player-avatar")),
       complexLoop: Boolean(document.querySelector(".city-board-loop")),
       freedomCore: Boolean(document.querySelector(".freedom-core")),
       streetGrid: Boolean(document.querySelector(".city-street-grid")),
@@ -740,6 +754,12 @@ try {
     }));
     assert.equal(overflow.hasMap, true);
     assert.equal(overflow.hasHud, true);
+    assert.equal(overflow.hudPlayerCard, true);
+    assert.equal(overflow.hudPlayerAvatar, true);
+    assert.equal(overflow.playerFootRing, true);
+    assert.equal(overflow.miniPlayerText, "", `${viewport.width}px mini map still exposes player placeholder text`);
+    assert.equal(overflow.miniPlayerDot, true);
+    assert.equal(!overflow.localPlayerStrip || overflow.localNextPlayer, true);
     assert.equal(overflow.complexLoop, true);
     assert.equal(overflow.freedomCore, true);
     assert.equal(overflow.streetGrid, true);
@@ -756,7 +776,8 @@ try {
     assert.equal(overflow.wordBreak, "keep-all");
     assert.ok(overflow.roll.width > overflow.roll.height, `${viewport.width}px roll button became vertical`);
     assert.ok(overflow.board.height >= viewport.height * 0.45, `${viewport.width}px board too short`);
-    assert.ok(overflow.hud.height <= Math.max(230, viewport.height * 0.28), `${viewport.width}px HUD too tall`);
+    const hudHeightLimit = viewport.width < 761 ? 122 : viewport.width < 1181 ? 140 : 150;
+    assert.ok(overflow.hud.height <= hudHeightLimit, `${viewport.width}px HUD too tall after compact polish: ${overflow.hud.height} > ${hudHeightLimit}`);
     assert.ok(overflow.hud.top >= overflow.board.top + overflow.board.height * 0.58 || overflow.hud.top >= viewport.height - 180, `${viewport.width}px HUD covers board center`);
     assert.ok(
       overflow.roll.bottom <= viewport.height - 4,
@@ -764,6 +785,7 @@ try {
     );
     assert.ok(overflow.toolbar.height <= (viewport.width < 761 ? 46 : 64), `${viewport.width}px map toolbar too tall`);
     assert.ok(overflow.toolbar.width <= Math.min(viewport.width - 16, viewport.width < 761 ? 190 : 260), `${viewport.width}px map toolbar too wide`);
+    assert.equal(overflow.playerOverTileLabel, false, `${viewport.width}px player marker overlaps active tile label: ${JSON.stringify({ player: overflow.player, label: overflow.activeTileLabel })}`);
     assert.ok(overflow.player.bottom < overflow.hud.top - 6 || viewport.width >= 761, `${viewport.width}px HUD covers player: ${JSON.stringify({ player: overflow.player, hud: overflow.hud, board: overflow.board })}`);
     assert.ok(overflow.width <= overflow.clientWidth + 1, `${viewport.width}px overflow: ${overflow.width} > ${overflow.clientWidth}`);
     await page.evaluate(() => window.cashflowDebug.showProgressCenter("freedom"));

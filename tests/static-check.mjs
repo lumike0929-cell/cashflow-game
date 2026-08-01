@@ -61,6 +61,7 @@ for (const file of requiredFiles) {
 
 const html = await readFile("index.html", "utf8");
 const game = await readFile("game.js", "utf8");
+const styles = await readFile("styles.css", "utf8");
 const data = await readFile("realEstateData.js", "utf8");
 
 assert.match(html, /type="module" src="\.\/game\.js"/);
@@ -85,15 +86,19 @@ assert.match(await readFile("i18n/index.js", "utf8"), /setLocale/);
 assert.match(await readFile("i18n/zh-TW.js", "utf8"), /財務自由/);
 assert.match(await readFile("i18n/zh-CN.js", "utf8"), /财务自由/);
 assert.match(await readFile("i18n/en.js", "utf8"), /Financial Freedom/);
-assert.match(await readFile("releaseInfo.js", "utf8"), /1\.31\.0-playtest-polish/);
+assert.match(await readFile("releaseInfo.js", "utf8"), /1\.32\.0-ui-polish/);
 assert.match(await readFile("releaseInfo.js", "utf8"), /Public Beta/);
 assert.match(html, /rel="manifest" href="\.\/manifest\.webmanifest"/);
 assert.match(await readFile("manifest.webmanifest", "utf8"), /"display": "standalone"/);
-assert.match(await readFile("sw.js", "utf8"), /cashflow-game-shell-playtest-polish-20260801/);
+assert.match(await readFile("sw.js", "utf8"), /cashflow-game-shell-ui-polish-20260801/);
 assert.match(await readFile("sw.js", "utf8"), /funSystem\.js/);
 assert.match(await readFile("sw.js", "utf8"), /localMultiplayerSystem\.js/);
 assert.match(await readFile("scripts/build-public.mjs", "utf8"), /funSystem\.js/);
 assert.match(await readFile("scripts/build-public.mjs", "utf8"), /localMultiplayerSystem\.js/);
 assert.match(game, /registerServiceWorker/);
+assert.match(styles, /hud-player-card/);
+assert.match(styles, /mini-player::after/);
+assert.match(styles, /market-light-blink/);
+assert.match(styles, /asset-building-lit/);
 
 console.log("Static build check passed.");

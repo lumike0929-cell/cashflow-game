@@ -1604,7 +1604,7 @@ function renderMiniMap() {
     <button class="city-minimap" id="cityMiniMap" type="button" aria-label="${translateText("小地图，点击移动视口")}">
       <span class="mini-road"></span>
       <span class="mini-viewport" style="left:${viewLeft}%; top:${viewTop}%; width:${viewWidth}%; height:${viewHeight}%"></span>
-      <span class="mini-player" style="left:${player.x}%; top:${player.y}%">${getLocale() === "en" ? "You" : "你"}</span>
+      <span class="mini-player" style="left:${player.x}%; top:${player.y}%" aria-label="${t("hud.player")}"></span>
       ${aiPoints.map((point) => `<span class="mini-ai" style="left:${point.x}%; top:${point.y}%" aria-hidden="true">${point.label}</span>`).join("")}
     </button>
   `;
@@ -1668,12 +1668,17 @@ function renderLocalPlayerStrip() {
   const next = nextLocalPlayer(state);
   const leaderboard = localLeaderboard();
   const currentRank = leaderboard.find((item) => item.playerId === current?.playerId);
+  const currentCareer = localizeCareer(careers.find((item) => item.id === current?.careerId) || state.career || careers[0]);
+  const nextCareer = localizeCareer(careers.find((item) => item.id === next?.careerId) || careers[1] || careers[0]);
   return `
     <section class="local-player-strip" aria-label="${localText({ zhCN: "本地多人玩家顺序", zhTW: "本地多人玩家順序", en: "Local player order" }, locale)}">
       <button type="button" class="local-current-player" id="openLocalLeaderboard" style="--player-color:${current?.color || playerColors[0]}">
-        <span>${localText({ zhCN: "当前玩家", zhTW: "目前玩家", en: "Current Player" }, locale)}</span>
-        <strong>${escapeHtml(current?.name || "Player 1")}</strong>
-        <em>#${currentRank?.rank || 1} · ${money(state.cash)} · ${money(netMonthlyCashflow())}</em>
+        <span class="hud-player-avatar">${avatarMarkup(currentCareer, "happy", "right")}</span>
+        <span class="local-player-copy">
+          <small>${localText({ zhCN: "当前", zhTW: "目前", en: "Now" }, locale)} #${currentRank?.rank || 1}</small>
+          <strong>${escapeHtml(current?.name || localText({ zhCN: "玩家 1", zhTW: "玩家 1", en: "Player 1" }, locale))}</strong>
+          <em>${money(netMonthlyCashflow())}</em>
+        </span>
       </button>
       <div class="local-turn-order">
         ${state.localPlayers.map((player) => {
@@ -1685,8 +1690,32 @@ function renderLocalPlayerStrip() {
           `;
         }).join("")}
       </div>
-      <small>${localText({ zhCN: "下一位", zhTW: "下一位", en: "Next" }, locale)}：${escapeHtml(next?.name || "-")}</small>
+      <small class="local-next-player" style="--player-color:${next?.color || playerColors[1] || playerColors[0]}">
+        <span>${avatarMarkup(nextCareer, "idle", "right")}</span>
+        <b>${localText({ zhCN: "下一位", zhTW: "下一位", en: "Next" }, locale)}</b>
+        <em>${escapeHtml(next?.name || "-")}</em>
+      </small>
     </section>
+  `;
+}
+
+function renderHudPlayerCard() {
+  const locale = getLocale();
+  const current = isLocalMultiplayer(state) ? currentLocalPlayer(state) : null;
+  const careerBase = current ? careers.find((item) => item.id === current.careerId) : state.career;
+  const career = localizeCareer(careerBase || careers[0]);
+  const playerName = current?.name || career.name || localText({ zhCN: "玩家", zhTW: "玩家", en: "Player" }, locale);
+  const playerColor = current?.color || playerColors[0];
+  const rank = isLocalMultiplayer(state) ? localLeaderboard().find((item) => item.playerId === current?.playerId)?.rank : null;
+  return `
+    <button class="hud-player-card" type="button" id="hudPlayerCard" style="--player-color:${playerColor}" aria-label="${escapeHtml(playerName)}">
+      <span class="hud-player-avatar">${avatarMarkup(career, uiState.avatarMood || "idle", uiState.avatarDirection || "right")}</span>
+      <span class="hud-player-copy">
+        <small>${rank ? `#${rank}` : t("hud.player")}</small>
+        <strong>${escapeHtml(playerName)}</strong>
+        <em>${money(netMonthlyCashflow())}</em>
+      </span>
+    </button>
   `;
 }
 
@@ -2184,6 +2213,7 @@ function renderActions() {
     : "";
   el.actionStack.innerHTML = `
     ${renderLocalPlayerStrip()}
+    ${renderHudPlayerCard()}
     <div class="hud-status game-hud-status">
       <span>${t("hud.status")}</span>
       <strong>${translateText(uiState.hudStatus)}</strong>
@@ -2214,6 +2244,10 @@ function renderActions() {
     </div>
   `;
   document.querySelector("#focusPlayerHud")?.addEventListener("click", () => focusCameraOnPlayer(true));
+  document.querySelector("#hudPlayerCard")?.addEventListener("click", () => {
+    if (isLocalMultiplayer(state)) showLocalLeaderboard();
+    else focusCameraOnPlayer(true);
+  });
   document.querySelector("#openLocalLeaderboard")?.addEventListener("click", showLocalLeaderboard);
   document.querySelector("#hudMissionTracker")?.addEventListener("click", () => showProgressCenter("missions"));
   document.querySelector("#hudFunTracker")?.addEventListener("click", showFunGoals);
